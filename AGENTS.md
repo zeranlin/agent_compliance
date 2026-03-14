@@ -38,3 +38,4 @@
 - Git 提交信息必须使用“结论式提交”，直接体现本次改动完成了什么、现在具备了什么结果，不要只写技术动作或实现过程。
 - 不明确的高风险操作先请求确认。
 - 完成后提供清晰的“做了什么 + 下一步”。
+- 如能力发生明显更新，应同步更新 [capability-overview.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/capability-overview.md)。
