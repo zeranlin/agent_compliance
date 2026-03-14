@@ -14,3 +14,5 @@
 
 - [政府采购需求编制常见问题分析.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/case-sources/政府采购需求编制常见问题分析.md)
 - [同类项目业绩案例解析.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/case-sources/同类项目业绩案例解析.md)
+- [主观评审客观化分析.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/case-sources/主观评审客观化分析.md)
+- [综合评分法边界分析.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/case-sources/综合评分法边界分析.md)
