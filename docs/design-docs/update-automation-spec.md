@@ -12,6 +12,12 @@
 - `docs/generated/new-case-candidates-YYYY-MM-DD.md`
 - `docs/generated/eval-gap-report-YYYY-MM.md`
 
+对应模板：
+
+- [月度规则更新摘要模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/monthly-rule-update-template.md)
+- [新增案例候选模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/new-case-candidates-template.md)
+- [能力缺口评测报告模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/eval-gap-report-template.md)
+
 ## 自动化任务拆分
 
 ### 自动化任务 A：法规与政策扫描
