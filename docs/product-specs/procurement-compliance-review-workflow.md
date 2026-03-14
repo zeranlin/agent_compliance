@@ -1,60 +1,60 @@
-# Procurement Compliance Review Workflow
+# 采购合规审查流程
 
-## Objective
+## 目标
 
-Review procurement requirement text for common compliance risks while preserving the purchaser's legitimate business need.
+对采购需求文本进行常见合规风险审查，同时尽量保留采购人的合法业务需求。
 
-## Review standard
+## 审查标准
 
-The agent should optimize for:
-- fairness
-- non-discrimination
-- relation to actual contract performance
-- measurable and reviewable requirements
-- traceable reasoning
-- controlled escalation when legal certainty is not possible
+智能体应重点优化以下目标：
+- 公平性
+- 非歧视性
+- 与实际履约能力的相关性
+- 要求可量化、可审查
+- 推理过程可追溯
+- 在法律无法确定时进行克制且明确的升级复核
 
-## Primary review dimensions
+## 主要审查维度
 
-### 1. Supplier qualification compliance
+### 1. 供应商资格条件合规性
 
-Check whether qualification conditions are directly related to contract performance. Flag when conditions look likely to:
-- exclude otherwise capable suppliers without clear necessity
-- require unnecessary certifications, location, awards, or historical projects
-- impose ownership, scale, or staffing thresholds unrelated to delivery
+检查资格条件是否与合同履约直接相关。出现以下情形时应重点标记：
+- 在无明确必要性的情况下排除本可履约的供应商
+- 要求不必要的认证、属地、奖项或历史项目经历
+- 设置与交付无关的所有制、规模或人员门槛
 
-### 2. Technical requirement neutrality
+### 2. 技术需求中立性
 
-Check whether technical parameters are functional and performance-based rather than supplier-targeted. Flag when text appears to:
-- name a brand, model, or proprietary feature without justified equivalence language
-- use overly narrow ranges that appear to fit only one product
-- bundle unnecessary features that collapse competition
+检查技术参数是否基于功能和性能，而不是指向特定供应商。出现以下情形时应重点标记：
+- 指定品牌、型号或专有特性，但缺少合理的等效表述
+- 参数范围过窄，疑似仅匹配单一产品
+- 叠加不必要特性，导致竞争空间明显收缩
 
-### 3. Scoring rule relevance
+### 3. 评分规则相关性
 
-Check whether scoring criteria are proportionate and linked to procurement objectives. Flag when scoring appears to:
-- reward non-essential certifications or honors
-- overweight experience thresholds beyond reasonable performance assurance
-- turn qualification gates into repeated score advantages
+检查评分标准是否适度且与采购目标有关。出现以下情形时应重点标记：
+- 对非必要认证或荣誉进行加分
+- 经验门槛远高于合理履约保障所需
+- 将资格门槛再次转化为重复加分项
 
-### 4. Commercial and acceptance clause clarity
+### 4. 商务与验收条款清晰度
 
-Check whether business clauses are clear, executable, and fair. Flag when terms are:
-- vague
-- impossible to verify
-- one-sided without business justification
-- missing objective acceptance criteria
+检查商务条款是否清晰、可执行且公平。出现以下情形时应重点标记：
+- 表述模糊
+- 无法验证
+- 明显单方失衡且无业务合理性
+- 缺少客观验收标准
 
-## Output contract
+## 输出约定
 
-Each review should produce a structured result with:
+每次审查应产出一个结构化结果，至少包括：
 - `document_name`
 - `review_scope`
 - `findings`
 - `overall_risk_summary`
 - `items_for_human_review`
 
-Each finding should contain:
+每条 finding 至少应包含：
 - `clause_id`
 - `clause_text`
 - `issue_type`
@@ -63,18 +63,18 @@ Each finding should contain:
 - `suggested_revision`
 - `confidence`
 
-## Escalation rules
+## 升级复核规则
 
-Mark `needs_human_review = true` when:
-- the legal basis depends on local or newly updated regulation
-- the clause may be justified by safety, secrecy, compatibility, or statutory qualification requirements
-- the document excerpt is incomplete
-- the text is too ambiguous to support a stable conclusion
+遇到以下情形时，应将 `needs_human_review` 设为 `true`：
+- 法律依据依赖地方性规则或最新更新的监管文件
+- 条款可能因安全、保密、兼容性或法定资质要求而具有正当性
+- 文档片段不完整
+- 条款语义过于模糊，无法形成稳定结论
 
-## Non-goals
+## 非目标
 
-The agent should not:
-- give definitive legal advice without jurisdictional basis
-- invent regulatory citations it cannot support
-- erase legitimate functional needs in the name of neutrality
-- convert every unusual parameter into a compliance finding
+智能体不应：
+- 在没有明确法域依据时给出确定性的法律结论
+- 编造自己无法支持的法规引用
+- 以“中立性”为名抹掉采购人的正当业务需求
+- 把所有不常见参数都机械地判定为合规问题

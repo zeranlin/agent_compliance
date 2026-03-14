@@ -1,118 +1,118 @@
-# Architecture
+# 架构设计
 
-## Why this repository is structured like a harness
+## 为什么这个仓库要按 harness 方式组织
 
-Following OpenAI's harness engineering and Codex agent-loop guidance, this project treats the agent as an operator inside a persistent work environment rather than a one-shot reviewer.
+参考 OpenAI 的 harness engineering 与 Codex agent loop 思路，这个项目不把智能体视为一次性问答器，而是视为在持续工作环境中运行的执行者。
 
-That means the repository must help an agent:
-- find the current truth fast
-- understand the product and domain rules
-- keep track of unfinished work
-- leave behind artifacts that future loops can inspect
-- improve quality through explicit evals and feedback
+这意味着仓库必须帮助智能体做到：
+- 快速找到当前有效信息
+- 理解产品目标和领域规则
+- 跟踪尚未完成的工作
+- 留下可供后续循环检查的产物
+- 通过显式评测与反馈持续改进质量
 
-## Top-level operating model
+## 顶层运行模型
 
 ```mermaid
 flowchart TD
-    A["Input: procurement requirement or bidding document"] --> B["Normalize and segment clauses"]
-    B --> C["Compliance review workflow"]
-    C --> D["Issue extraction"]
-    D --> E["Rewrite and mitigation suggestions"]
-    E --> F["Structured review artifact"]
-    F --> G["Human procurement/legal review"]
-    F --> H["Eval report and failure capture"]
-    H --> I["Prompt/spec/plan updates"]
+    A["输入：采购需求或招标文件"] --> B["条款归一化与切分"]
+    B --> C["合规审查流程"]
+    C --> D["问题抽取"]
+    D --> E["改写与缓释建议"]
+    E --> F["结构化审查结果"]
+    F --> G["人工采购/法务复核"]
+    F --> H["评测报告与失败归因"]
+    H --> I["Prompt / 规格 / 计划更新"]
     I --> C
 ```
 
-## Repository layers
+## 仓库分层
 
-- `AGENTS.md`: short operating instructions for any future agent loop.
-- `README.md`: quick entry point.
-- `ARCHITECTURE.md`: the system map and why the map exists.
-- `docs/design-docs/`: deeper rationale, tradeoffs, and design decisions.
-- `docs/product-specs/`: the operational definition of compliant review behavior.
-- `docs/exec-plans/`: resumable task state and next actions.
-- `docs/evals/`: benchmark cases, rubrics, and score reports.
-- `docs/generated/`: sample outputs and future run artifacts.
-- `docs/references/`: concise notes tying this repo back to external architecture guidance.
+- `AGENTS.md`：供后续智能体循环快速读取的简明操作说明。
+- `README.md`：仓库入口。
+- `ARCHITECTURE.md`：系统地图，以及为什么要这样组织。
+- `docs/design-docs/`：更深入的设计理由、权衡与决策。
+- `docs/product-specs/`：对“合规审查行为”的操作性定义。
+- `docs/exec-plans/`：可恢复的任务状态与下一步动作。
+- `docs/evals/`：基准样例、评分规则与评测报告。
+- `docs/generated/`：样例输出与未来运行产物。
+- `docs/references/`：与外部架构方法对应的参考说明。
 
-## Design principles for this agent
+## 这个智能体的设计原则
 
-### 1. Agent legibility over hidden cleverness
+### 1. 优先保证智能体可读性，而不是隐藏式聪明
 
-The review agent should expose:
-- which clause triggered a concern
-- what kind of risk it believes exists
-- what evidence supports that judgment
-- what remains uncertain
+审查智能体应当清楚暴露：
+- 是哪一条款触发了风险判断
+- 风险属于什么类型
+- 依据是什么
+- 哪些地方仍然不确定
 
-### 2. Short maps, deep docs
+### 2. 顶层文件短小，深层文档承载细节
 
-Top-level files should help an agent route itself quickly. Detailed doctrine, examples, and policy nuance belong deeper in `docs/`.
+顶层文件负责帮助智能体快速定位；更详细的规则、例外、案例与政策细节放到 `docs/` 深层目录中。
 
-### 3. Plans are first-class state
+### 3. 计划是第一类状态
 
-Work should not disappear into memory. Current work belongs in an active execution plan so a later loop can resume without reconstructing everything.
+工作状态不能只留在上下文里。当前任务必须写入活动执行计划，方便后续循环直接续跑，而不是重新猜测上下文。
 
-### 4. Evals drive improvement
+### 4. 评测驱动改进
 
-A compliance agent is only useful if it repeatedly catches the right issues and avoids false positives. The repository therefore reserves explicit space for:
-- representative case sets
-- scoring rubrics
-- failure analysis
-- prompt and spec refinements
+一个合规检查智能体只有在“持续抓到真正的问题、同时控制误报”时才有价值。因此仓库必须为这些内容预留空间：
+- 代表性样例集
+- 评分 rubric
+- 失败分析
+- prompt 与规格迭代
 
-### 5. Human escalation is part of the design
+### 5. 人工升级复核是设计的一部分
 
-Some procurement questions depend on jurisdiction, current regulation, or document context outside the excerpt provided. The harness should surface these clearly instead of pretending certainty.
+有些政府采购问题高度依赖地域规则、时效性政策或上下文完整性。harness 应明确把这些情况暴露出来，而不是伪装成确定答案。
 
-## Functional modules
+## 功能模块
 
-### Intake and segmentation
+### 输入与切分
 
-Responsibilities:
-- accept raw procurement text or file-derived text
-- split by section, clause, table row, or requirement item
-- preserve original numbering for traceability
+职责：
+- 接收原始采购文本或从文件提取出的文本
+- 按章节、条款、表格行或需求项进行切分
+- 保留原始编号，确保可追溯
 
-### Compliance analysis
+### 合规分析
 
-Responsibilities:
-- detect discriminatory or exclusionary supplier conditions
-- detect brand, model, origin, certification, or performance requirements that may be overly specific
-- detect scoring factors unrelated to contract performance
-- detect vague or unverifiable acceptance and service clauses
-- distinguish likely violation, possible risk, and needs-human-review
+职责：
+- 识别带有歧视性或排他性的供应商条件
+- 识别品牌、型号、产地、资质或性能要求是否过度具体
+- 识别与合同履约能力无关的评分因素
+- 识别模糊或不可验证的验收与服务条款
+- 区分明显违规、存在风险、需要人工复核三类结论
 
-### Rewrite engine
+### 改写引擎
 
-Responsibilities:
-- propose neutral, performance-based alternatives
-- preserve the buyer's legitimate functional need
-- reduce brand- or supplier-locking language
-- turn vague demands into measurable criteria where possible
+职责：
+- 提供中性、基于功能或性能的替代表述
+- 保留采购人的合法业务需求
+- 降低对品牌或特定供应商的绑定
+- 在可能时把模糊要求改成可量化要求
 
-### Reporting layer
+### 报告层
 
-Responsibilities:
-- generate a structured finding list
-- preserve source references
-- provide confidence and review notes
-- support human approval workflows
+职责：
+- 生成结构化问题清单
+- 保留源条款引用
+- 提供置信度和复核说明
+- 支持人工审批与后续流转
 
-### Evaluation layer
+### 评测层
 
-Responsibilities:
-- run curated benchmark cases
-- compare findings against expected labels
-- capture false positives and false negatives
-- feed updates back into specs and prompts
+职责：
+- 运行整理好的基准样例
+- 将输出与预期标签对比
+- 捕获误报与漏报
+- 把结果反馈回规格与 prompt
 
-## Suggested artifact format
+## 建议的产物格式
 
-Each finding should aim to include:
+每条 finding 建议至少包含：
 - `source_section`
 - `source_text`
 - `risk_type`
@@ -123,10 +123,10 @@ Each finding should aim to include:
 - `rewrite_suggestion`
 - `needs_human_review`
 
-## Near-term build order
+## 近期建设顺序
 
-1. Define the operational review workflow.
-2. Define the finding schema and severity model.
-3. Create a starter eval set with obvious and borderline cases.
-4. Add generated example outputs.
-5. Iterate on prompts and rubrics from observed failures.
+1. 先定义操作性的审查流程。
+2. 再定义 finding schema 和严重度模型。
+3. 建立首批包含明显案例与边界案例的评测集。
+4. 补充生成式样例输出。
+5. 根据观测到的失败持续迭代 prompt 和 rubric。
