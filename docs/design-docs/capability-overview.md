@@ -183,6 +183,10 @@
   - 输出格式或审查范围发生变化
 - 不应在环境和条件未变化时，随意改变问题标题、风险等级、合规判断或修改建议
 - 对于需要保持稳定复现的结论，应优先复用既有问题类型、固定输出字段顺序和一致的法条映射口径
+- 后续执行优先采用“标准化输入 + 规则版本 + 引用快照 + findings 缓存 + 增量复审”的方式，减少重复全量大模型推理
+
+相关设计：
+- [consistency-and-caching-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/consistency-and-caching-design.md)
 
 ## 十、当前能力边界
 

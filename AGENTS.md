@@ -41,3 +41,4 @@
 - 完成后提供清晰的“做了什么 + 下一步”。
 - 如能力发生明显更新，应同步更新 [capability-overview.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/capability-overview.md)。
 - 对同一文件复审时，在输入、规则、引用状态和输出格式未变化的前提下，应尽量保持审查结果一致；如结论变化，必须说明变化原因。
+- 后续复审默认优先复用标准化输入、规则命中结果和结构化 findings 缓存，仅对受影响条款重新调用大模型，不对整份文档重复进行全量自由推理。
