@@ -55,6 +55,8 @@
 - `items_for_human_review`
 
 每条 finding 至少应包含：
+- `document_name`
+- `section_path`
 - `clause_id`
 - `clause_text`
 - `issue_type`
@@ -62,6 +64,11 @@
 - `why_it_is_risky`
 - `suggested_revision`
 - `confidence`
+
+对于长文档、表格类文件和评分标准，建议同时输出：
+- `page_hint`
+- `table_or_item_label`
+- `source_text`
 
 ## 升级复核规则
 

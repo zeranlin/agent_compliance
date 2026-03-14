@@ -32,8 +32,14 @@
 ```json
 {
   "finding_id": "string",
+  "document_name": "string",
+  "page_hint": "string or null",
   "clause_id": "string",
   "source_section": "string",
+  "section_path": "string or null",
+  "table_or_item_label": "string or null",
+  "text_line_start": 0,
+  "text_line_end": 0,
   "source_text": "string",
   "issue_type": "string",
   "risk_level": "high | medium | low | none",
@@ -55,6 +61,15 @@
 
 在同一次审查结果中使用稳定编号，如 `F-001`。
 
+### `document_name`
+
+填写来源文件名或来源文档标识，方便在多文件场景下快速回溯。
+
+### `page_hint`
+
+用于记录页码或页码区间，如 `第28页`、`第28-29页`。  
+对于 Word、PDF、扫描件等文档，页码通常比纯行号更适合人工快速定位。
+
 ### `clause_id`
 
 优先使用原文编号，如 `3.2`、`表4/第2行`、`评分项A`。
@@ -62,6 +77,22 @@
 ### `source_section`
 
 使用最近的、有意义的章节标签，例如 `技术参数`、`资格要求`、`评分标准`。
+
+### `section_path`
+
+用于记录完整章节路径，如 `七、采购实施计划-5.3 分值-项目负责人业绩`。  
+这是人工审查时最重要的主定位字段之一。
+
+### `table_or_item_label`
+
+用于记录表格名、评分项名、采购标的项名等，如 `评分表-第2项-服务团队`。  
+当问题位于表格、清单或评分项中时，应优先补充该字段。
+
+### `text_line_start` / `text_line_end`
+
+用于记录文本抽取后的起止行号。  
+这两个字段属于辅助定位字段，适用于纯文本副本、Markdown、稳定抽取文本等场景。  
+若当前文档无法稳定提供行号，可填 `0` 或在后续实现中留空。
 
 ### `source_text`
 
@@ -192,3 +223,5 @@
 - 不要把法律条文当作装饰性引用。
 - 如果一个条款包含多个应分别整改的风险，不要把它们粗暴合并为单个 finding。
 - 对大概率合规的条款，通常可不出现在常规审查输出中；若用于评测或报告，可保留并将 `severity_score` 设为 `0`。
+- 每条高风险或中风险 finding 都应至少具备 `document_name`、`source_section`、`clause_id`、`source_text` 四项定位信息。
+- 对长文档、表格型文件和评分标准类文件，应优先补充 `page_hint`、`section_path`、`table_or_item_label`。
