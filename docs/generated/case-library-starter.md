@@ -34,6 +34,10 @@
 | CASE-008 | 主观评分缺少分档标准 | 典型案例 | ambiguous_requirement | 竞争性磋商 | 根据实施方案优劣综合比较打分，满分15分。 | 没有明确分档和判断基准，专家自由裁量大 | potentially_problematic | 2 | RULE-011、RULE-004 | 细化为分项分档打分 | 是 | 高频投诉点 |
 | CASE-009 | 本地服务机构作为资格门槛 | 内部样例 | geographic_restriction | 公开招标 | 供应商须在项目所在地设有固定服务机构，并提供属地备案证明。 | 将属地便利性直接转化为准入门槛，可能排除外地供应商 | likely_non_compliant | 3 | RULE-002、RULE-013 | 改为中标后服务响应承诺或驻场机制 | 是 | 地域限制高频问题 |
 | CASE-010 | AAA信用等级高权重加分 | 内部样例 | irrelevant_certification_or_award | 竞争性磋商 | 供应商具有AAA信用等级证书得5分，具有省级荣誉称号得5分。 | 奖项荣誉和信用等级可能与项目直接履约能力无关 | likely_non_compliant | 3 | RULE-010、RULE-014 | 删除或大幅弱化此类加分项 | 是 | 高频争议点 |
+| CASE-011 | 同类合同数量要求过高 | 内部样例 | excessive_supplier_qualification | 公开招标 | 供应商近三年须提供不少于5个同类项目合同，否则资格不满足。 | 同类业绩数量要求过高，可能不合理缩小竞争范围 | potentially_problematic | 2 | RULE-015、RULE-003 | 缩减合同数量要求并明确同类范围 | 是 | 需结合项目特点论证 |
+| CASE-012 | 验收标准仅写动态考核 | 内部样例 | unclear_acceptance_standard | 框架协议 | 采购人将对供应商开展动态绩效考核，不达标的取消资格。 | 缺少验收内容、标准、方法和记录机制 | potentially_problematic | 2 | RULE-016、RULE-003 | 明确验收清单、考核指标和程序 | 是 | 履约争议高发点 |
+| CASE-013 | 第三方付款前提条款 | 内部样例 | one_sided_commercial_term | 竞争性磋商 | 待上级资金拨付或第三方付款到账后，采购人再向供应商支付合同款。 | 将付款条件与第三方行为挂钩，增加供应商资金风险 | likely_non_compliant | 3 | RULE-017、RULE-008 | 改为明确支付时点和逾期责任 | 是 | 中小企业风险高 |
+| CASE-014 | 采购人绝对免责条款 | 内部样例 | one_sided_commercial_term | 框架协议 | 因项目实施产生的一切风险、损失及法律责任均由供应商承担，采购人不承担任何责任。 | 责任分配失衡，可能排除采购人法定或约定义务 | likely_non_compliant | 3 | RULE-017、RULE-008 | 改为依法分别承担相应责任 | 是 | 合同条款高风险 |
 
 ## 维护建议
 
