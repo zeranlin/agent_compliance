@@ -54,6 +54,13 @@
 - `overall_risk_summary`
 - `items_for_human_review`
 
+如面向业务方或采购人直接改稿，建议同时输出一份“正式审查意见表”，强调：
+- 风险位置
+- 原文摘录
+- 修改建议
+- 建议替代表述
+- 优先修改顺序
+
 每条 finding 至少应包含：
 - `document_name`
 - `section_path`

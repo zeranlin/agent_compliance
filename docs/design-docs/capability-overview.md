@@ -55,6 +55,12 @@
 
 已建立正式模板：
 - [正式审查意见模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/review-output-template.md)
+- [业务方/采购人修改用正式审查意见表模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/business-facing-review-table-template.md)
+
+当前还具备一类更偏落地修改的交付能力：
+- 可输出“复审结果可直接给业务方/采购人修改”的正式审查意见表
+- 强调风险位置、原文摘录、修改建议和建议替代表述并列展示
+- 适合业务、采购、法务、代理机构协同改稿
 
 ## 三、精确定位能力
 
