@@ -1,34 +1,38 @@
-# Initial Harness Bootstrap
+# 初始 Harness 启动计划
 
-## Goal
+## 目标
 
-Turn `agent_compliance` from an empty folder into a harness-oriented repository for a government procurement compliance agent.
+将 `agent_compliance` 从一个空文件夹，建设为面向政府采购合规审查智能体的 harness 化仓库。
 
-## Current status
+## 当前状态
 
-Completed:
-- created top-level agent map
-- created architecture document
-- created procurement review workflow spec
-- created OpenAI-guidance reference notes
-- created design rationale document
+已完成：
+- 创建顶层智能体导航文件
+- 创建架构文档
+- 创建采购合规审查流程规格
+- 创建 finding schema
+- 创建 review rubric
+- 创建首批 benchmark 案例
+- 创建结构化审查样例输出
+- 创建 OpenAI 方法参考笔记
+- 创建设计理由文档
 
-Pending:
-- define finding schema in detail
-- define severity and confidence rubric
-- add starter eval cases
-- add sample generated review output
+待完成：
+- 定义面向具体法域的法律依据策略
+- 补充 benchmark 输出样例与评分报告
+- 增加条款级审查和整篇文档审查的 prompt 模板
+- 扩展到更多边界采购品类的 benchmark 集
 
-## Next actions
+## 下一步动作
 
-1. Create `docs/product-specs/finding-schema.md`.
-2. Create `docs/evals/rubrics/review-rubric.md`.
-3. Add at least 10 benchmark clauses across clear pass, clear fail, and borderline cases.
-4. Add one fully worked sample report under `docs/generated/`.
-5. Refine the workflow using failures from the benchmark set.
+1. 定义法域策略与权威政策依据集合。
+2. 基于初始 benchmark 样例补一份带评分的 eval 报告。
+3. 创建条款级审查和整篇文档审查的 prompt 模板。
+4. 将初始 benchmark 扩展为按品类划分的样例包。
+5. 根据评分案例中暴露的问题继续迭代审查流程。
 
-## Open questions
+## 待明确问题
 
-- Which jurisdiction and policy corpus should be treated as primary authority?
-- Should the agent target only procurement-needs review, or also scoring rules and contract clauses?
-- What output format is preferred for downstream use: Markdown table, JSON, or both?
+- 应以哪个法域和政策体系作为主要依据？
+- 智能体只覆盖采购需求审查，还是同时覆盖评分标准和合同条款？
+- 下游更偏好的输出格式是什么：Markdown 表格、JSON，还是两者都要？

@@ -1,26 +1,26 @@
-# Repo Design Rationale
+# 仓库设计理由
 
-This repository is intentionally document-heavy at the start because the current need is architectural alignment, not code volume.
+在项目早期，这个仓库刻意采用“文档多于代码”的方式，因为当前更需要先完成架构对齐，而不是单纯增加代码量。
 
-## Why not start with prompts only
+## 为什么不只从 prompt 开始
 
-Prompt-only systems are brittle for compliance review. They hide assumptions, make iteration hard, and leave weak handoff points for later agent loops.
+仅依赖 prompt 的系统在合规审查场景下很脆弱。它会隐藏假设，导致迭代困难，也会让后续智能体循环缺少稳定的交接点。
 
-## Why plans are stored in-repo
+## 为什么把计划存放在仓库中
 
-Execution plans provide:
-- continuity across loops
-- visibility into current priorities
-- a place to capture scope changes and blockers
+执行计划能够提供：
+- 跨循环的连续性
+- 当前优先事项的可见性
+- 记录范围变化与阻塞点的位置
 
-## Why evals are part of the first design
+## 为什么一开始就要纳入评测
 
-Compliance checking fails quietly when no benchmark exists. A repository that only stores prompts will drift. A repository with eval cases can improve deliberately.
+如果没有基准样例，合规检查常常会“静悄悄地失败”。只存 prompt 的仓库会逐渐漂移；有 eval 样例的仓库才能进行有意识的改进。
 
-## Why this is a harness for procurement compliance
+## 为什么这是一个面向采购合规的 harness
 
-Government procurement review is a good fit for harness engineering because it contains:
-- repeatable tasks
-- recurring error patterns
-- a need for evidence-backed judgments
-- a strong requirement for human review at the boundary cases
+政府采购审查很适合用 harness engineering 来组织，因为它具有：
+- 可重复执行的任务
+- 高频重复出现的错误模式
+- 对证据支撑判断的强需求
+- 对边界问题进行人工复核的强需求

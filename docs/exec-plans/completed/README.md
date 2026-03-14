@@ -1,3 +1,3 @@
-# Completed Plans
+# 已完成计划
 
-Move finished execution plans here so future agents can inspect prior work without crowding the active queue.
+将已经完成的执行计划移动到这里，方便后续智能体查看历史工作，同时避免活动计划目录过于拥挤。
