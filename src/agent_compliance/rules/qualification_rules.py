@@ -126,4 +126,16 @@ RULES = [
         rewrite_hint="删除人员年龄、性别、身高、户籍等画像限制，改为岗位能力和履约经验要求。",
         merge_key="qualification-personnel-profile",
     ),
+    RuleDefinition(
+        rule_id="QUAL-011",
+        issue_type="excessive_supplier_qualification",
+        pattern=re.compile(r"具有.*类似项目业绩.*方可投标|近\d+年.*类似项目业绩.*不得少于\d+个|承接过.*项目业绩.*作为资格条件|提供类似业绩证明材料方可"),
+        rationale="将类似业绩直接前置为资格条件，容易把履约经验要求泛化成准入门槛。",
+        severity_score=3,
+        related_rule_ids=("RULE-003", "RULE-012"),
+        related_reference_ids=("LEGAL-001", "CASESRC-002"),
+        source_section="申请人的资格要求",
+        rewrite_hint="删除类似业绩前置门槛，如确需评价履约经验，可在评分中低权重、与项目规模相匹配地设置。",
+        merge_key="qualification-past-performance",
+    ),
 ]

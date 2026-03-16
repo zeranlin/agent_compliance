@@ -432,9 +432,13 @@ def _merge_technical_justification_findings(findings: list[Finding]) -> list[Fin
 
 
 def _can_merge_technical_justification(left: Finding, right: Finding) -> bool:
-    if left.section_path != right.section_path:
+    left_section = left.section_path or left.source_section or ""
+    right_section = right.section_path or right.source_section or ""
+    if "技术要求" not in left_section or "技术要求" not in right_section:
         return False
-    return right.text_line_start - left.text_line_end <= 40
+    if left.document_name != right.document_name:
+        return False
+    return right.text_line_start - left.text_line_end <= 120
 
 
 def _merge_technical_justification_into(target: Finding, finding: Finding, family: str) -> None:
