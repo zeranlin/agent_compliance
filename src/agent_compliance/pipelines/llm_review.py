@@ -377,7 +377,7 @@ def _build_task_prompt(
         [
             "候选条款:",
             *[
-                f"- clause_id={clause.clause_id} | section={clause.section_path} | lines={clause.line_start}-{clause.line_end} | text={clause.text}"
+                f"- clause_ref={clause.line_start}:{clause.clause_id} | clause_id={clause.clause_id} | section={clause.section_path} | lines={clause.line_start}-{clause.line_end} | text={clause.text}"
                 for clause in clauses
             ],
             "输出 JSON 对象，格式如下：",
@@ -385,6 +385,7 @@ def _build_task_prompt(
             '  "findings": [',
             '    {',
             '      "should_flag": true,',
+            '      "clause_ref": "行号:条款编号",',
             '      "clause_id": "条款编号",',
             '      "issue_type": "问题类型",',
             '      "problem_title": "问题标题",',
@@ -437,13 +438,19 @@ def _findings_from_payload(
     allowed_issue_types: set[str],
 ) -> list[Finding]:
     findings: list[Finding] = []
+    allowed_clause_refs = {f"{clause.line_start}:{clause.clause_id}" for clause in document.clauses if clause.clause_id in allowed_clause_ids}
     for index, item in enumerate(payload.get("findings", []), start=1):
         if not isinstance(item, dict) or not item.get("should_flag"):
             continue
+        clause_ref = str(item.get("clause_ref", ""))
         clause_id = str(item.get("clause_id", ""))
-        if clause_id not in allowed_clause_ids:
-            continue
-        clause = _find_clause_by_id(document, clause_id)
+        clause = None
+        if clause_ref and clause_ref in allowed_clause_refs:
+            clause = _find_clause_by_ref(document, clause_ref)
+        if clause is None:
+            if clause_id not in allowed_clause_ids:
+                continue
+            clause = _find_clause_by_id(document, clause_id)
         if clause is None:
             continue
         issue_type = str(item.get("issue_type") or issue_type_default)
@@ -684,6 +691,18 @@ def _document_domain_summary(document: NormalizedDocument) -> str:
 def _find_clause_by_id(document: NormalizedDocument, clause_id: str) -> Clause | None:
     for clause in document.clauses:
         if clause.clause_id == clause_id:
+            return clause
+    return None
+
+
+def _find_clause_by_ref(document: NormalizedDocument, clause_ref: str) -> Clause | None:
+    try:
+        line_start_str, clause_id = clause_ref.split(":", 1)
+        line_start = int(line_start_str)
+    except Exception:
+        return None
+    for clause in document.clauses:
+        if clause.line_start == line_start and clause.clause_id == clause_id:
             return clause
     return None
 

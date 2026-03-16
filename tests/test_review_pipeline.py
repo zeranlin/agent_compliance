@@ -317,6 +317,34 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertTrue(any(finding.issue_type == "other" for finding in review.findings))
         self.assertFalse(any("履约异常情况反馈表" in (finding.section_path or "") for finding in review.findings))
 
+    def test_review_flags_fixed_year_and_manufacturer_engineer_and_payment_shift(self) -> None:
+        text = "\n".join(
+            [
+                "技术要求",
+                "产品应选用原装产品，生产日期必须是2025年。",
+                "该技术人员必须为柴油发电机制造商厂的专业工程师，有指导安装、调试同类设备5年以上工作经验。",
+                "商务要求",
+                "工程全部安装调试完成经采购人现场验收合格设备正常运行三个月后支付合同总价的20%。",
+                "采购人不承担任何责任及相关费用。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="techbiz123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = build_review_result(document, run_rule_scan(document))
+
+        issue_types = {finding.issue_type for finding in review.findings}
+        self.assertIn("technical_justification_needed", issue_types)
+        self.assertIn("excessive_supplier_qualification", issue_types)
+        self.assertTrue(any(finding.issue_type == "payment_acceptance_linkage" for finding in review.findings))
+        self.assertTrue(any(finding.issue_type == "one_sided_commercial_term" for finding in review.findings))
+
     def test_review_flags_sample_scoring_weight_and_commercial_risk_shift(self) -> None:
         text = "\n".join(
             [
