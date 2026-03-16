@@ -37,6 +37,7 @@
 - `PYTHONPATH=src python3 -m agent_compliance normalize <file>`
 - `PYTHONPATH=src python3 -m agent_compliance scan-rules <file> --json`
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json`
+- `PYTHONPATH=src python3 -m agent_compliance web`
 
 测试阶段默认关闭 review 缓存；如需复用缓存，可显式加：
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-cache`
@@ -44,6 +45,11 @@
 本地大模型兜底接口已预留，默认关闭；如需显式启用：
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-llm`
 - 可选覆盖模型和地址：`--llm-model <model>`、`--llm-base-url <base_url>`
+
+本地 Web 页面：
+- 启动：`PYTHONPATH=src python3 -m agent_compliance web`
+- 默认地址：[http://127.0.0.1:8765](http://127.0.0.1:8765)
+- 当前支持上传文件、启用缓存/本地模型开关、查看审查摘要和 findings 列表
 
 本地引用资料：
 - [法规依据本地引用库](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/legal-authorities/README.md)

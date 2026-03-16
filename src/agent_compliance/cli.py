@@ -46,6 +46,14 @@ def build_parser() -> argparse.ArgumentParser:
     eval_parser = subparsers.add_parser("eval", help="Show benchmark entry points")
     eval_parser.add_argument("--json", action="store_true")
 
+    web_parser = subparsers.add_parser(
+        "web",
+        help="Run local review web UI",
+        description="Run local review web UI",
+    )
+    web_parser.add_argument("--host", default="127.0.0.1")
+    web_parser.add_argument("--port", type=int, default=8765)
+
     return parser
 
 
@@ -110,6 +118,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "eval":
         return _print_result(benchmark_summary(), args.json)
+
+    if args.command == "web":
+        from agent_compliance.web.app import run_web_server
+
+        run_web_server(host=args.host, port=args.port)
+        return 0
 
     parser.error("Unknown command")
     return 2

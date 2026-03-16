@@ -43,6 +43,17 @@ class CliSmokeTest(unittest.TestCase):
         )
         self.assertIn("rule_hits", result.stdout)
 
+    def test_web_command_is_available(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "agent_compliance", "web", "--help"],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            env={**dict(__import__("os").environ), "PYTHONPATH": str(REPO_ROOT / "src")},
+        )
+        self.assertIn("Run local review web UI", result.stdout)
+
     def test_review_uses_cache_on_second_run(self) -> None:
         sample = "\n".join(
             [

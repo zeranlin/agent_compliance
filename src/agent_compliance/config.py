@@ -12,6 +12,7 @@ class AppPaths:
     normalized_root: Path
     review_root: Path
     cache_root: Path
+    uploads_root: Path
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ def detect_paths() -> AppPaths:
         normalized_root=generated_root / "normalized-documents",
         review_root=generated_root / "reviews",
         cache_root=generated_root / "cache",
+        uploads_root=generated_root / "uploads",
     )
 
 
