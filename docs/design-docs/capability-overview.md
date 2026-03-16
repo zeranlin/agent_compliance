@@ -361,6 +361,10 @@
 - 已将窗帘项目中的人工差异要点整理为 benchmark 回归样本，后续可持续验证属地、类似业绩前置、商务违约链路和技术需论证查点
 - 已让本地 eval 入口读取 benchmark 清单；同时补入服务响应条款中的属地限制，并继续压缩技术“需论证”类 finding
 - 已开始把资格异常识别、评分内容错位识别和全文辅助扫描纳入正式主链路，不再只依赖单个项目差异驱动补规则
+- 已把原先落在 `other` 里的资格错位和评分错位细分成更稳定的问题类型，如 `qualification_domain_mismatch` 与 `scoring_content_mismatch`
+- 已把固定年份这类技术“需论证”问题提升为主题级 finding，并增强了必要性论证、市场可得性和更中性表达的说明质量
+- 已补入 `1 小时到场 / 60 分钟到场` 等事实上的属地倾斜识别，并在标题层直接提示“售后响应时限设置形成事实上的属地倾斜”
+- 已继续压缩长文档中的本地模型重复输出和错位挂接，改为优先使用 `clause_ref=行号:条款编号`，并按问题类型、行号和摘要签名做去重
 
 相关设计：
 - [local-runtime-skeleton.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-runtime-skeleton.md)

@@ -152,7 +152,7 @@ RULES = [
     ),
     RuleDefinition(
         rule_id="QUAL-013",
-        issue_type="other",
+        issue_type="qualification_domain_mismatch",
         pattern=re.compile(r"有害生物防制|SPCA登记证书|SPCA"),
         rationale="资格条件出现与采购标的领域明显不匹配的资质或登记要求，疑似模板错贴或条款域与标的域不一致。",
         severity_score=3,

@@ -98,14 +98,17 @@ def issue_type_fragment(issue_type: str) -> str:
         "geographic_restriction": "属地",
         "personnel_restriction": "资格条件",
         "excessive_supplier_qualification": "资格条件",
+        "qualification_domain_mismatch": "资格条件",
         "irrelevant_certification_or_award": "奖项",
         "duplicative_scoring_advantage": "评分",
+        "scoring_content_mismatch": "评分",
         "ambiguous_requirement": "主观评分",
         "narrow_technical_parameter": "采购需求",
         "technical_justification_needed": "采购需求",
         "unclear_acceptance_standard": "验收",
         "one_sided_commercial_term": "付款",
         "payment_acceptance_linkage": "付款",
+        "template_mismatch": "采购需求",
         "other": "采购需求",
     }
     return fragments.get(issue_type, issue_type)

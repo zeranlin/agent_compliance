@@ -104,7 +104,7 @@ RULES = [
     ),
     RuleDefinition(
         rule_id="SCORE-009",
-        issue_type="duplicative_scoring_advantage",
+        issue_type="scoring_content_mismatch",
         pattern=re.compile(r"安装的工程案例|工程案例；|具有CMA标识的第三方检测报告"),
         rationale="方案或计划评分中混入工程案例、检测报告形式等内容，容易把与方案本体不同层次的材料转化为评分优势。",
         severity_score=3,
@@ -117,7 +117,7 @@ RULES = [
     RuleDefinition(
         rule_id="SCORE-010",
         issue_type="geographic_restriction",
-        pattern=re.compile(r"1小时（60分钟）.*到达现场.*得100分|1\.5小时（90分钟.*到达现场.*得50分|1小时内到达现场处理问题"),
+        pattern=re.compile(r"1小时(?:（60分钟）)?内?.*到达现场.*得(?:100|满)分|1\.5小时(?:（90分钟）)?内?.*到达现场.*得(?:50|半)分|1小时内到达现场处理问题|60分钟内到达现场.*得分"),
         rationale="对极短到场时限给予高分，容易对本地驻点或既有服务网络形成事实上的属地倾斜。",
         severity_score=3,
         related_rule_ids=("RULE-002", "RULE-004"),
@@ -128,7 +128,7 @@ RULES = [
     ),
     RuleDefinition(
         rule_id="SCORE-011",
-        issue_type="duplicative_scoring_advantage",
+        issue_type="scoring_content_mismatch",
         pattern=re.compile(r"从业人员超过\d+人|资产总额达到\d+万元以上|成立时间满\d+年"),
         rationale="评分项将企业规模、资产或成立年限直接转化为竞争优势，通常与具体履约质量无直接对应关系。",
         severity_score=3,
@@ -140,7 +140,7 @@ RULES = [
     ),
     RuleDefinition(
         rule_id="SCORE-012",
-        issue_type="other",
+        issue_type="scoring_content_mismatch",
         pattern=re.compile(r"有机产品认证证书|水运机电工程专项监理企业资质认定|采用国际标准产品确认证书|采用国际标准产品标志证书"),
         rationale="评分项中出现与当前采购标的关联不足或领域明显错位的证书、资质或认证，疑似模板错贴或内容错位。",
         severity_score=3,

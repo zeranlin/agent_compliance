@@ -32,7 +32,7 @@ RULES = [
     ),
     RuleDefinition(
         rule_id="CONTRACT-003",
-        issue_type="other",
+        issue_type="template_mismatch",
         pattern=re.compile(r"卫生清洁、保洁|垃圾的分类收集、清运|碳足迹盘查报告"),
         rationale="存在与项目主标的关系不清的义务或模板残留内容。",
         severity_score=2,

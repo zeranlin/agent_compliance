@@ -280,7 +280,7 @@ class ReviewPipelineTest(unittest.TestCase):
         review = build_review_result(document, run_rule_scan(document))
 
         issue_types = {finding.issue_type for finding in review.findings}
-        self.assertIn("other", issue_types)
+        self.assertIn("qualification_domain_mismatch", issue_types)
         self.assertIn("excessive_supplier_qualification", issue_types)
         self.assertTrue(any("有害生物防制" in finding.source_text or "SPCA" in finding.source_text for finding in review.findings))
         self.assertTrue(any("年均纳税额" in finding.source_text or "单项合同金额" in finding.source_text for finding in review.findings))
@@ -313,8 +313,7 @@ class ReviewPipelineTest(unittest.TestCase):
         )
         review = build_review_result(document, run_rule_scan(document))
 
-        self.assertTrue(any(finding.issue_type == "duplicative_scoring_advantage" for finding in review.findings))
-        self.assertTrue(any(finding.issue_type == "other" for finding in review.findings))
+        self.assertTrue(any(finding.issue_type == "scoring_content_mismatch" for finding in review.findings))
         self.assertFalse(any("履约异常情况反馈表" in (finding.section_path or "") for finding in review.findings))
 
     def test_review_flags_fixed_year_and_manufacturer_engineer_and_payment_shift(self) -> None:
@@ -517,6 +516,77 @@ class ReviewPipelineTest(unittest.TestCase):
         justifications = [finding for finding in review.findings if finding.issue_type == "technical_justification_needed"]
         self.assertEqual(len(justifications), 1)
         self.assertIn("必要性论证", justifications[0].problem_title)
+
+    def test_review_flags_one_hour_arrival_as_geographic_restriction(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "售后服务",
+                "投标人承诺 1小时（60分钟）内到达现场处理问题的得100分，1.5小时（90分钟）内到达现场的得50分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="geo123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = build_review_result(document, run_rule_scan(document))
+
+        findings = [finding for finding in review.findings if finding.issue_type == "geographic_restriction"]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("属地倾斜", findings[0].problem_title)
+
+    def test_review_merges_scoring_content_mismatch_by_theme(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "施工组织方案及安全保障措施",
+                "发电机组安装的工程案例。",
+                "投标人须提供具有CMA标识的第三方检测报告。",
+                "投标人从业人员超过100人的，得3分；资产总额达到3000万元以上的，得3分；成立时间满3年的得2分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="scoremerge123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = build_review_result(document, run_rule_scan(document))
+
+        mismatches = [finding for finding in review.findings if finding.issue_type == "scoring_content_mismatch"]
+        self.assertEqual(len(mismatches), 1)
+        self.assertIn("同一评分项已合并", mismatches[0].problem_title)
+
+    def test_review_refines_fixed_year_technical_justification_text(self) -> None:
+        text = "\n".join(
+            [
+                "技术要求",
+                "产品应选用原装产品，生产日期必须是2025年。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="fixedyear123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = build_review_result(document, run_rule_scan(document))
+
+        findings = [finding for finding in review.findings if finding.issue_type == "technical_justification_needed"]
+        self.assertEqual(len(findings), 1)
+        self.assertIn("固定年份", findings[0].problem_title)
+        self.assertIn("市场可得性", findings[0].why_it_is_risky)
 
     def test_review_flags_geographic_restriction_in_service_response_clause(self) -> None:
         text = "\n".join(

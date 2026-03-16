@@ -182,16 +182,19 @@ def _expand_rationale(group: HitGroup) -> str:
         "geographic_restriction": "这类要求会直接压缩非本地供应商的可参与范围。",
         "personnel_restriction": "这类画像限制通常不能直接替代岗位能力和履约经验要求。",
         "excessive_supplier_qualification": "这类条件通常会把与履约无直接关系的企业属性、规模或年限要求变成准入门槛。",
+        "qualification_domain_mismatch": "当资格条件与采购标的所属领域明显不匹配时，往往意味着模板错贴或不当扩大准入门槛。",
         "irrelevant_certification_or_award": "这类企业称号、荣誉或认证通常不能直接替代项目履约能力判断。",
         "duplicative_scoring_advantage": "如果资格证明材料或与履约弱相关的因素再次计分，容易扭曲竞争。",
+        "scoring_content_mismatch": "评分项如果混入与评分主题不一致的案例、证书、规模或行业错位内容，容易把不相关材料变成竞争优势。",
         "excessive_scoring_weight": "单一因素分值过高时，容易使评分结构失衡并对少数供应商形成明显倾斜。",
         "post_award_proof_substitution": "允许中标后补证会削弱投标时点评分依据的真实性和可比性。",
         "ambiguous_requirement": "评分分档缺乏量化锚点时，评委之间的尺度容易失衡。",
         "narrow_technical_parameter": "如缺少市场调研和必要性说明，容易形成对少数产品体系的实质偏向。",
-        "technical_justification_needed": "此类要求不当然违规，但应补充场景必要性、标准依据和市场可竞争性说明。",
+        "technical_justification_needed": "此类要求不当然违规，但应补充场景必要性、标准依据、市场可得性和是否存在更中性表达的说明。",
         "unclear_acceptance_standard": "验收清单、触发条件和费用边界不清时，后续履约争议风险会升高。",
         "one_sided_commercial_term": "将付款、责任或验收风险过度转嫁给供应商，容易造成合同权利义务失衡。",
         "payment_acceptance_linkage": "当抽检、终验和付款深度绑定时，供应商回款预期和履约成本都更难稳定评估。",
+        "template_mismatch": "这类条款通常表现为跨领域模板残留、开放式义务外扩或与标的不直接相关的履约要求。",
         "other": "这类条款通常需要进一步判断是否超出采购标的实际需要或属于模板残留。",
     }
     prefix = "相邻条款存在同类问题，建议作为一个风险点统筹修改。" if len(group.hits) > 1 else ""
@@ -207,12 +210,22 @@ def _rewrite_suggestion(group: HitGroup) -> str:
 
 def _problem_title(group: HitGroup, clause) -> str:
     issue = group.primary_hit.issue_type_candidate
+    combined_text = f"{group.source_text} {group.primary_hit.matched_clause_id}"
+    if issue == "geographic_restriction" and any(
+        marker in combined_text for marker in ("1小时", "60分钟", "1.5小时", "90分钟", "到达现场")
+    ):
+        base = "售后响应时限设置形成事实上的属地倾斜"
+        if len(group.hits) > 1:
+            return f"{base}（同一评分项已合并）"
+        return base
     titles = {
         "geographic_restriction": "资格或评分要求存在属地限制",
         "personnel_restriction": "人员条件存在不当画像限制",
         "excessive_supplier_qualification": "资格条件设置与履约关联不足",
+        "qualification_domain_mismatch": "资格条件中出现与采购标的不匹配的资质要求",
         "irrelevant_certification_or_award": "评分中设置与履约弱相关的荣誉资质加分",
         "duplicative_scoring_advantage": "评分中重复放大资格证明材料",
+        "scoring_content_mismatch": "评分内容与评分主题或采购标的不完全匹配",
         "excessive_scoring_weight": "单一评分因素权重设置过高",
         "scoring_structure_imbalance": "评分结构中多类高分因素集中出现",
         "post_award_proof_substitution": "评分证明材料允许中标后补证",
@@ -222,6 +235,7 @@ def _problem_title(group: HitGroup, clause) -> str:
         "unclear_acceptance_standard": "验收标准或检测边界不清",
         "one_sided_commercial_term": "商务条款存在单方风险转嫁",
         "payment_acceptance_linkage": "付款条件与抽检终验深度绑定",
+        "template_mismatch": "条款内容可能存在模板错贴或义务外扩",
         "other": "条款内容可能存在模板残留或义务外扩",
     }
     base = titles.get(issue, "条款存在合规风险")
@@ -237,17 +251,20 @@ def _impact_text(issue_type: str) -> str:
         "geographic_restriction": "可能直接排除非本地供应商，削弱公平竞争。",
         "personnel_restriction": "可能把与履约无直接关系的人员画像条件转化为准入或评分优势。",
         "excessive_supplier_qualification": "可能直接缩小合格供应商范围，降低竞争充分性。",
+        "qualification_domain_mismatch": "可能把与采购标的不匹配的行业资质、登记或许可错误地变成准入条件。",
         "irrelevant_certification_or_award": "可能把综合声誉或企业形象替代为履约能力评价，形成不合理倾斜。",
         "duplicative_scoring_advantage": "可能把本应止于资格审查的因素重复放大为评分优势。",
+        "scoring_content_mismatch": "可能把与评分主题无关或与标的不匹配的材料转化为得分点，扭曲评审重心。",
         "excessive_scoring_weight": "可能导致评分结构明显失衡，过度放大单一因素对中标结果的影响。",
         "scoring_structure_imbalance": "可能导致评分表整体失衡，使少数高分因素对中标结果形成决定性影响。",
         "post_award_proof_substitution": "可能导致评分依据失真，破坏投标文件在截止时点的可比性。",
         "ambiguous_requirement": "可能导致评审尺度不一致、自由裁量过大和复核难度上升。",
         "narrow_technical_parameter": "可能压缩可竞争的品牌和型号范围，并提高投诉风险。",
-        "technical_justification_needed": "可能形成较高履约门槛或缩窄供应范围，需结合场景必要性进一步复核。",
+        "technical_justification_needed": "可能在形式上缩窄供应范围或提高证明成本，需结合适用场景、标准依据和市场可得性进一步复核。",
         "unclear_acceptance_standard": "可能导致验收标准不稳定、成本难估算和后续争议升级。",
         "one_sided_commercial_term": "可能抬高供应商报价和履约风险，增加合同争议概率。",
         "payment_acceptance_linkage": "可能导致回款周期不稳定、履约成本难估算和付款争议增多。",
+        "template_mismatch": "可能扩张供应商义务范围，并将与采购标的不直接相关的履约成本转嫁给中标人。",
         "other": "可能扩张供应商义务范围或引入与项目不直接相关的履约成本。",
     }
     return mapping.get(issue_type, "可能影响公平竞争、履约可执行性或复核稳定性。")
@@ -286,7 +303,7 @@ def _legal_basis_text(references: list[ReferenceRecord]) -> str | None:
 
 
 def _confidence(issue_type: str, severity_score: int) -> str:
-    if issue_type in {"narrow_technical_parameter", "technical_justification_needed", "other"} and severity_score >= 2:
+    if issue_type in {"narrow_technical_parameter", "technical_justification_needed", "template_mismatch", "other"} and severity_score >= 2:
         return "medium"
     return "high" if severity_score >= 2 else "medium"
 
@@ -297,6 +314,9 @@ def _needs_human_review(issue_type: str) -> bool:
         "technical_justification_needed",
         "one_sided_commercial_term",
         "payment_acceptance_linkage",
+        "qualification_domain_mismatch",
+        "scoring_content_mismatch",
+        "template_mismatch",
         "other",
     }
 
@@ -304,9 +324,12 @@ def _needs_human_review(issue_type: str) -> bool:
 def _human_review_reason(issue_type: str) -> str | None:
     reasons = {
         "narrow_technical_parameter": "需结合市场调研、兼容性边界和临床必要性判断参数是否具有正当性。",
-        "technical_justification_needed": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+        "technical_justification_needed": "需结合采购场景、适用标准、市场可得性和是否存在更中性表达判断该技术要求是否应保留。",
         "one_sided_commercial_term": "需结合采购人内控、财政支付流程和合同谈判边界判断条款是否可保留。",
         "payment_acceptance_linkage": "需结合抽检机制、终验流程和财政支付安排判断付款节点设置是否合理。",
+        "qualification_domain_mismatch": "需结合采购标的领域、法定许可要求和履约实际判断该资质是否确有必要。",
+        "scoring_content_mismatch": "需结合评分主题和项目履约目标判断该评分内容是否与评审事项直接相关。",
+        "template_mismatch": "需结合项目范围判断该条款是否属于模板残留、跨领域复制或确有业务必要性。",
         "other": "需结合项目背景判断该义务是否属于模板残留或确有政策和业务必要性。",
     }
     return reasons.get(issue_type)
@@ -350,6 +373,7 @@ def _refine_findings(findings: list[Finding]) -> list[Finding]:
         refined.append(finding)
 
     refined = _merge_sample_scoring_findings(refined)
+    refined = _merge_scoring_content_findings(refined)
     refined = _add_scoring_structure_finding(refined)
     refined = _merge_technical_justification_findings(refined)
     refined = _filter_technical_justification_noise(refined)
@@ -464,6 +488,7 @@ def _merge_technical_justification_findings(findings: list[Finding]) -> list[Fin
         if family is None:
             merged.append(finding)
             continue
+        _apply_technical_justification_theme(finding, family, merged_count=1)
         existing = groups.get(family)
         if existing is None:
             groups[family] = finding
@@ -480,6 +505,10 @@ def _merge_technical_justification_findings(findings: list[Finding]) -> list[Fin
 
 
 def _can_merge_technical_justification(left: Finding, right: Finding) -> bool:
+    left_family = _technical_justification_family_key(left)
+    right_family = _technical_justification_family_key(right)
+    if left_family == "fixed_year_requirement" and right_family == "fixed_year_requirement":
+        return left.document_name == right.document_name
     left_section = left.section_path or left.source_section or ""
     right_section = right.section_path or right.source_section or ""
     if "技术要求" not in left_section or "技术要求" not in right_section:
@@ -499,19 +528,13 @@ def _merge_technical_justification_into(target: Finding, finding: Finding, famil
     target.legal_or_policy_basis = _merge_optional_text(
         [target.legal_or_policy_basis, finding.legal_or_policy_basis]
     )
-    target.problem_title = _technical_justification_title(family)
-    target.why_it_is_risky = (
-        "相邻技术条款涉及安全、环保、院感或检测证明等同类要求，建议作为一个风险点统筹论证。"
-        "此类要求不当然违规，但应补充场景必要性、标准依据和市场可竞争性说明。"
-    )
-    target.rewrite_suggestion = (
-        "建议对同一技术组的相邻条款统一说明适用场景、标准依据、检测证明形式和市场可竞争性，"
-        "能以国家或行业标准表达的尽量避免叠加细化证明形式。"
-    )
+    _apply_technical_justification_theme(target, family, merged_count=2)
 
 
 def _technical_justification_family_key(finding: Finding) -> str | None:
     normalized = _normalized_source_signature(finding.source_text)
+    if any(token in normalized for token in ("生产日期必须是", "生产日期", "2025年", "固定年份")):
+        return "fixed_year_requirement"
     if any(token in normalized for token in ("阻燃", "抗菌", "抗病毒", "防霉", "环保", "致癌染料", "有机锡", "邻苯", "含氯苯酚", "盐雾")):
         return "safety_environment"
     if any(token in normalized for token in ("cma", "cnas", "第三方", "检测报告")):
@@ -521,11 +544,67 @@ def _technical_justification_family_key(finding: Finding) -> str | None:
 
 def _technical_justification_title(family: str) -> str:
     titles = {
-        "safety_environment": "安全环保类技术要求可能合理但需补充必要性论证（相邻条款已合并）",
-        "testing_proof": "检测证明形式要求可能合理但需补充必要性论证（相邻条款已合并）",
-        "technical_justification_general": "技术要求可能合理但需补充必要性论证（相邻条款已合并）",
+        "fixed_year_requirement": "固定年份或过窄时点要求可能合理但需补充必要性论证",
+        "safety_environment": "安全环保类技术要求可能合理但需补充必要性论证",
+        "testing_proof": "检测证明形式要求可能合理但需补充必要性论证",
+        "technical_justification_general": "技术要求可能合理但需补充必要性论证",
     }
-    return titles.get(family, "技术要求可能合理但需补充必要性论证（相邻条款已合并）")
+    return titles.get(family, "技术要求可能合理但需补充必要性论证")
+
+
+def _apply_technical_justification_theme(finding: Finding, family: str, *, merged_count: int) -> None:
+    title = _technical_justification_title(family)
+    if merged_count > 1:
+        title = f"{title}（相邻条款已合并）"
+    finding.problem_title = title
+    finding.why_it_is_risky = _technical_justification_rationale(family)
+    finding.rewrite_suggestion = _technical_justification_rewrite(family)
+    finding.human_review_reason = _technical_justification_human_review_reason(family)
+
+
+def _technical_justification_rationale(family: str) -> str:
+    mapping = {
+        "fixed_year_requirement": (
+            "相邻技术条款对生产日期、供货时点或新旧程度提出较窄要求，建议作为一个风险点统筹论证。"
+            "此类要求不当然违规，但采购人应补充限定固定年份或固定时点的设备性能必要性、市场可得性以及是否存在更中性的替代表达。"
+        ),
+        "safety_environment": (
+            "相邻技术条款涉及安全、环保、院感或有害物质限制等同类要求，建议作为一个风险点统筹论证。"
+            "此类要求不当然违规，但应补充适用场景、标准依据、风险控制目标和市场可竞争性说明。"
+        ),
+        "testing_proof": (
+            "相邻技术条款对第三方检测、证明形式或报告时段提出同类要求，建议作为一个风险点统筹论证。"
+            "此类要求不当然违规，但应补充为什么必须限定证明机构、报告时段和证明形式，以及是否存在更中性的验证方式。"
+        ),
+    }
+    return mapping.get(
+        family,
+        "相邻技术条款涉及同类约束条件，建议作为一个风险点统筹论证。此类要求不当然违规，但应补充场景必要性、标准依据、市场可得性和更中性表达的可行性说明。",
+    )
+
+
+def _technical_justification_rewrite(family: str) -> str:
+    mapping = {
+        "fixed_year_requirement": "建议将固定年份改为全新、未使用且满足交付和质保要求的表述；如确需限定时点，应同步说明性能、安全和运维上的必要性。",
+        "safety_environment": "建议按适用标准、场景风险和验收目标统一说明保留范围，能以国家或行业标准表达的尽量避免叠加细化指标。",
+        "testing_proof": "建议统一说明检测证明的适用范围、报告时段和证明机构要求，优先采用国家或行业通用标准和更中性的验证方式。",
+    }
+    return mapping.get(
+        family,
+        "建议对同一技术组的相邻条款统一说明适用场景、标准依据、证明方式和市场可竞争性，能以国家或行业标准表达的尽量避免叠加细化证明形式。",
+    )
+
+
+def _technical_justification_human_review_reason(family: str) -> str:
+    mapping = {
+        "fixed_year_requirement": "需结合设备更新周期、性能要求、市场可得性和是否存在更中性时点表达判断固定年份要求是否应保留。",
+        "safety_environment": "需结合安全、环保、院感或有害物质控制要求及市场可得性判断该类技术要求是否应保留。",
+        "testing_proof": "需结合适用标准、证明机构选择依据和更中性的验证方式判断该证明形式要求是否应保留。",
+    }
+    return mapping.get(
+        family,
+        "需结合采购场景、适用标准、市场可得性和是否存在更中性表达判断该技术要求是否应保留。",
+    )
 
 
 def _add_scoring_structure_finding(findings: list[Finding]) -> list[Finding]:
@@ -626,6 +705,85 @@ def _merge_sample_scoring_findings(findings: list[Finding]) -> list[Finding]:
     flush_pending()
     merged.sort(key=lambda item: (item.text_line_start, item.issue_type, item.section_path or ""))
     return merged
+
+
+def _merge_scoring_content_findings(findings: list[Finding]) -> list[Finding]:
+    merged: list[Finding] = []
+    pending: list[Finding] = []
+
+    def flush_pending() -> None:
+        if not pending:
+            return
+        if len(pending) == 1:
+            merged.append(pending[0])
+        else:
+            merged.append(_build_scoring_content_finding(pending))
+        pending.clear()
+
+    for finding in sorted(findings, key=lambda item: (item.text_line_start, item.text_line_end, item.issue_type)):
+        if finding.issue_type == "scoring_content_mismatch":
+            if pending and not _can_merge_scoring_content(pending[-1], finding):
+                flush_pending()
+            pending.append(finding)
+            continue
+        flush_pending()
+        merged.append(finding)
+
+    flush_pending()
+    merged.sort(key=lambda item: (item.text_line_start, item.issue_type, item.section_path or ""))
+    return merged
+
+
+def _can_merge_scoring_content(left: Finding, right: Finding) -> bool:
+    if _scoring_content_family_key(left) != _scoring_content_family_key(right):
+        return False
+    left_section = left.section_path or ""
+    right_section = right.section_path or ""
+    if "评标信息" not in left_section or "评标信息" not in right_section:
+        return False
+    return right.text_line_start - left.text_line_end <= 120
+
+
+def _build_scoring_content_finding(candidates: list[Finding]) -> Finding:
+    ordered = sorted(candidates, key=lambda item: (item.text_line_start, item.text_line_end))
+    base = ordered[0]
+    merged = Finding(**base.to_dict())
+    merged.text_line_start = min(item.text_line_start for item in ordered)
+    merged.text_line_end = max(item.text_line_end for item in ordered)
+    merged.page_hint = _merge_optional_text((item.page_hint for item in ordered), separator=" / ")
+    merged.section_path = _merge_optional_text((item.section_path for item in ordered), separator=" / ")
+    merged.source_text = "；".join(list(OrderedDict.fromkeys(item.source_text for item in ordered if item.source_text)))
+    merged.problem_title = "评分内容与评分主题或采购标的不完全匹配（同一评分项已合并）"
+    merged.issue_type = "scoring_content_mismatch"
+    merged.risk_level = "high"
+    merged.severity_score = 3
+    merged.confidence = "high"
+    merged.compliance_judgment = "likely_non_compliant"
+    merged.why_it_is_risky = (
+        "同一评分项中混入了与评分主题不一致的案例、检测报告形式、企业规模或跨领域证书等内容，建议作为一个风险点统筹修改。"
+        "这类内容容易把与项目履约无直接关系的材料转化为得分点，导致评审重心偏离采购需求本身。"
+    )
+    merged.impact_on_competition_or_performance = "可能把与评分主题无关或与标的不匹配的材料转化为得分点，扭曲评审重心。"
+    merged.legal_or_policy_basis = _merge_optional_text(
+        item.legal_or_policy_basis for item in ordered if item.legal_or_policy_basis
+    )
+    merged.rewrite_suggestion = (
+        "建议将工程案例、检测证明形式、企业规模和跨领域证书等内容移出对应评分项，仅保留与评分主题和履约目标直接相关的可核验因素。"
+    )
+    merged.needs_human_review = True
+    merged.human_review_reason = "需结合评分主题和项目履约目标判断该评分内容是否与评审事项直接相关。"
+    return merged
+
+
+def _scoring_content_family_key(finding: Finding) -> str:
+    text = f"{finding.problem_title} {finding.source_text}"
+    if any(marker in text for marker in ("工程案例", "CMA", "检测报告")):
+        return "plan_support_material"
+    if any(marker in text for marker in ("从业人员", "资产总额", "成立时间")):
+        return "enterprise_attribute"
+    if any(marker in text for marker in ("有机产品认证", "国际标准产品", "水运机电工程专项监理")):
+        return "domain_mismatch_certification"
+    return "general_scoring_content"
 
 
 def _is_sample_scoring_candidate(finding: Finding) -> bool:

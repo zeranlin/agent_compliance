@@ -189,9 +189,9 @@ def _run_template_mismatch_task(
     return _findings_from_payload(
         document,
         payload,
-        issue_type_default="other",
+        issue_type_default="template_mismatch",
         allowed_clause_ids={clause.clause_id for clause in candidate_clauses},
-        allowed_issue_types={"template_mismatch", "other"},
+        allowed_issue_types={"template_mismatch"},
     )
 
 
@@ -237,16 +237,18 @@ def _run_document_audit_task(
     findings = _findings_from_payload(
         document,
         payload,
-        issue_type_default="other",
+        issue_type_default="qualification_domain_mismatch",
         allowed_clause_ids={clause.clause_id for clause in candidate_clauses},
         allowed_issue_types={
             "excessive_supplier_qualification",
+            "qualification_domain_mismatch",
             "duplicative_scoring_advantage",
+            "scoring_content_mismatch",
             "geographic_restriction",
             "technical_justification_needed",
             "one_sided_commercial_term",
             "unclear_acceptance_standard",
-            "other",
+            "template_mismatch",
         },
     )
     findings.extend(_fallback_document_audit_findings(document, review, candidate_clauses))
@@ -268,13 +270,14 @@ def _run_scoring_structure_task(
 
     findings: list[Finding] = []
     allowed_issue_types = {
-        "ambiguous_requirement",
-        "irrelevant_certification_or_award",
-        "duplicative_scoring_advantage",
-        "excessive_scoring_weight",
-        "scoring_structure_imbalance",
-        "post_award_proof_substitution",
-        "geographic_restriction",
+            "ambiguous_requirement",
+            "irrelevant_certification_or_award",
+            "duplicative_scoring_advantage",
+            "scoring_content_mismatch",
+            "excessive_scoring_weight",
+            "scoring_structure_imbalance",
+            "post_award_proof_substitution",
+            "geographic_restriction",
     }
     sample_clauses = [
         clause for clause in candidate_clauses if any(token in clause.text for token in ("样品", "评审为优", "得80%分", "得 80%分"))
@@ -491,11 +494,19 @@ def _merge_added_findings(review: ReviewResult, added_findings: list[Finding]) -
         return review
     result = deepcopy(review)
     existing_keys = {
-        (finding.issue_type, finding.clause_id, finding.problem_title)
+        (
+            finding.issue_type,
+            finding.text_line_start,
+            _normalized_summary_signature(f"{finding.problem_title} {finding.source_text}"),
+        )
         for finding in result.findings
     }
     for finding in added_findings:
-        key = (finding.issue_type, finding.clause_id, finding.problem_title)
+        key = (
+            finding.issue_type,
+            finding.text_line_start,
+            _normalized_summary_signature(f"{finding.problem_title} {finding.source_text}"),
+        )
         if key not in existing_keys:
             result.findings.append(finding)
             existing_keys.add(key)
@@ -584,11 +595,11 @@ def _fallback_document_audit_findings(
     checks = [
         (
             ("有害生物防制", "SPCA"),
-            {"other", "excessive_supplier_qualification"},
+            {"qualification_domain_mismatch", "excessive_supplier_qualification"},
             "与采购标的领域不匹配的资格资质要求",
             "资格条件中出现与柴油发电机组供货安装明显不匹配的资质或登记要求，疑似模板错贴或无关门槛。",
             "建议删除与项目标的不相称的资质和登记要求，仅保留与供货安装履约直接相关的条件。",
-            "other",
+            "qualification_domain_mismatch",
         ),
         (
             ("年均纳税额", "经营业绩证明", "单项合同金额不低于"),
@@ -755,7 +766,7 @@ def _keyword_candidates(text: str) -> list[str]:
 def _false_positive_risk(finding: Finding) -> str:
     if finding.issue_type in {"technical_justification_needed", "unclear_acceptance_standard"}:
         return "medium"
-    if finding.issue_type in {"other", "scoring_structure_imbalance"}:
+    if finding.issue_type in {"template_mismatch", "qualification_domain_mismatch", "scoring_content_mismatch", "scoring_structure_imbalance"}:
         return "low"
     return "medium"
 
@@ -802,11 +813,19 @@ def _make_added_finding(
 
 def _dedupe_added_findings(findings: list[Finding]) -> list[Finding]:
     deduped: list[Finding] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, int, str]] = set()
     for finding in findings:
-        key = (finding.issue_type, finding.clause_id, finding.problem_title)
+        key = (
+            finding.issue_type,
+            finding.text_line_start,
+            _normalized_summary_signature(f"{finding.problem_title} {finding.source_text}"),
+        )
         if key in seen:
             continue
         seen.add(key)
         deduped.append(finding)
     return deduped
+
+
+def _normalized_summary_signature(text: str) -> str:
+    return "".join(ch for ch in text if ch.isalnum())[:96]

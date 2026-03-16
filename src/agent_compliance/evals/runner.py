@@ -72,7 +72,7 @@ def _extract_issue_types(content: str) -> list[str]:
     if explicit:
         return sorted(set(explicit))
     discovered = re.findall(
-        r"`(geographic_restriction|personnel_restriction|excessive_supplier_qualification|irrelevant_certification_or_award|duplicative_scoring_advantage|ambiguous_requirement|excessive_scoring_weight|post_award_proof_substitution|narrow_technical_parameter|technical_justification_needed|unclear_acceptance_standard|one_sided_commercial_term|payment_acceptance_linkage|other|scoring_structure_imbalance|template_mismatch)`",
+        r"`(geographic_restriction|personnel_restriction|excessive_supplier_qualification|qualification_domain_mismatch|irrelevant_certification_or_award|duplicative_scoring_advantage|scoring_content_mismatch|ambiguous_requirement|excessive_scoring_weight|post_award_proof_substitution|narrow_technical_parameter|technical_justification_needed|unclear_acceptance_standard|one_sided_commercial_term|payment_acceptance_linkage|other|scoring_structure_imbalance|template_mismatch)`",
         content,
     )
     return sorted(set(discovered))
