@@ -90,4 +90,16 @@ RULES = [
         rewrite_hint="降低样品主观评价分值，并改为按具体缺陷、尺寸、材质、工艺等可核验指标评分。",
         merge_key="scoring-sample-weight",
     ),
+    RuleDefinition(
+        rule_id="SCORE-008",
+        issue_type="geographic_restriction",
+        pattern=re.compile(r"本地项目业绩.*得\d+分|省内、本地存在相关项目的业绩|在项目所在地设有服务机构.*得\d+分|本地服务团队.*得\d+分"),
+        rationale="在评分项中对本地业绩、本地服务机构或本地团队给予加分，可能形成变相属地倾斜。",
+        severity_score=3,
+        related_rule_ids=("RULE-002", "RULE-004"),
+        related_reference_ids=("LEGAL-001", "CASESRC-005"),
+        source_section="评标信息",
+        rewrite_hint="删除本地业绩、本地服务机构或本地团队加分，改为统一的响应时效、服务方案和履约能力评价。",
+        merge_key="scoring-geographic",
+    ),
 ]

@@ -406,29 +406,27 @@ def _merge_similar_technical_findings(findings: list[Finding]) -> list[Finding]:
 
 def _merge_technical_justification_findings(findings: list[Finding]) -> list[Finding]:
     merged: list[Finding] = []
-    pending: Finding | None = None
-
-    def flush_pending() -> None:
-        nonlocal pending
-        if pending is not None:
-            merged.append(pending)
-            pending = None
+    groups: dict[str, Finding] = {}
 
     for finding in sorted(findings, key=lambda item: (item.text_line_start, item.issue_type, item.section_path or "")):
         if finding.issue_type != "technical_justification_needed":
-            flush_pending()
             merged.append(finding)
             continue
-        if pending is None:
-            pending = finding
+        family = _technical_justification_family_key(finding)
+        if family is None:
+            merged.append(finding)
             continue
-        if _can_merge_technical_justification(pending, finding):
-            _merge_technical_justification_into(pending, finding)
+        existing = groups.get(family)
+        if existing is None:
+            groups[family] = finding
             continue
-        flush_pending()
-        pending = finding
+        if _can_merge_technical_justification(existing, finding):
+            _merge_technical_justification_into(existing, finding, family)
+            continue
+        merged.append(existing)
+        groups[family] = finding
 
-    flush_pending()
+    merged.extend(groups.values())
     merged.sort(key=lambda item: (item.text_line_start, item.issue_type, item.section_path or ""))
     return merged
 
@@ -436,10 +434,10 @@ def _merge_technical_justification_findings(findings: list[Finding]) -> list[Fin
 def _can_merge_technical_justification(left: Finding, right: Finding) -> bool:
     if left.section_path != right.section_path:
         return False
-    return right.text_line_start - left.text_line_end <= 8
+    return right.text_line_start - left.text_line_end <= 40
 
 
-def _merge_technical_justification_into(target: Finding, finding: Finding) -> None:
+def _merge_technical_justification_into(target: Finding, finding: Finding, family: str) -> None:
     target.text_line_start = min(target.text_line_start, finding.text_line_start)
     target.text_line_end = max(target.text_line_end, finding.text_line_end)
     target.page_hint = _merge_page_hint(target.page_hint, finding.page_hint)
@@ -449,7 +447,7 @@ def _merge_technical_justification_into(target: Finding, finding: Finding) -> No
     target.legal_or_policy_basis = _merge_optional_text(
         [target.legal_or_policy_basis, finding.legal_or_policy_basis]
     )
-    target.problem_title = "技术要求可能合理但需补充必要性论证（相邻条款已合并）"
+    target.problem_title = _technical_justification_title(family)
     target.why_it_is_risky = (
         "相邻技术条款涉及安全、环保、院感或检测证明等同类要求，建议作为一个风险点统筹论证。"
         "此类要求不当然违规，但应补充场景必要性、标准依据和市场可竞争性说明。"
@@ -458,6 +456,24 @@ def _merge_technical_justification_into(target: Finding, finding: Finding) -> No
         "建议对同一技术组的相邻条款统一说明适用场景、标准依据、检测证明形式和市场可竞争性，"
         "能以国家或行业标准表达的尽量避免叠加细化证明形式。"
     )
+
+
+def _technical_justification_family_key(finding: Finding) -> str | None:
+    normalized = _normalized_source_signature(finding.source_text)
+    if any(token in normalized for token in ("阻燃", "抗菌", "抗病毒", "防霉", "环保", "致癌染料", "有机锡", "邻苯", "含氯苯酚")):
+        return "safety_environment"
+    if any(token in normalized for token in ("cma", "cnas", "第三方")):
+        return "testing_proof"
+    return "technical_justification_general"
+
+
+def _technical_justification_title(family: str) -> str:
+    titles = {
+        "safety_environment": "安全环保类技术要求可能合理但需补充必要性论证（相邻条款已合并）",
+        "testing_proof": "检测证明形式要求可能合理但需补充必要性论证（相邻条款已合并）",
+        "technical_justification_general": "技术要求可能合理但需补充必要性论证（相邻条款已合并）",
+    }
+    return titles.get(family, "技术要求可能合理但需补充必要性论证（相邻条款已合并）")
 
 
 def _add_scoring_structure_finding(findings: list[Finding]) -> list[Finding]:

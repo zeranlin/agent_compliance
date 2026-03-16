@@ -376,6 +376,59 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("payment_acceptance_linkage", issue_types)
         self.assertIn("unclear_acceptance_standard", issue_types)
 
+    def test_review_flags_geographic_scoring_and_contract_penalty_terms(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "项目实施方案",
+                "如果在省内、本地存在相关项目的业绩，可得10分；在项目所在地设有服务机构并配备本地服务团队的，可得10分。",
+                "商务要求",
+                "采购人有权单方解除合同且无需承担责任。",
+                "中标人违约的，采购人可按合同总金额20%支付违约金，并从应付货款中直接扣除。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        issue_types = {finding.issue_type for finding in review.findings}
+        self.assertIn("geographic_restriction", issue_types)
+        self.assertIn("one_sided_commercial_term", issue_types)
+
+    def test_review_merges_technical_justification_by_theme(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "技术要求",
+                "须提供第三方CMA机构出具的阻燃检测报告。",
+                "须提供第三方CNAS机构出具的抗菌检测报告。",
+                "须提供第三方CMA机构出具的有机锡和邻苯检测报告。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        justifications = [finding for finding in review.findings if finding.issue_type == "technical_justification_needed"]
+        self.assertEqual(len(justifications), 1)
+        self.assertIn("必要性论证", justifications[0].problem_title)
+
 
 if __name__ == "__main__":
     unittest.main()
