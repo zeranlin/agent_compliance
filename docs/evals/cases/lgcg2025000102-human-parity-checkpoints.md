@@ -19,6 +19,8 @@
 
 ### 资格条件
 
+- `expected_issue_types`: `excessive_supplier_qualification`, `geographic_restriction`
+
 - `excessive_supplier_qualification`
   - 主管单位同意函
   - 年收入/注册资本/年平均盈利
@@ -31,6 +33,8 @@
   - 类似业绩被前置为资格条件时，应形成独立问题点
 
 ### 评分标准
+
+- `expected_issue_types`: `duplicative_scoring_advantage`, `geographic_restriction`, `excessive_scoring_weight`, `scoring_structure_imbalance`, `post_award_proof_substitution`
 
 - `duplicative_scoring_advantage`
   - 资格材料或营业执照被重复转评分
@@ -45,6 +49,8 @@
 
 ### 商务、验收、付款
 
+- `expected_issue_types`: `one_sided_commercial_term`, `unclear_acceptance_standard`, `payment_acceptance_linkage`
+
 - `one_sided_commercial_term`
   - 采购人绝对免责
   - 一切事故全部由供应商承担
@@ -57,6 +63,8 @@
   - 财政资金或内部审批与付款绑定
 
 ### 技术要求
+
+- `expected_issue_types`: `narrow_technical_parameter`, `technical_justification_needed`
 
 - `narrow_technical_parameter`
   - 兼容性、接口、平台、定向参数

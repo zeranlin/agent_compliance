@@ -331,6 +331,7 @@ def _refine_findings(findings: list[Finding]) -> list[Finding]:
     refined = _merge_sample_scoring_findings(refined)
     refined = _add_scoring_structure_finding(refined)
     refined = _merge_technical_justification_findings(refined)
+    refined = _filter_technical_justification_noise(refined)
     refined = _merge_similar_technical_findings(refined)
     refined = _merge_nearby_liability_findings(refined)
     for finding in refined:
@@ -402,6 +403,32 @@ def _merge_similar_technical_findings(findings: list[Finding]) -> list[Finding]:
     merged.extend(tech_groups.values())
     merged.sort(key=lambda item: (item.text_line_start, item.issue_type, item.section_path or ""))
     return merged
+
+
+def _filter_technical_justification_noise(findings: list[Finding]) -> list[Finding]:
+    filtered: list[Finding] = []
+    for finding in findings:
+        if finding.issue_type != "technical_justification_needed":
+            filtered.append(finding)
+            continue
+        normalized = (finding.source_text or "").strip()
+        if len(normalized) <= 12:
+            continue
+        if any(
+            marker in normalized
+            for marker in (
+                "政府采购支持本国产品",
+                "支持中小企业",
+                "监狱企业",
+                "残疾人福利性单位",
+                "乡村产业振兴",
+            )
+        ):
+            continue
+        if normalized in {"抗菌抗病毒卷帘", "阻燃抑菌抗病毒隔帘", "燃抑菌抗病毒"}:
+            continue
+        filtered.append(finding)
+    return filtered
 
 
 def _merge_technical_justification_findings(findings: list[Finding]) -> list[Finding]:
