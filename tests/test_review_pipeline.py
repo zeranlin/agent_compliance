@@ -322,6 +322,60 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("样品、认证和业绩", structure_findings[0].why_it_is_risky)
         self.assertEqual(structure_findings[0].risk_level, "high")
 
+    def test_review_flags_geographic_and_personnel_restrictions(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "投标人须在项目所在地设有常驻服务机构或办公场所，并配备本地服务团队。",
+                "项目经理年龄不超过35岁，限男性，身高175cm以上。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        issue_types = {finding.issue_type for finding in review.findings}
+        self.assertIn("geographic_restriction", issue_types)
+        self.assertIn("personnel_restriction", issue_types)
+
+    def test_review_flags_business_chain_and_technical_justification_points(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "技术要求",
+                "投标人须提供2024年1月1日至投标截止日前由第三方CMA或CNAS机构出具的阻燃、抗菌、抗病毒检测报告。",
+                "兼容原有设备及专有接口平台。",
+                "商务要求",
+                "货物验收合格且财政资金到位后支付合同价款；抽检不合格复检费用由供应商承担，整改后重新验收。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        issue_types = {finding.issue_type for finding in review.findings}
+        self.assertIn("technical_justification_needed", issue_types)
+        self.assertIn("narrow_technical_parameter", issue_types)
+        self.assertIn("payment_acceptance_linkage", issue_types)
+        self.assertIn("unclear_acceptance_standard", issue_types)
+
 
 if __name__ == "__main__":
     unittest.main()
