@@ -77,7 +77,7 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
             {
                 "cache": {"enabled": use_cache, "used": cache_used, "key": cache_key},
                 "llm": {
-                    "enabled": use_llm and detect_llm_config().enabled,
+                    "enabled": _web_llm_config(use_llm).enabled,
                     "base_url": detect_llm_config().base_url,
                     "model": detect_llm_config().model,
                 },
@@ -187,7 +187,7 @@ def _persist_upload(filename: str, content: bytes) -> Path:
 def _web_llm_config(use_llm: bool) -> LLMConfig:
     config = detect_llm_config()
     return LLMConfig(
-        enabled=use_llm and config.enabled,
+        enabled=bool(use_llm or config.enabled),
         base_url=config.base_url,
         model=config.model,
         api_key=config.api_key,

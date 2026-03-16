@@ -7,6 +7,7 @@ from agent_compliance.cli import build_parser
 from agent_compliance.config import LLMConfig, detect_llm_config
 from agent_compliance.pipelines.llm_enhance import _build_prompt, enhance_review_result
 from agent_compliance.schemas import Finding, ReviewResult
+from agent_compliance.web.app import _web_llm_config
 
 
 class LLMIntegrationTest(unittest.TestCase):
@@ -77,6 +78,11 @@ class LLMIntegrationTest(unittest.TestCase):
         self.assertEqual(config.base_url, "http://112.111.54.86:10011/v1")
         self.assertEqual(config.model, "qwen3.5-27b")
         self.assertEqual(config.api_key, "local-dev-placeholder")
+
+    def test_web_llm_switch_overrides_disabled_env_default(self) -> None:
+        os.environ["AGENT_COMPLIANCE_LLM_ENABLED"] = "false"
+        config = _web_llm_config(True)
+        self.assertTrue(config.enabled)
 
     def test_llm_prompt_only_targets_technical_findings(self) -> None:
         review = ReviewResult(
