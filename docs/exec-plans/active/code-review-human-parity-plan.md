@@ -8,6 +8,7 @@
 
 - [2026-03-16-lgcg2025000102-comparison.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/reviews/2026-03-16-lgcg2025000102-comparison.md)
 - [code-review-to-human-parity-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-to-human-parity-roadmap.md)
+- [human-review-checkpoint-matrix.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/human-review-checkpoint-matrix.md)
 
 ## 当前阶段判断
 
@@ -25,6 +26,11 @@
 - 技术参数边界判断
 - 商务责任和付款联动识别
 - 差异样本反向迭代
+
+当前调整后的工作原则：
+- 先补“查点覆盖率”和“问题找全率”，暂不把分值精算作为主线
+- 先把各一级、二级审查查点盘清，再按查点矩阵逐项补规则、结构分析和局部模型判断
+- 每次增强都要能映射回具体查点，而不是只做零散表达优化
 
 ## 阶段一：差异驱动的规则增强
 
@@ -95,9 +101,9 @@
 
 ## 当前最优先的下一步
 
-1. 新增资格条件细拆规则包  
-2. 新增评分高权重与中标后补证规则包  
-3. 新增商务责任失衡与付款联动规则包  
+1. 依据查点矩阵补齐剩余资格条件高频问题  
+2. 依据查点矩阵补齐评分项更多类别和混合问题拆分  
+3. 依据查点矩阵补齐商务、验收、付款链路问题  
 4. 建立差异样本格式并把窗帘项目纳入 benchmark
 
 ## 风险提醒

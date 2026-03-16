@@ -340,9 +340,11 @@
 - 已补入第二批逼近人工审查的增强规则，可识别样品主观高分、商务责任失衡，以及抽检终验与付款联动问题
 - 已补入面向正式审查风格的结果聚合增强，可将样品优良中差评分收紧为单个问题点，并压缩相邻商务责任条款的重复命中
 - 已补入评分结构分析增强，当样品、认证、业绩等多类高分因素同时出现时，可补出评分结构整体失衡的综合 finding
+- 已形成人工式审查查点矩阵，明确资格条件、评分标准、技术要求、商务条款、验收检测、付款违约、模板残留等一级查点及当前代码缺口
 
 相关设计：
 - [local-runtime-skeleton.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-runtime-skeleton.md)
+- [human-review-checkpoint-matrix.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/human-review-checkpoint-matrix.md)
 
 ## 十四、结果一致性与可复现能力
 
