@@ -195,8 +195,66 @@ class ReviewPipelineTest(unittest.TestCase):
         hits = run_rule_scan(document)
         review = build_review_result(document, hits)
 
-        self.assertEqual(len(review.findings), 1)
-        self.assertLess(len(review.findings[0].source_text), 90)
+        self.assertEqual(len(review.findings), 2)
+        self.assertTrue(any("股权结构" in finding.source_text for finding in review.findings))
+        self.assertTrue(any(len(finding.source_text) < 90 for finding in review.findings))
+
+    def test_review_splits_distinct_qualification_barriers(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "供应商须提供其上级主管单位（须为省部级机关单位）出具的同意其参与投标的函件。",
+                "该企业的股权结构由国有资本持股41%以确保控股地位。",
+                "投标人必须提供自2020年至2024年（含）连续五个会计年度的、由注册会计师事务所出具的财务审计报告。",
+                "投标人必须是经认定的国家级特色企业。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertEqual(len(review.findings), 4)
+        self.assertTrue(any("主管单位" in finding.source_text for finding in review.findings))
+        self.assertTrue(any("股权结构" in finding.source_text for finding in review.findings))
+        self.assertTrue(any("财务审计报告" in finding.source_text for finding in review.findings))
+        self.assertTrue(any("国家级特色企业" in finding.source_text for finding in review.findings))
+
+    def test_review_flags_scoring_weight_and_post_award_proof(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "认证证书",
+                "投标人通过质量管理体系认证得33分；投标人通过职业健康安全管理体系认证得33分；投标人通过环境管理体系认证得34分。",
+                "注：如投标人距本项目开标之日的注册成立时间不足3个月，可承诺中标（成交）后4个月内取得评审因素相关认证证书。",
+                "供应商同类业绩",
+                "投标人自2021年1月1日至本项目投标截止承接过窗帘采购项目业绩的，每提供1个得20分，最高得100分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        issue_types = {finding.issue_type for finding in review.findings}
+        self.assertIn("excessive_scoring_weight", issue_types)
+        self.assertIn("post_award_proof_substitution", issue_types)
+        self.assertTrue(any("中标后补证" in finding.problem_title or "补证" in finding.problem_title for finding in review.findings))
 
 
 if __name__ == "__main__":

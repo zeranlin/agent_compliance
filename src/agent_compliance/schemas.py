@@ -85,6 +85,7 @@ class NormalizedDocument:
 class RuleHit:
     rule_hit_id: str
     rule_id: str
+    merge_key: str
     rule_set_version: str
     issue_type_candidate: str
     matched_text: str

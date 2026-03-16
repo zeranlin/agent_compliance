@@ -97,7 +97,7 @@ def _find_clause(document: NormalizedDocument, hit: RuleHit):
 def _dedupe_hits(hits: list[RuleHit]) -> list[RuleHit]:
     unique: "OrderedDict[tuple[int, str], RuleHit]" = OrderedDict()
     for hit in hits:
-        key = (hit.line_start, hit.issue_type_candidate)
+        key = (hit.line_start, hit.merge_key)
         existing = unique.get(key)
         if existing is None or hit.severity_score > existing.severity_score:
             unique[key] = hit
@@ -141,7 +141,7 @@ def _group_hits(document: NormalizedDocument, hits: list[RuleHit]) -> list[HitGr
 
 def _should_merge(group: HitGroup, hit: RuleHit, clause) -> bool:
     primary = group.primary_hit
-    if primary.issue_type_candidate != hit.issue_type_candidate:
+    if primary.merge_key != hit.merge_key:
         return False
     if hit.line_start - group.line_end > 3:
         return False
@@ -181,6 +181,8 @@ def _expand_rationale(group: HitGroup) -> str:
         "excessive_supplier_qualification": "这类条件通常会把与履约无直接关系的企业属性、规模或年限要求变成准入门槛。",
         "irrelevant_certification_or_award": "这类企业称号、荣誉或认证通常不能直接替代项目履约能力判断。",
         "duplicative_scoring_advantage": "如果资格证明材料或与履约弱相关的因素再次计分，容易扭曲竞争。",
+        "excessive_scoring_weight": "单一因素分值过高时，容易使评分结构失衡并对少数供应商形成明显倾斜。",
+        "post_award_proof_substitution": "允许中标后补证会削弱投标时点评分依据的真实性和可比性。",
         "ambiguous_requirement": "评分分档缺乏量化锚点时，评委之间的尺度容易失衡。",
         "narrow_technical_parameter": "如缺少市场调研和必要性说明，容易形成对少数产品体系的实质偏向。",
         "unclear_acceptance_standard": "验收清单、触发条件和费用边界不清时，后续履约争议风险会升高。",
@@ -204,6 +206,8 @@ def _problem_title(group: HitGroup, clause) -> str:
         "excessive_supplier_qualification": "资格条件设置与履约关联不足",
         "irrelevant_certification_or_award": "评分中设置与履约弱相关的荣誉资质加分",
         "duplicative_scoring_advantage": "评分中重复放大资格证明材料",
+        "excessive_scoring_weight": "单一评分因素权重设置过高",
+        "post_award_proof_substitution": "评分证明材料允许中标后补证",
         "ambiguous_requirement": "评分分档缺少明确量化锚点",
         "narrow_technical_parameter": "技术参数组合存在定向或过窄风险",
         "unclear_acceptance_standard": "验收标准或检测边界不清",
@@ -223,6 +227,8 @@ def _impact_text(issue_type: str) -> str:
         "excessive_supplier_qualification": "可能直接缩小合格供应商范围，降低竞争充分性。",
         "irrelevant_certification_or_award": "可能把综合声誉或企业形象替代为履约能力评价，形成不合理倾斜。",
         "duplicative_scoring_advantage": "可能把本应止于资格审查的因素重复放大为评分优势。",
+        "excessive_scoring_weight": "可能导致评分结构明显失衡，过度放大单一因素对中标结果的影响。",
+        "post_award_proof_substitution": "可能导致评分依据失真，破坏投标文件在截止时点的可比性。",
         "ambiguous_requirement": "可能导致评审尺度不一致、自由裁量过大和复核难度上升。",
         "narrow_technical_parameter": "可能压缩可竞争的品牌和型号范围，并提高投诉风险。",
         "unclear_acceptance_standard": "可能导致验收标准不稳定、成本难估算和后续争议升级。",

@@ -15,6 +15,7 @@ class RuleDefinition:
     related_reference_ids: tuple[str, ...]
     source_section: str
     rewrite_hint: str
+    merge_key: str | None = None
 
 
-RULE_SET_VERSION = "v0.1.0"
+RULE_SET_VERSION = "v0.2.0"

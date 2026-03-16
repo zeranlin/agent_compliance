@@ -23,6 +23,7 @@ def run_rule_scan(document: NormalizedDocument) -> list[RuleHit]:
                     RuleHit(
                         rule_hit_id=f"RH-{counter:04d}",
                         rule_id=rule.rule_id,
+                        merge_key=rule.merge_key or rule.issue_type,
                         rule_set_version=RULE_SET_VERSION,
                         issue_type_candidate=rule.issue_type,
                         matched_text=clause.text,

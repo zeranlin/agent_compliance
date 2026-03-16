@@ -336,6 +336,7 @@
 - 已预留 parsers、rules、knowledge、cache、evals 等模块边界，便于后续离线化和算法增强
 - 已预留本地大模型兜底接口，默认关闭，显式启用时可用于边界判断和改写增强
 - 已形成“代码审查持续逼近人工审查”的增强路线，明确以规则细拆、结构分析、局部模型推理和 benchmark 闭环为主线
+- 已补入第一批逼近人工审查的增强规则，可细拆部分资格门槛，并识别评分高权重和中标后补证问题
 
 相关设计：
 - [local-runtime-skeleton.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-runtime-skeleton.md)
