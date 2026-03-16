@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 from agent_compliance.cli import build_parser
 from agent_compliance.config import LLMConfig, detect_llm_config
 from agent_compliance.pipelines.llm_enhance import _build_prompt, enhance_review_result
-from agent_compliance.schemas import Finding, ReviewResult
+from agent_compliance.pipelines.llm_review import apply_llm_review_tasks, run_benchmark_gate
+from agent_compliance.parsers.section_splitter import split_into_clauses
+from agent_compliance.schemas import Finding, NormalizedDocument, ReviewResult
 from agent_compliance.web.app import _web_llm_config
 
 
@@ -147,6 +151,90 @@ class LLMIntegrationTest(unittest.TestCase):
         prompt = _build_prompt(review.document_name, [review.findings[0]])
         self.assertIn("F-001", prompt)
         self.assertNotIn("F-002", prompt)
+
+    def test_llm_review_tasks_add_findings_and_generate_candidates(self) -> None:
+        text = "\n".join(
+            [
+                "低值易耗物品采购",
+                "评标信息",
+                "样品",
+                "5.1 优：样品外观整洁无破损，生产工艺很好，材料质感很好，样品整体制作效果很好，得80%分。",
+                "环境标志产品认证",
+                "6.1 投标人提供环境标志产品认证得100%分。",
+                "商务要求",
+                "9.6 中标人提供的芯片及系统需无缝对接医院现有的设备及系统。",
+                "9.7 如提供货物与实际需求不符，以采购人的实际需求为准。",
+                "验收",
+                "5.4 如投标人届时不派人来，则验收结果应以采购人的验收报告为最终验收结果。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="llm12345",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = ReviewResult(
+            document_name="sample.txt",
+            review_scope="资格条件、评分规则、技术要求、商务及验收条款",
+            jurisdiction="中国",
+            review_timestamp="2026-03-16T00:00:00+00:00",
+            overall_risk_summary="summary",
+            findings=[],
+            items_for_human_review=[],
+            review_limitations=[],
+        )
+        llm_config = LLMConfig(
+            enabled=True,
+            base_url="http://112.111.54.86:10011/v1",
+            model="local-model",
+            api_key=None,
+            timeout_seconds=60,
+        )
+        responses = [
+            '{"findings":[{"should_flag":true,"clause_id":"9.6","issue_type":"other","problem_title":"条款疑似跨领域模板错贴","why_it_is_risky":"芯片及系统对接与纺织类货物采购标的不一致。","rewrite_suggestion":"删除系统对接要求。"}]}',
+            '{"findings":[{"should_flag":true,"clause_id":"5.1","issue_type":"ambiguous_requirement","problem_title":"样品评分主观性强且缺少量化锚点","why_it_is_risky":"样品评分使用优良中差主观分档，评委自由裁量空间过大。","rewrite_suggestion":"将样品评分拆成可核验指标。"}]}',
+            '{"findings":[{"should_flag":true,"clause_id":"5.4","issue_type":"unclear_acceptance_standard","problem_title":"验收结果单方确定且需求边界开放","why_it_is_risky":"验收结果完全由采购人单方确认，且实际需求边界不清。","rewrite_suggestion":"明确复验和异议处理机制。"}]}',
+        ]
+
+        with patch("agent_compliance.pipelines.llm_review.OpenAICompatibleLLMClient.chat", side_effect=responses):
+            result, artifacts = apply_llm_review_tasks(document, review, llm_config, output_stem="llmtest")
+
+        self.assertEqual(len(result.findings), 3)
+        self.assertEqual(len(artifacts.added_findings), 3)
+        self.assertEqual(len(artifacts.rule_candidates), 3)
+        self.assertTrue(Path(artifacts.candidate_json_path).exists())
+        self.assertTrue(Path(artifacts.benchmark_json_path).exists())
+        self.assertIn("当前结果已接入本地规则映射、引用资料检索和本地大模型边界判断", result.overall_risk_summary)
+
+        for path in [
+            artifacts.candidate_json_path,
+            artifacts.candidate_md_path,
+            artifacts.benchmark_json_path,
+            artifacts.benchmark_md_path,
+        ]:
+            Path(path).unlink(missing_ok=True)
+
+    def test_benchmark_gate_marks_unknown_issue_types(self) -> None:
+        gate = run_benchmark_gate(
+            [
+                {
+                    "candidate_rule_id": "CAND-001",
+                    "issue_type": "other",
+                },
+                {
+                    "candidate_rule_id": "CAND-002",
+                    "issue_type": "unknown_issue_type",
+                },
+            ]
+        )
+        self.assertEqual(gate["candidate_count"], 2)
+        self.assertEqual(gate["covered_count"], 1)
+        self.assertEqual(gate["needs_benchmark_count"], 1)
+        self.assertEqual(gate["status"], "needs_attention")
 
 
 if __name__ == "__main__":

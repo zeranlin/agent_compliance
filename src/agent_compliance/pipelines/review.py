@@ -56,7 +56,7 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
         findings=findings,
         items_for_human_review=_human_review_items(findings),
         review_limitations=[
-            "当前为第二阶段离线骨架，已接入本地引用资料检索，但尚未接入本地大模型做边界判断和改写增强。",
+            "当前离线执行引擎已接入本地引用资料检索；如未显式启用本地模型，则模板错贴、评分结构和商务链路仍以规则与启发式为主。",
             "当前 section_path 与 table_or_item_label 仍基于启发式识别，对复杂表格和跨页结构的定位仍需继续增强。",
             "当前 page_hint 在缺少显式分页标记时会回退为估算页号，正式审查前仍建议结合原文件复核。",
         ],

@@ -13,6 +13,7 @@ class AppPaths:
     review_root: Path
     cache_root: Path
     uploads_root: Path
+    improvement_root: Path
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ def detect_paths() -> AppPaths:
         review_root=generated_root / "reviews",
         cache_root=generated_root / "cache",
         uploads_root=generated_root / "uploads",
+        improvement_root=generated_root / "improvement",
     )
 
 

@@ -46,6 +46,14 @@
 本地大模型兜底接口已预留，默认关闭；如需显式启用：
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-llm`
 - 可选覆盖模型和地址：`--llm-model <model>`、`--llm-base-url <base_url>`
+- 当本地模型启用时，当前会额外执行三类局部判断：
+  - 模板错贴与标的域不匹配
+  - 评分结构判断
+  - 商务链路联合判断
+- 同时自动产出：
+  - `docs/generated/improvement/*-rule-candidates.{json,md}`
+  - `docs/generated/improvement/*-benchmark-gate.{json,md}`
+- 当前模型调用已支持自动探测 `/v1/models` 并在默认模型失效时回退到服务端可用模型。
 
 本地 Web 页面：
 - 启动：`PYTHONPATH=src python3 -m agent_compliance web`
@@ -63,3 +71,6 @@
 - [能力缺口评测报告模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/eval-gap-report-template.md)
 - [业务方/采购人修改用正式审查意见表模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/business-facing-review-table-template.md)
 - [正式审查意见模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/review-output-template.md)
+
+新增评测样本：
+- [LGDL2025000044 人工逼近查点](/Users/linzeran/code/2026-zn/agent_compliance/docs/evals/cases/lgdl2025000044-human-parity-checkpoints.md)

@@ -2,8 +2,8 @@
   "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
   "review_scope": "资格条件、评分规则、技术要求、商务及验收条款",
   "jurisdiction": "中国",
-  "review_timestamp": "2026-03-16T09:21:24+00:00",
-  "overall_risk_summary": "本地离线审查共形成 23 条去重 findings，其中高风险 5 条、中风险 18 条。 当前结果已接入本地规则映射和引用资料检索，可作为正式审查前的离线初筛与复审输入。",
+  "review_timestamp": "2026-03-16T09:43:40+00:00",
+  "overall_risk_summary": "本地离线审查共形成 27 条去重 findings，其中高风险 5 条、中风险 22 条。当前结果已接入本地规则映射、引用资料检索和本地大模型边界判断，可作为正式审查前的离线初筛与复审输入。",
   "findings": [
     {
       "finding_id": "F-001",
@@ -27,7 +27,8 @@
       "legal_or_policy_basis": "属地限制与非歧视性审查（中国政府采购网）；政府采购需求管理办法（财政部）",
       "rewrite_suggestion": "删除本地业绩、本地服务机构或本地团队加分，改为统一的响应时效、服务方案和履约能力评价。",
       "needs_human_review": false,
-      "human_review_reason": null
+      "human_review_reason": null,
+      "finding_origin": "rule"
     },
     {
       "finding_id": "F-002",
@@ -51,7 +52,8 @@
       "legal_or_policy_basis": "政府采购需求编制常见问题分析（中国政府采购网）；奖项荣誉信用等级评分问题（中国政府采购网）",
       "rewrite_suggestion": "删除与履约无直接关系的荣誉、称号和信用等级加分项。",
       "needs_human_review": false,
-      "human_review_reason": null
+      "human_review_reason": null,
+      "finding_origin": "rule"
     },
     {
       "finding_id": "F-003",
@@ -75,7 +77,8 @@
       "legal_or_policy_basis": "综合评分法边界分析（中国政府采购网）；主观评审客观化分析（中国政府采购网）；奖项荣誉信用等级评分问题（中国政府采购网）",
       "rewrite_suggestion": "删除资格证明材料加分，避免将资格审查内容重复转化为评分优势。",
       "needs_human_review": false,
-      "human_review_reason": null
+      "human_review_reason": null,
+      "finding_origin": "rule"
     },
     {
       "finding_id": "F-004",
@@ -99,7 +102,8 @@
       "legal_or_policy_basis": "同类项目业绩案例解析（中国政府采购网）；政府采购需求管理办法（财政部）；资格条件与类似业绩设置（中国政府采购网）",
       "rewrite_suggestion": "删除主管单位同意函要求，仅保留法定主体资格和履约所必需的证明材料。",
       "needs_human_review": false,
-      "human_review_reason": null
+      "human_review_reason": null,
+      "finding_origin": "rule"
     },
     {
       "finding_id": "F-005",
@@ -123,7 +127,8 @@
       "legal_or_policy_basis": "同类项目业绩案例解析（中国政府采购网）；资格条件与类似业绩设置（中国政府采购网）；政府采购需求管理办法（财政部）",
       "rewrite_suggestion": "建议对同一风险点下的相邻条款统一改写：删除一般性财务和经营年限门槛，改用法定资质和履约能力证明。",
       "needs_human_review": false,
-      "human_review_reason": null
+      "human_review_reason": null,
+      "finding_origin": "rule"
     },
     {
       "finding_id": "F-006",
@@ -147,10 +152,36 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；属地限制与非歧视性审查（中国政府采购网）；同类项目业绩案例解析（中国政府采购网）",
       "rewrite_suggestion": "删除股权结构或国有资本持股比例要求，不得按企业组织形式设置门槛。",
       "needs_human_review": false,
-      "human_review_reason": null
+      "human_review_reason": null,
+      "finding_origin": "rule"
     },
     {
       "finding_id": "F-007",
+      "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
+      "problem_title": "技术参数与采购标的领域错位",
+      "page_hint": "第28页（估算）",
+      "clause_id": "1.2",
+      "source_section": "五、具体技术要求",
+      "section_path": "第二章   招标项目需求-五、具体技术要求-1.2 织物密度（根/10cm） ：经密 830-840 纬密 455-465；",
+      "table_or_item_label": null,
+      "text_line_start": 1222,
+      "text_line_end": 1222,
+      "source_text": "1.2 织物密度（根/10cm） ：经密 830-840 纬密 455-465；",
+      "issue_type": "template_mismatch",
+      "risk_level": "medium",
+      "severity_score": 2,
+      "confidence": "medium",
+      "compliance_judgment": "potentially_problematic",
+      "why_it_is_risky": "条款要求“低于安卓 7.1 系统、≥21.5 寸触摸屏”等 IT 设备参数，而采购标的为“低值易耗物品”。这属于典型的模板错贴，将 IT 设备或智能终端的采购需求错误地复制到了低值易耗品采购文件中，导致需求混乱。",
+      "impact_on_competition_or_performance": "可能影响公平竞争、履约边界或合同可执行性。",
+      "legal_or_policy_basis": null,
+      "rewrite_suggestion": "核实采购标的真实需求。如为低值易耗品，删除所有 IT 设备相关技术参数；如为智能终端采购，应修改采购文件标题及整体需求描述。",
+      "needs_human_review": true,
+      "human_review_reason": "该问题由本地大模型在边界判断任务中新增，建议复核后决定是否入正式规则库。",
+      "finding_origin": "llm_added"
+    },
+    {
+      "finding_id": "F-008",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "安全环保类技术要求可能合理但需补充必要性论证（相邻条款已合并）",
       "page_hint": "第28页（估算） / 第30页（估算） / 第30页（估算） / 第30页（估算） / 第30页（估算） / 第32页（估算） / 第32页（估算） / 第37页（估算） / 第37页（估算） / 第37页（估算） / 第37页（估算） / 第38页（估算） / 第38页（估算） / 第39页（估算） / 第40页（估算） / 第40页（估算） / 第40页（估算）",
@@ -171,10 +202,11 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）；履约验收规范要点（中国政府采购网）",
       "rewrite_suggestion": "建议对同一技术组的相邻条款统一说明适用场景、标准依据、检测证明形式和市场可竞争性，能以国家或行业标准表达的尽量避免叠加细化证明形式。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。"
+      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-008",
+      "finding_id": "F-009",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "安全环保类技术要求可能合理但需补充必要性论证（相邻条款已合并）",
       "page_hint": "第46页（估算） / 第47页（估算）",
@@ -195,10 +227,11 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）；履约验收规范要点（中国政府采购网）",
       "rewrite_suggestion": "建议对同一技术组的相邻条款统一说明适用场景、标准依据、检测证明形式和市场可竞争性，能以国家或行业标准表达的尽量避免叠加细化证明形式。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。"
+      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-009",
+      "finding_id": "F-010",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "技术要求可能合理但需补充必要性论证",
       "page_hint": "第53页（估算）",
@@ -219,10 +252,11 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）；履约验收规范要点（中国政府采购网）",
       "rewrite_suggestion": "如确需保留安全、环保或院感控制指标，应补充适用场景、标准依据和市场调研说明。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。"
+      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-010",
+      "finding_id": "F-011",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "条款内容可能存在模板残留或义务外扩",
       "page_hint": "第57页（估算）",
@@ -243,10 +277,61 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）",
       "rewrite_suggestion": "删除与主标的不直接相关的义务，或改成与安装履约直接相关的要求。",
       "needs_human_review": true,
-      "human_review_reason": "需结合项目背景判断该义务是否属于模板残留或确有政策和业务必要性。"
+      "human_review_reason": "需结合项目背景判断该义务是否属于模板残留或确有政策和业务必要性。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-011",
+      "finding_id": "F-012",
+      "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
+      "problem_title": "货物采购中混入服务义务条款",
+      "page_hint": "第57页（估算）",
+      "clause_id": "供应商提供包括公共区域、室外公共场所、地面、通道、楼层、天台、办公室、功能室等室",
+      "source_section": "其他",
+      "section_path": "第二章   招标项目需求-六、项目商务需求-其他",
+      "table_or_item_label": "其他",
+      "text_line_start": 2557,
+      "text_line_end": 2557,
+      "source_text": "供应商提供包括公共区域、室外公共场所、地面、通道、楼层、天台、办公室、功能室等室内的卫生清洁、保洁，垃圾的分类收集、清运",
+      "issue_type": "template_mismatch",
+      "risk_level": "medium",
+      "severity_score": 2,
+      "confidence": "medium",
+      "compliance_judgment": "potentially_problematic",
+      "why_it_is_risky": "采购标的为低值易耗物品（货物），但条款要求供应商提供卫生清洁、保洁及垃圾清运服务，属于服务类采购内容。此类条款混入货物采购文件中，可能导致采购需求不明确、履约验收困难，甚至引发供应商投诉或法律风险。",
+      "impact_on_competition_or_performance": "可能影响公平竞争、履约边界或合同可执行性。",
+      "legal_or_policy_basis": null,
+      "rewrite_suggestion": "删除该条款。如确需保洁服务，应单独作为服务类项目采购，或在货物合同中明确约定货物交付后的基础清理责任，而非整体保洁服务。",
+      "needs_human_review": true,
+      "human_review_reason": "该问题由本地大模型在边界判断任务中新增，建议复核后决定是否入正式规则库。",
+      "finding_origin": "llm_added"
+    },
+    {
+      "finding_id": "F-013",
+      "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
+      "problem_title": "特定医院系统对接要求与采购标的不符",
+      "page_hint": "第61页（估算）",
+      "clause_id": "★9.6",
+      "source_section": "其他",
+      "section_path": "第二章   招标项目需求-六、项目商务需求-5.4 货物和设备运抵安装现场后，采购人将与投标人共同验收，-其他",
+      "table_or_item_label": "其他",
+      "text_line_start": 2717,
+      "text_line_end": 2717,
+      "source_text": "★9.6 中标人提供的芯片及系统需无缝对接医院现有的设备及系统，以保障正常运行。",
+      "issue_type": "template_mismatch",
+      "risk_level": "medium",
+      "severity_score": 2,
+      "confidence": "medium",
+      "compliance_judgment": "potentially_problematic",
+      "why_it_is_risky": "采购文件标题为“低值易耗物品采购”，但条款要求中标人提供的芯片及系统需无缝对接“医院现有的设备及系统”。这明显是医院信息化或专用设备项目的模板残留，与低值易耗品采购无关，限制了非特定供应商参与，存在排他性风险。",
+      "impact_on_competition_or_performance": "可能影响公平竞争、履约边界或合同可执行性。",
+      "legal_or_policy_basis": null,
+      "rewrite_suggestion": "删除该条款。如确需系统对接，应核实采购标的是否包含信息化系统，并明确具体的对接标准，而非使用“医院现有设备”等模糊且特定的表述。",
+      "needs_human_review": true,
+      "human_review_reason": "该问题由本地大模型在边界判断任务中新增，建议复核后决定是否入正式规则库。",
+      "finding_origin": "llm_added"
+    },
+    {
+      "finding_id": "F-014",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "技术要求可能合理但需补充必要性论证",
       "page_hint": "第81页（估算）",
@@ -267,10 +352,11 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）；履约验收规范要点（中国政府采购网）",
       "rewrite_suggestion": "如确需保留安全、环保或院感控制指标，应补充适用场景、标准依据和市场调研说明。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。"
+      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-012",
+      "finding_id": "F-015",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "技术要求可能合理但需补充必要性论证",
       "page_hint": "第84页（估算）",
@@ -291,10 +377,11 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）；履约验收规范要点（中国政府采购网）",
       "rewrite_suggestion": "如确需保留安全、环保或院感控制指标，应补充适用场景、标准依据和市场调研说明。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。"
+      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-013",
+      "finding_id": "F-016",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "技术要求可能合理但需补充必要性论证",
       "page_hint": "第92页（估算）",
@@ -315,10 +402,11 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）；履约验收规范要点（中国政府采购网）",
       "rewrite_suggestion": "如确需保留安全、环保或院感控制指标，应补充适用场景、标准依据和市场调研说明。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。"
+      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-014",
+      "finding_id": "F-017",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "技术要求可能合理但需补充必要性论证",
       "page_hint": "第95页（估算）",
@@ -339,10 +427,11 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）；履约验收规范要点（中国政府采购网）",
       "rewrite_suggestion": "如确需保留安全、环保或院感控制指标，应补充适用场景、标准依据和市场调研说明。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。"
+      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-015",
+      "finding_id": "F-018",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "技术要求可能合理但需补充必要性论证",
       "page_hint": "第95页（估算）",
@@ -363,10 +452,11 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）；履约验收规范要点（中国政府采购网）",
       "rewrite_suggestion": "如确需保留安全、环保或院感控制指标，应补充适用场景、标准依据和市场调研说明。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。"
+      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-016",
+      "finding_id": "F-019",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "技术要求可能合理但需补充必要性论证",
       "page_hint": "第97页（估算）",
@@ -387,10 +477,11 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）；履约验收规范要点（中国政府采购网）",
       "rewrite_suggestion": "如确需保留安全、环保或院感控制指标，应补充适用场景、标准依据和市场调研说明。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。"
+      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-017",
+      "finding_id": "F-020",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "技术要求可能合理但需补充必要性论证",
       "page_hint": "第106页（估算）",
@@ -411,10 +502,11 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）；履约验收规范要点（中国政府采购网）",
       "rewrite_suggestion": "如确需保留安全、环保或院感控制指标，应补充适用场景、标准依据和市场调研说明。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。"
+      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-018",
+      "finding_id": "F-021",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "技术要求可能合理但需补充必要性论证",
       "page_hint": "第106页（估算）",
@@ -435,10 +527,11 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）；履约验收规范要点（中国政府采购网）",
       "rewrite_suggestion": "如确需保留安全、环保或院感控制指标，应补充适用场景、标准依据和市场调研说明。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。"
+      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-019",
+      "finding_id": "F-022",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "技术要求可能合理但需补充必要性论证",
       "page_hint": "第116页（估算）",
@@ -459,10 +552,11 @@
       "legal_or_policy_basis": "政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）；履约验收规范要点（中国政府采购网）",
       "rewrite_suggestion": "如确需保留安全、环保或院感控制指标，应补充适用场景、标准依据和市场调研说明。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。"
+      "human_review_reason": "需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-020",
+      "finding_id": "F-023",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "商务条款存在单方风险转嫁",
       "page_hint": "第124页（估算）",
@@ -483,10 +577,11 @@
       "legal_or_policy_basis": "合同付款前提与责任边界（中国政府采购网）；政府采购需求管理办法（财政部）",
       "rewrite_suggestion": "按过错和责任来源划分责任，删除“采购人不承担任何责任”“一切事故全部由供应商承担”等绝对化表述。",
       "needs_human_review": true,
-      "human_review_reason": "需结合采购人内控、财政支付流程和合同谈判边界判断条款是否可保留。"
+      "human_review_reason": "需结合采购人内控、财政支付流程和合同谈判边界判断条款是否可保留。",
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-021",
+      "finding_id": "F-024",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "评分分档缺少明确量化锚点",
       "page_hint": "第129页（估算）",
@@ -507,10 +602,11 @@
       "legal_or_policy_basis": "主观评审客观化分析（中国政府采购网）",
       "rewrite_suggestion": "把主观描述拆成分项分档和可核验指标，减少自由裁量空间。",
       "needs_human_review": false,
-      "human_review_reason": null
+      "human_review_reason": null,
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-022",
+      "finding_id": "F-025",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "评分中设置与履约弱相关的荣誉资质加分",
       "page_hint": "第133页（估算）",
@@ -531,10 +627,11 @@
       "legal_or_policy_basis": "政府采购需求编制常见问题分析（中国政府采购网）；奖项荣誉信用等级评分问题（中国政府采购网）",
       "rewrite_suggestion": "删除与履约无直接关系的荣誉、称号和信用等级加分项。",
       "needs_human_review": false,
-      "human_review_reason": null
+      "human_review_reason": null,
+      "finding_origin": "rule"
     },
     {
-      "finding_id": "F-023",
+      "finding_id": "F-026",
       "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
       "problem_title": "评分分档缺少明确量化锚点",
       "page_hint": "第137页（估算）",
@@ -555,7 +652,33 @@
       "legal_or_policy_basis": "主观评审客观化分析（中国政府采购网）",
       "rewrite_suggestion": "把主观描述拆成分项分档和可核验指标，减少自由裁量空间。",
       "needs_human_review": false,
-      "human_review_reason": null
+      "human_review_reason": null,
+      "finding_origin": "rule"
+    },
+    {
+      "finding_id": "F-027",
+      "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
+      "problem_title": "政策附件内容模板残留",
+      "page_hint": "第143页（估算）",
+      "clause_id": "三、本规定适用的行业包括：",
+      "source_section": "第十二章    附件：相关政策",
+      "section_path": "第十二章    附件：相关政策",
+      "table_or_item_label": null,
+      "text_line_start": 6432,
+      "text_line_end": 6432,
+      "source_text": "三、本规定适用的行业包括： 农、林、牧、渔业， 工业（包括采矿业， 制造 业， 电力、热力、燃气及水生产和供应业），建筑业， 批发业，零售业，交通运输 业（不含铁路运输业），…",
+      "issue_type": "template_mismatch",
+      "risk_level": "medium",
+      "severity_score": 2,
+      "confidence": "medium",
+      "compliance_judgment": "potentially_problematic",
+      "why_it_is_risky": "条款内容为各行业划型标准（如软件和信息技术服务业从业人员标准），属于政策附件或中小企业划型说明的模板文本。此类内容通常不应直接出现在采购需求章节中，尤其是当采购标的与软件服务业无关时，属于明显的模板残留。",
+      "impact_on_competition_or_performance": "可能影响公平竞争、履约边界或合同可执行性。",
+      "legal_or_policy_basis": null,
+      "rewrite_suggestion": "删除该条款。中小企业划型标准应依据国家统一规定执行，无需在采购文件中重复列出，除非有特定的政策优惠要求且需明确说明。",
+      "needs_human_review": true,
+      "human_review_reason": "该问题由本地大模型在边界判断任务中新增，建议复核后决定是否入正式规则库。",
+      "finding_origin": "llm_added"
     }
   ],
   "items_for_human_review": [
@@ -572,7 +695,11 @@
     "F-017：需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
     "F-018：需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
     "F-019：需结合采购场景、适用标准、院感或安全要求及市场调研判断该技术要求是否应保留。",
-    "F-020：需结合采购人内控、财政支付流程和合同谈判边界判断条款是否可保留。"
+    "F-020：需结合采购人内控、财政支付流程和合同谈判边界判断条款是否可保留。",
+    "货物采购中混入服务义务条款",
+    "特定医院系统对接要求与采购标的不符",
+    "技术参数与采购标的领域错位",
+    "政策附件内容模板残留"
   ],
   "review_limitations": [
     "当前为第二阶段离线骨架，已接入本地引用资料检索，但尚未接入本地大模型做边界判断和改写增强。",

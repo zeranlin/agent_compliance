@@ -14,6 +14,7 @@ from agent_compliance.cache.review_cache import (
 from agent_compliance.config import LLMConfig, detect_llm_config, detect_paths
 from agent_compliance.evals.runner import benchmark_summary
 from agent_compliance.pipelines.llm_enhance import enhance_review_result
+from agent_compliance.pipelines.llm_review import apply_llm_review_tasks
 from agent_compliance.pipelines.normalize import run_normalize
 from agent_compliance.pipelines.render import write_review_outputs
 from agent_compliance.pipelines.review import build_review_result
@@ -101,8 +102,14 @@ def main(argv: list[str] | None = None) -> int:
                         "review_pipeline_version": REVIEW_CACHE_VERSION,
                     },
                 )
-        review = enhance_review_result(review, llm_config)
         output_stem = args.output_stem or normalized.file_hash[:12]
+        review = enhance_review_result(review, llm_config)
+        review, llm_artifacts = apply_llm_review_tasks(
+            normalized,
+            review,
+            llm_config,
+            output_stem=output_stem,
+        )
         json_path, md_path = write_review_outputs(review, output_stem)
         payload = {
             "review": review.to_dict(),
@@ -112,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
                 "base_url": llm_config.base_url,
                 "model": llm_config.model,
             },
+            "llm_review": llm_artifacts.to_dict(),
             "outputs": {"json": str(json_path), "markdown": str(md_path)},
         }
         return _print_result(payload, args.json)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import json
 
 from agent_compliance.config import detect_paths
 
@@ -39,6 +40,7 @@ def benchmark_summary() -> dict[str, str]:
         "case_count": sum(int(item["case_count"]) for item in cases),
         "issue_types_covered": sorted({issue for item in cases for issue in item.get("issue_types", [])}),
         "cases": cases,
+        "latest_benchmark_gate": _latest_benchmark_gate(paths.repo_root / "docs" / "generated" / "improvement"),
         "status": "当前可读取本地 benchmark 样本清单与案例数量，后续版本继续接入自动跑分。",
     }
 
@@ -70,7 +72,22 @@ def _extract_issue_types(content: str) -> list[str]:
     if explicit:
         return sorted(set(explicit))
     discovered = re.findall(
-        r"`(geographic_restriction|personnel_restriction|excessive_supplier_qualification|irrelevant_certification_or_award|duplicative_scoring_advantage|ambiguous_requirement|excessive_scoring_weight|post_award_proof_substitution|narrow_technical_parameter|technical_justification_needed|unclear_acceptance_standard|one_sided_commercial_term|payment_acceptance_linkage|other|scoring_structure_imbalance)`",
+        r"`(geographic_restriction|personnel_restriction|excessive_supplier_qualification|irrelevant_certification_or_award|duplicative_scoring_advantage|ambiguous_requirement|excessive_scoring_weight|post_award_proof_substitution|narrow_technical_parameter|technical_justification_needed|unclear_acceptance_standard|one_sided_commercial_term|payment_acceptance_linkage|other|scoring_structure_imbalance|template_mismatch)`",
         content,
     )
     return sorted(set(discovered))
+
+
+def _latest_benchmark_gate(improvement_root: Path) -> dict[str, object] | None:
+    gates = sorted(improvement_root.glob("*-benchmark-gate.json"))
+    if not gates:
+        return None
+    latest = gates[-1]
+    payload = json.loads(latest.read_text(encoding="utf-8"))
+    return {
+        "path": str(latest),
+        "status": payload.get("status"),
+        "candidate_count": payload.get("candidate_count", 0),
+        "covered_count": payload.get("covered_count", 0),
+        "needs_benchmark_count": payload.get("needs_benchmark_count", 0),
+    }

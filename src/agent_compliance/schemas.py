@@ -131,6 +131,7 @@ class Finding:
     rewrite_suggestion: str
     needs_human_review: bool
     human_review_reason: str | None
+    finding_origin: str = "rule"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

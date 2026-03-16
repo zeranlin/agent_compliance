@@ -1,0 +1,32 @@
+{
+  "candidate_count": 4,
+  "covered_count": 4,
+  "needs_benchmark_count": 0,
+  "results": [
+    {
+      "candidate_rule_id": "CAND-06B78999-001",
+      "issue_type": "template_mismatch",
+      "status": "covered",
+      "reason": "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
+    },
+    {
+      "candidate_rule_id": "CAND-06B78999-002",
+      "issue_type": "template_mismatch",
+      "status": "covered",
+      "reason": "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
+    },
+    {
+      "candidate_rule_id": "CAND-06B78999-003",
+      "issue_type": "template_mismatch",
+      "status": "covered",
+      "reason": "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
+    },
+    {
+      "candidate_rule_id": "CAND-06B78999-004",
+      "issue_type": "template_mismatch",
+      "status": "covered",
+      "reason": "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
+    }
+  ],
+  "status": "ok"
+}

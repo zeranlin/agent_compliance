@@ -23,6 +23,7 @@ from agent_compliance.cache.review_cache import (
 from agent_compliance.config import LLMConfig, detect_llm_config, detect_paths
 from agent_compliance.parsers.pagination import page_hint_for_line
 from agent_compliance.pipelines.llm_enhance import enhance_review_result
+from agent_compliance.pipelines.llm_review import apply_llm_review_tasks
 from agent_compliance.pipelines.normalize import run_normalize
 from agent_compliance.pipelines.render import write_review_outputs
 from agent_compliance.pipelines.review import build_review_result
@@ -151,6 +152,12 @@ def _run_review(
                 },
             )
     review = enhance_review_result(review, _web_llm_config(use_llm))
+    review, _ = apply_llm_review_tasks(
+        normalized,
+        review,
+        _web_llm_config(use_llm),
+        output_stem=normalized.file_hash[:12],
+    )
     return review, cache_key, cache_used
 
 

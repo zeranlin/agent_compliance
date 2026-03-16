@@ -241,6 +241,13 @@
 
 这意味着系统目标不仅是“做完这次审查”，还包括“把这次经验变成下次能力”。
 
+当前还新增了“本地模型参与 -> 规则候选生成 -> benchmark gate”的自动演化链路：
+- 启用本地模型后，会额外执行模板错贴与标的域不匹配、评分结构判断、商务链路联合判断三类局部任务
+- 本地模型新增的边界问题会自动沉淀成 `rule_candidate`，而不是只停留在一次性 finding 中
+- 每个 `rule_candidate` 至少携带：`candidate_rule_id`、`issue_type`、`source_text`、`trigger_keywords`、`suggested_merge_key`、`false_positive_risk`
+- `eval` 入口已可直接显示最新 benchmark gate 结果，帮助判断候选问题类型是否已被 benchmark 覆盖
+- 当前已补入 `template_mismatch` 问题类型的 benchmark 样本，用于承接模板错贴和标的域错位问题
+
 相关设计：
 - [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)
 
@@ -262,6 +269,11 @@
 - 财政部门政策解读和公开答复
 - 中国政府采购网及省级政府采购网典型案例
 - 内部审查失败样本和人工修正记录
+
+当前还新增了“规则候选自动生长”的中间层：
+- 对本地模型在真实文件中新增、而规则链路尚未稳定覆盖的问题，自动生成规则候选
+- 规则候选不会直接进入正式规则库，而是先进入 `docs/generated/improvement/` 产物层
+- 候选规则需先通过 benchmark gate，再进入后续人工确认入库环节
 
 并已定义周期能力：
 - 每周抓取新增案例、政策解读和高频争议点
@@ -304,6 +316,7 @@
 - 通过 benchmark 和 rubric 做能力回归检查
 - 输出误报、漏报、依据缺失点和能力薄弱点报告
 - 将评测结果反向更新到规格、规则、案例库和改写示例中
+- 输出最新 `benchmark_gate`，识别哪些新增候选问题类型已被 benchmark 覆盖、哪些仍需先补样本
 
 这意味着系统不只追求“这次看起来答得不错”，还追求“下一轮是否能稳定复现并改进”。
 
