@@ -4,11 +4,14 @@ import json
 import subprocess
 from email.parser import BytesParser
 from email.policy import default
+from html import escape as html_escape
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+from xml.etree import ElementTree as ET
+from zipfile import ZipFile
 
 from agent_compliance.cache.review_cache import (
     REVIEW_CACHE_VERSION,
@@ -198,21 +201,154 @@ def _flag_value(value: str | None) -> bool:
 
 def _build_document_payload(normalized: NormalizedDocument) -> dict[str, Any]:
     text = Path(normalized.normalized_text_path).read_text(encoding="utf-8")
-    lines: list[dict[str, Any]] = []
-    for number, raw_line in enumerate(text.splitlines(), start=1):
-        lines.append(
-            {
-                "number": number,
-                "text": raw_line,
-                "page_hint": page_hint_for_line(number, normalized.page_map),
-            }
-        )
-    return {
+    lines = [
+        {
+            "number": number,
+            "text": raw_line,
+            "page_hint": page_hint_for_line(number, normalized.page_map),
+        }
+        for number, raw_line in enumerate(text.splitlines(), start=1)
+    ]
+    payload = {
         "source_path": normalized.source_path,
         "normalized_text_path": normalized.normalized_text_path,
         "line_count": len(lines),
         "lines": lines,
+        "render_mode": "text",
+        "blocks": [],
     }
+    suffix = Path(normalized.source_path).suffix.lower()
+    if suffix == ".docx":
+        blocks = _build_docx_blocks(Path(normalized.source_path), lines)
+        if blocks:
+            payload["render_mode"] = "docx_blocks"
+            payload["blocks"] = blocks
+    return payload
+
+
+def _build_docx_blocks(source_path: Path, lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    try:
+        with ZipFile(source_path) as archive:
+            document_xml = archive.read("word/document.xml")
+    except Exception:
+        return []
+
+    root = ET.fromstring(document_xml)
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    body = root.find("w:body", ns)
+    if body is None:
+        return []
+
+    normalized_lines = [str(item["text"]) for item in lines]
+    search_cursor = 0
+    blocks: list[dict[str, Any]] = []
+    block_index = 1
+
+    for child in body:
+        tag = child.tag.rsplit("}", 1)[-1]
+        if tag == "p":
+            text = _docx_paragraph_text(child, ns)
+            if not text.strip():
+                continue
+            start_line, end_line, search_cursor = _locate_block_lines(text, normalized_lines, search_cursor)
+            blocks.append(
+                {
+                    "block_id": f"block-{block_index}",
+                    "kind": "paragraph",
+                    "html": f"<p>{html_escape(text)}</p>",
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "page_hint": page_hint_for_line(start_line, []) if False else None,
+                }
+            )
+            block_index += 1
+        elif tag == "tbl":
+            rows = _docx_table_rows(child, ns)
+            if not rows:
+                continue
+            table_text = "\n".join(" | ".join(cell for cell in row if cell) for row in rows if any(cell for cell in row))
+            start_line, end_line, search_cursor = _locate_block_lines(table_text, normalized_lines, search_cursor)
+            rows_html = []
+            for row in rows:
+                cells_html = "".join(f"<td>{html_escape(cell)}</td>" for cell in row)
+                rows_html.append(f"<tr>{cells_html}</tr>")
+            blocks.append(
+                {
+                    "block_id": f"block-{block_index}",
+                    "kind": "table",
+                    "html": f"<table><tbody>{''.join(rows_html)}</tbody></table>",
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "page_hint": None,
+                }
+            )
+            block_index += 1
+    return blocks
+
+
+def _docx_paragraph_text(paragraph: ET.Element, ns: dict[str, str]) -> str:
+    parts: list[str] = []
+    for node in paragraph.iter():
+        tag = node.tag.rsplit("}", 1)[-1]
+        if tag == "t" and node.text:
+            parts.append(node.text)
+        elif tag == "tab":
+            parts.append("    ")
+        elif tag in {"br", "cr"}:
+            parts.append("\n")
+    return "".join(parts).strip()
+
+
+def _docx_table_rows(table: ET.Element, ns: dict[str, str]) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for row in table.findall("w:tr", ns):
+        cells: list[str] = []
+        for cell in row.findall("w:tc", ns):
+            paragraphs = [_docx_paragraph_text(paragraph, ns) for paragraph in cell.findall("w:p", ns)]
+            cell_text = "\n".join(part for part in paragraphs if part).strip()
+            cells.append(cell_text)
+        if cells:
+            rows.append(cells)
+    return rows
+
+
+def _locate_block_lines(block_text: str, normalized_lines: list[str], cursor: int) -> tuple[int, int, int]:
+    target_parts = [part.strip() for part in block_text.splitlines() if part.strip()]
+    if not target_parts:
+        fallback = min(cursor + 1, max(len(normalized_lines), 1))
+        return fallback, fallback, fallback
+
+    start_index = None
+    search_text = target_parts[0]
+    for idx in range(cursor, len(normalized_lines)):
+        candidate = normalized_lines[idx].strip()
+        if not candidate:
+            continue
+        if search_text in candidate or candidate in search_text:
+            start_index = idx
+            break
+    if start_index is None:
+        for idx, candidate_line in enumerate(normalized_lines):
+            candidate = candidate_line.strip()
+            if candidate and (search_text in candidate or candidate in search_text):
+                start_index = idx
+                break
+
+    if start_index is None:
+        fallback = min(cursor + 1, max(len(normalized_lines), 1))
+        return fallback, fallback, fallback
+
+    end_index = start_index
+    part_cursor = start_index
+    for part in target_parts[1:]:
+        for idx in range(part_cursor + 1, len(normalized_lines)):
+            candidate = normalized_lines[idx].strip()
+            if candidate and (part in candidate or candidate in part):
+                end_index = idx
+                part_cursor = idx
+                break
+
+    return start_index + 1, end_index + 1, max(end_index + 1, cursor)
 
 
 def _index_html() -> str:
@@ -433,6 +569,44 @@ def _index_html() -> str:
       max-height: calc(100vh - 250px);
       overflow: auto;
       padding: 8px 0;
+      background: #fff;
+    }
+    .doc-block {
+      margin: 12px 16px;
+      padding: 10px 12px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .doc-block.active {
+      background: var(--active);
+      border-color: #f0c98a;
+    }
+    .doc-block p {
+      margin: 0;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .doc-block table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+    }
+    .doc-block td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      vertical-align: top;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .doc-block-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
     }
     .doc-line {
       display: grid;
@@ -609,9 +783,19 @@ def _index_html() -> str:
         <h2>文件正文</h2>
         <div class="meta">原文件：${escapeHtml(documentPayload.source_path)}</div>
         <div class="meta">稳定文本：${escapeHtml(documentPayload.normalized_text_path)}</div>
-        <div class="meta">总行数：${documentPayload.line_count}</div>`;
-      documentBodyNode.innerHTML = documentPayload.lines.map((line) => renderDocumentLine(line)).join('');
+        <div class="meta">总行数：${documentPayload.line_count} ｜ 渲染模式：${documentPayload.render_mode === 'docx_blocks' ? 'DOCX 原文结构' : '稳定文本'}</div>`;
+      documentBodyNode.innerHTML = documentPayload.render_mode === 'docx_blocks'
+        ? documentPayload.blocks.map((block) => renderDocumentBlock(block)).join('')
+        : documentPayload.lines.map((line) => renderDocumentLine(line)).join('');
       workspaceNode.style.display = 'grid';
+    }
+
+    function renderDocumentBlock(block) {
+      const meta = `行号：${formatLineRange(block.start_line, block.end_line)}`;
+      return `<div class="doc-block" id="${escapeHtml(block.block_id)}" data-start-line="${block.start_line}" data-end-line="${block.end_line}">
+        ${block.html}
+        <div class="doc-block-meta">${escapeHtml(meta)}</div>
+      </div>`;
     }
 
     function renderDocumentLine(line) {
@@ -631,12 +815,27 @@ def _index_html() -> str:
     }
 
     function highlightDocumentRange(start, end) {
-      documentBodyNode.querySelectorAll('.doc-line.active').forEach((node) => node.classList.remove('active'));
-      for (let line = start; line <= end; line += 1) {
-        const node = document.getElementById(`doc-line-${line}`);
-        if (node) node.classList.add('active');
+      documentBodyNode.querySelectorAll('.active').forEach((node) => node.classList.remove('active'));
+      let target = null;
+      if (latestDocument && latestDocument.render_mode === 'docx_blocks') {
+        documentBodyNode.querySelectorAll('.doc-block').forEach((node) => {
+          const blockStart = Number(node.dataset.startLine);
+          const blockEnd = Number(node.dataset.endLine);
+          const overlaps = blockStart <= end && blockEnd >= start;
+          if (overlaps) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
+        });
+      } else {
+        for (let line = start; line <= end; line += 1) {
+          const node = document.getElementById(`doc-line-${line}`);
+          if (node) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
+        }
       }
-      const target = document.getElementById(`doc-line-${start}`);
       if (target) {
         target.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }

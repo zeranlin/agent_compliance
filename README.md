@@ -49,7 +49,7 @@
 本地 Web 页面：
 - 启动：`PYTHONPATH=src python3 -m agent_compliance web`
 - 默认地址：[http://127.0.0.1:8765](http://127.0.0.1:8765)
-- 当前支持上传文件、启用缓存/本地模型开关、查看审查摘要和 findings 列表，并在页面内打开稳定文本视图、按 finding 跳转定位到对应行
+- 当前支持上传文件、启用缓存/本地模型开关、查看审查摘要和 findings 列表；对 `docx` 会优先按段落/表格结构渲染原文，并按 finding 跳转定位到对应位置
 
 本地引用资料：
 - [法规依据本地引用库](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/legal-authorities/README.md)
