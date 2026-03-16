@@ -429,6 +429,28 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertEqual(len(justifications), 1)
         self.assertIn("必要性论证", justifications[0].problem_title)
 
+    def test_review_flags_geographic_restriction_in_service_response_clause(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "商务要求",
+                "中标人须在项目所在地设有常驻服务人员，并配备本地服务团队，深圳市内2小时内到场处理故障。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertTrue(any(finding.issue_type == "geographic_restriction" for finding in review.findings))
+
 
 if __name__ == "__main__":
     unittest.main()

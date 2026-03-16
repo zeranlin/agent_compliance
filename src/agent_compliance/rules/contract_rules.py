@@ -114,4 +114,16 @@ RULES = [
         rewrite_hint="细化违约金、扣款、保证金处理的触发条件、计算方式和责任边界，避免当然扣减或过度处罚。",
         merge_key="contract-deduction-imbalance",
     ),
+    RuleDefinition(
+        rule_id="CONTRACT-010",
+        issue_type="geographic_restriction",
+        pattern=re.compile(r"本地服务团队.*到场|本地驻点服务|项目所在地驻场|在项目所在地设有常驻服务人员|深圳市内.*小时内到场|本地工程师.*响应"),
+        rationale="在服务响应、驻场或到场要求中嵌入本地团队、本地驻点或属地人员要求，可能构成变相属地限制。",
+        severity_score=3,
+        related_rule_ids=("RULE-002", "RULE-003"),
+        related_reference_ids=("LEGAL-001", "CASESRC-005"),
+        source_section="商务要求",
+        rewrite_hint="删除本地团队、驻点或属地人员要求，改为统一的到场时限、响应时效和服务方案要求。",
+        merge_key="contract-geographic-service",
+    ),
 ]

@@ -344,6 +344,7 @@
 - 已补入属地/本地团队/人员画像限制、商务验收付款链路，以及技术要求“需论证”中间层查点，先提升问题找全率而非继续强化评分细算
 - 已补入评分项中的属地限制识别，并开始识别单方解除、违约金、扣款条件等商务失衡条款；技术“需论证”类 finding 也开始按主题归并
 - 已将窗帘项目中的人工差异要点整理为 benchmark 回归样本，后续可持续验证属地、类似业绩前置、商务违约链路和技术需论证查点
+- 已让本地 eval 入口读取 benchmark 清单；同时补入服务响应条款中的属地限制，并继续压缩技术“需论证”类 finding
 
 相关设计：
 - [local-runtime-skeleton.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-runtime-skeleton.md)

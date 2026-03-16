@@ -438,7 +438,7 @@ def _can_merge_technical_justification(left: Finding, right: Finding) -> bool:
         return False
     if left.document_name != right.document_name:
         return False
-    return right.text_line_start - left.text_line_end <= 120
+    return right.text_line_start - left.text_line_end <= 220
 
 
 def _merge_technical_justification_into(target: Finding, finding: Finding, family: str) -> None:
@@ -464,9 +464,9 @@ def _merge_technical_justification_into(target: Finding, finding: Finding, famil
 
 def _technical_justification_family_key(finding: Finding) -> str | None:
     normalized = _normalized_source_signature(finding.source_text)
-    if any(token in normalized for token in ("阻燃", "抗菌", "抗病毒", "防霉", "环保", "致癌染料", "有机锡", "邻苯", "含氯苯酚")):
+    if any(token in normalized for token in ("阻燃", "抗菌", "抗病毒", "防霉", "环保", "致癌染料", "有机锡", "邻苯", "含氯苯酚", "盐雾")):
         return "safety_environment"
-    if any(token in normalized for token in ("cma", "cnas", "第三方")):
+    if any(token in normalized for token in ("cma", "cnas", "第三方", "检测报告")):
         return "testing_proof"
     return "technical_justification_general"
 
