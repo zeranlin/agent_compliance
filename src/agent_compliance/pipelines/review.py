@@ -10,6 +10,7 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
     deduped_hits = _dedupe_hits(hits)
     findings: list[Finding] = []
     for index, hit in enumerate(deduped_hits, start=1):
+        clause = _find_clause(document, hit)
         references = find_references(
             reference_ids=hit.related_reference_ids,
             rule_ids=hit.related_rule_ids,
@@ -18,9 +19,11 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
         finding = Finding(
             finding_id=f"F-{index:03d}",
             document_name=document.document_name,
+            page_hint=clause.page_hint if clause else None,
             clause_id=hit.matched_clause_id,
-            source_section=hit.source_section,
-            section_path=_find_section(document, hit) or hit.source_section,
+            source_section=clause.source_section if clause and clause.source_section else hit.source_section,
+            section_path=clause.section_path if clause else hit.source_section,
+            table_or_item_label=clause.table_or_item_label if clause else None,
             text_line_start=hit.line_start,
             text_line_end=hit.line_end,
             source_text=hit.matched_text,
@@ -70,9 +73,17 @@ def _judgment(issue_type: str, severity_score: int) -> str:
 
 
 def _find_section(document: NormalizedDocument, hit: RuleHit) -> str | None:
+    clause = _find_clause(document, hit)
+    return clause.section_path if clause else None
+
+
+def _find_clause(document: NormalizedDocument, hit: RuleHit):
+    for clause in document.clauses:
+        if clause.line_start == hit.line_start and clause.text == hit.matched_text:
+            return clause
     for clause in document.clauses:
         if clause.line_start == hit.line_start:
-            return clause.section_path
+            return clause
     return None
 
 

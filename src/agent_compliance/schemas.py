@@ -16,7 +16,10 @@ class Clause:
     text: str
     line_start: int
     line_end: int
+    source_section: str | None = None
     section_path: str | None = None
+    table_or_item_label: str | None = None
+    page_hint: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -69,9 +72,11 @@ class RuleHit:
 class Finding:
     finding_id: str
     document_name: str
+    page_hint: str | None
     clause_id: str
     source_section: str
     section_path: str | None
+    table_or_item_label: str | None
     text_line_start: int
     text_line_end: int
     source_text: str

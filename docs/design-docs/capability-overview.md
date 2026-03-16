@@ -103,6 +103,7 @@
 当前已验证或已明确设计的能力包括：
 - 从 `docx`、`pdf` 或稳定文本副本中提取正文
 - 对原文做章节、条款、表格项、评分项和商务条款切分
+- 在离线执行引擎中输出层级化 `section_path`、`source_section` 和 `table_or_item_label`
 - 为后续审查保留稳定文本副本，便于复核和复用
 - 为后续缓存复用预留标准化字段，如 `file_hash`、`normalized_text`、`section_map`、`clause_map`、`page_map`、`line_map`
 
@@ -128,6 +129,8 @@
 - `text_line_end`
 
 这意味着当前输出已经不仅能指出“有问题”，还能尽量帮助使用者快速回到原文件中的具体风险位置。
+
+当前离线执行引擎已能在无网络情况下把常见章节标题、评分表标签和条款片段映射到 `section_path`、`source_section`、`table_or_item_label`。`page_hint` 字段已保留在 schema 中，但对 `docx` 文本抽取结果仍主要为预留状态，后续需结合页映射继续补强。
 
 该能力已适用于：
 - Word

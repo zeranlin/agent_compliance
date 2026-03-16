@@ -35,6 +35,22 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertGreaterEqual(len(review.findings), 2)
         self.assertTrue(any(finding.legal_or_policy_basis for finding in review.findings))
         self.assertIn("本地离线审查共形成", review.overall_risk_summary)
+        self.assertTrue(any(finding.section_path for finding in review.findings))
+
+    def test_splitter_builds_hierarchical_section_path_and_table_label(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "评标信息",
+                "技术部分",
+                "评分因素",
+                "方案极合理、条理极清晰、可操作性极强的得 40 分；",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        target = clauses[-1]
+        self.assertEqual(target.section_path, "第一章 招标公告-评标信息-技术部分-评分因素")
+        self.assertEqual(target.table_or_item_label, "评分因素")
 
 
 if __name__ == "__main__":

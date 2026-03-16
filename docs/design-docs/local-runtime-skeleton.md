@@ -55,6 +55,7 @@ tests/
 ### 当前已落地
 
 - `parsers/`: 文本抽取和基础条款切分
+- `parsers/section_splitter.py`: 已可输出层级化 `section_path`、`source_section` 和 `table_or_item_label`
 - `rules/`: 资格、评分、技术、合同四类高频规则
 - `pipelines/normalize.py`: 标准化输出
 - `pipelines/rule_scan.py`: 规则命中结果
@@ -65,7 +66,7 @@ tests/
 
 ### 后续优先补强
 
-- 章节路径识别和页码映射精度
+- 页码映射和复杂表格结构定位精度
 - 本地法规和案例全文检索排序能力
 - 规则映射到更细粒度法规依据和案例依据
 - 本地模型边界判断与改写建议
