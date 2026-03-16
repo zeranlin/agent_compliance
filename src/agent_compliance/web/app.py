@@ -629,6 +629,35 @@ def _index_html() -> str:
       max-height: calc(100vh - 250px);
       overflow: auto;
     }
+    .issues-summary-bar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .issues-stat {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px 12px;
+      display: grid;
+      gap: 4px;
+    }
+    .issues-stat-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .issues-stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+    .issues-stat-value.high {
+      color: var(--high);
+    }
+    .issues-stat-value.medium {
+      color: var(--medium);
+    }
     .issue-item {
       width: 100%;
       background: #fff;
@@ -642,6 +671,14 @@ def _index_html() -> str:
       border-color: var(--accent);
       box-shadow: 0 0 0 2px rgba(157, 74, 36, 0.12);
       background: #fff8f1;
+    }
+    .issue-item.high {
+      border-left: 5px solid var(--high);
+      background: linear-gradient(90deg, rgba(163, 61, 34, 0.05), #fff 14%);
+    }
+    .issue-item.medium {
+      border-left: 5px solid var(--medium);
+      background: linear-gradient(90deg, rgba(143, 103, 20, 0.05), #fff 14%);
     }
     .issue-summary {
       width: 100%;
@@ -758,6 +795,39 @@ def _index_html() -> str:
       font-weight: 700;
       line-height: 1.5;
     }
+    .issue-title-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+    .issue-rank {
+      min-width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: #f5ede2;
+      color: var(--accent);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex: 0 0 auto;
+    }
+    .issue-rank.high {
+      background: rgba(163, 61, 34, 0.12);
+      color: var(--high);
+    }
+    .issue-rank.medium {
+      background: rgba(143, 103, 20, 0.12);
+      color: var(--medium);
+    }
+    .issue-main {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
     .issue-meta,
     .issue-snippet {
       color: var(--muted);
@@ -768,10 +838,18 @@ def _index_html() -> str:
     }
     .issue-snippet {
       color: var(--ink);
+      background: #fffaf3;
+      border-radius: 10px;
+      padding: 9px 10px;
     }
     .issue-toggle-text {
       color: var(--muted);
       font-size: 12px;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 12px;
     }
     .document-body {
       max-height: calc(100vh - 250px);
@@ -862,6 +940,10 @@ def _index_html() -> str:
       }
       .summary-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .issues-summary-bar,
+      .detail-grid {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -971,12 +1053,21 @@ def _index_html() -> str:
 
 
     function renderIssues(findings) {
-      const filtered = applyFindingFilter(findings, currentFindingFilter);
+      const sortedFindings = sortFindings(findings);
+      const filtered = applyFindingFilter(sortedFindings, currentFindingFilter);
       const llmCount = findings.filter((item) => item.finding_origin === 'llm_added').length;
       const ruleCount = findings.filter((item) => item.finding_origin !== 'llm_added').length;
+      const highCount = findings.filter((item) => item.risk_level === 'high').length;
+      const mediumCount = findings.filter((item) => item.risk_level === 'medium').length;
       issuesHeadNode.innerHTML = `
         <h2>审查问题清单</h2>
-        <div class="meta">共 ${findings.length} 条问题，其中规则命中 ${ruleCount} 条、模型新增 ${llmCount} 条。点击“定位正文”会跳到对应位置，点击“展开详情”可查看依据、判断和建议。</div>
+        <div class="meta">共 ${findings.length} 条问题，其中规则命中 ${ruleCount} 条、模型新增 ${llmCount} 条。清单已按风险等级排序，高风险优先显示。点击“定位正文”会跳到对应位置，点击“展开详情”可查看依据、判断和建议。</div>
+        <div class="issues-summary-bar">
+          <div class="issues-stat"><div class="issues-stat-label">高风险</div><div class="issues-stat-value high">${highCount}</div></div>
+          <div class="issues-stat"><div class="issues-stat-label">中风险</div><div class="issues-stat-value medium">${mediumCount}</div></div>
+          <div class="issues-stat"><div class="issues-stat-label">规则命中</div><div class="issues-stat-value">${ruleCount}</div></div>
+          <div class="issues-stat"><div class="issues-stat-label">模型新增</div><div class="issues-stat-value">${llmCount}</div></div>
+        </div>
         <div class="issues-filters">
           <button type="button" class="filter-chip ${currentFindingFilter === 'all' ? 'active' : ''}" data-filter="all">全部</button>
           <button type="button" class="filter-chip ${currentFindingFilter === 'rule' ? 'active' : ''}" data-filter="rule">规则</button>
@@ -1018,7 +1109,7 @@ def _index_html() -> str:
     function renderIssueItem(finding, index) {
       const originLabel = finding.finding_origin === 'llm_added' ? '模型新增' : '规则命中';
       const originClass = finding.finding_origin === 'llm_added' ? 'origin-llm' : 'origin-rule';
-      return `<article class="issue-item" data-finding-id="${escapeHtml(finding.finding_id)}">
+      return `<article class="issue-item ${escapeHtml(finding.risk_level || '')}" data-finding-id="${escapeHtml(finding.finding_id)}">
         <button type="button" class="issue-summary">
           <div class="issue-top">
             <span>问题 ${index}</span>
@@ -1026,8 +1117,14 @@ def _index_html() -> str:
             <span class="badge">${escapeHtml(finding.issue_type)}</span>
             <span class="badge ${originClass}">${originLabel}</span>
           </div>
-          <div class="issue-title">${escapeHtml(finding.problem_title)}</div>
-          <div class="issue-meta">位置：${escapeHtml(finding.section_path || finding.source_section || '待补充')} ｜ 行号：${escapeHtml(formatLineRange(finding.text_line_start, finding.text_line_end))}</div>
+          <div class="issue-title-row">
+            <div class="issue-rank ${escapeHtml(finding.risk_level || '')}">${String(index).padStart(2, '0')}</div>
+            <div class="issue-main">
+              <div class="issue-title">${escapeHtml(finding.problem_title)}</div>
+              <div class="issue-meta">位置：${escapeHtml(finding.section_path || finding.source_section || '待补充')}</div>
+              <div class="issue-meta">页码：${escapeHtml(finding.page_hint || '待人工翻页复核')} ｜ 行号：${escapeHtml(formatLineRange(finding.text_line_start, finding.text_line_end))}</div>
+            </div>
+          </div>
           <div class="issue-snippet">${escapeHtml(finding.source_text)}</div>
           <div class="issue-actions">
             <div class="issue-action-buttons">
@@ -1037,17 +1134,23 @@ def _index_html() -> str:
           </div>
         </button>
         <div class="issue-detail">
-          <div class="detail-pair">
-            <div class="detail-label">合规判断</div>
-            <div class="detail-value">${escapeHtml(finding.compliance_judgment)}</div>
-          </div>
-          <div class="detail-pair">
-            <div class="detail-label">页码提示</div>
-            <div class="detail-value">${escapeHtml(finding.page_hint || '待人工翻页复核')}</div>
-          </div>
-          <div class="detail-pair">
-            <div class="detail-label">来源</div>
-            <div class="detail-value">${escapeHtml(originLabel)}</div>
+          <div class="detail-grid">
+            <div class="detail-pair">
+              <div class="detail-label">合规判断</div>
+              <div class="detail-value">${escapeHtml(finding.compliance_judgment)}</div>
+            </div>
+            <div class="detail-pair">
+              <div class="detail-label">来源</div>
+              <div class="detail-value">${escapeHtml(originLabel)}</div>
+            </div>
+            <div class="detail-pair">
+              <div class="detail-label">条款编号</div>
+              <div class="detail-value">${escapeHtml(finding.clause_id || '待补充')}</div>
+            </div>
+            <div class="detail-pair">
+              <div class="detail-label">表格/评分项</div>
+              <div class="detail-value">${escapeHtml(finding.table_or_item_label || '—')}</div>
+            </div>
           </div>
           <div class="detail-pair">
             <div class="detail-label">风险说明</div>
@@ -1161,6 +1264,17 @@ def _index_html() -> str:
         return findings.filter((item) => item.finding_origin !== 'llm_added');
       }
       return findings;
+    }
+
+    function sortFindings(findings) {
+      const priority = { high: 0, medium: 1, low: 2, none: 3 };
+      return [...findings].sort((left, right) => {
+        const levelDiff = (priority[left.risk_level] ?? 9) - (priority[right.risk_level] ?? 9);
+        if (levelDiff !== 0) return levelDiff;
+        const lineDiff = (left.text_line_start || 0) - (right.text_line_start || 0);
+        if (lineDiff !== 0) return lineDiff;
+        return String(left.finding_id).localeCompare(String(right.finding_id));
+      });
     }
 
     function escapeHtml(text) {
