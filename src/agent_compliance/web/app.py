@@ -835,12 +835,16 @@ def _index_html() -> str:
       const review = payload.review;
       const highCount = review.findings.filter((item) => item.risk_level === 'high').length;
       const mediumCount = review.findings.filter((item) => item.risk_level === 'medium').length;
+      const llmAddedCount = review.findings.filter((item) => item.finding_origin === 'llm_added').length;
+      const ruleCount = review.findings.filter((item) => item.finding_origin !== 'llm_added').length;
       summaryNode.innerHTML = `
         <h2>审查摘要</h2>
         <div>${escapeHtml(review.overall_risk_summary)}</div>
         <div class="summary-grid">
           <div class="stat"><div class="label">文件</div><div class="value">${escapeHtml(review.document_name)}</div></div>
           <div class="stat"><div class="label">发现项</div><div class="value">${review.findings.length}</div></div>
+          <div class="stat"><div class="label">规则命中</div><div class="value">${ruleCount}</div></div>
+          <div class="stat"><div class="label">模型新增</div><div class="value">${llmAddedCount}</div></div>
           <div class="stat"><div class="label">高风险</div><div class="value">${highCount}</div></div>
           <div class="stat"><div class="label">中风险</div><div class="value">${mediumCount}</div></div>
           <div class="stat"><div class="label">缓存 / 模型</div><div class="value">${payload.cache.enabled ? '缓存开' : '缓存关'} / ${payload.llm.enabled ? '模型开' : '模型关'}</div></div>
