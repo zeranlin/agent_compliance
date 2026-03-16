@@ -19,6 +19,7 @@ class LLMConfig:
     enabled: bool
     base_url: str
     model: str
+    api_key: str | None
     timeout_seconds: int
 
 
@@ -35,10 +36,12 @@ def detect_paths() -> AppPaths:
 
 
 def detect_llm_config() -> LLMConfig:
+    _load_local_env()
     return LLMConfig(
         enabled=_env_flag("AGENT_COMPLIANCE_LLM_ENABLED", default=False),
         base_url=os.getenv("AGENT_COMPLIANCE_LLM_BASE_URL", "http://112.111.54.86:10011/v1").rstrip("/"),
-        model=os.getenv("AGENT_COMPLIANCE_LLM_MODEL", "local-model"),
+        model=os.getenv("AGENT_COMPLIANCE_LLM_MODEL", "qwen3.5-27b"),
+        api_key=os.getenv("AGENT_COMPLIANCE_LLM_API_KEY"),
         timeout_seconds=int(os.getenv("AGENT_COMPLIANCE_LLM_TIMEOUT_SECONDS", "60")),
     )
 
@@ -48,3 +51,15 @@ def _env_flag(name: str, *, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _load_local_env() -> None:
+    env_path = detect_paths().repo_root / ".env.local"
+    if not env_path.exists():
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip())

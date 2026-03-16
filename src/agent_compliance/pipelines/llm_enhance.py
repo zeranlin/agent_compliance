@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 
 from agent_compliance.config import LLMConfig
 from agent_compliance.models.llm_client import ChatMessage, OpenAICompatibleLLMClient
@@ -19,7 +20,7 @@ def enhance_review_result(review: ReviewResult, llm_config: LLMConfig) -> Review
         return review
 
     client = OpenAICompatibleLLMClient(llm_config)
-    targets = [finding for finding in review.findings if finding.needs_human_review or "已合并" in finding.problem_title]
+    targets = [finding for finding in review.findings if finding.issue_type == "narrow_technical_parameter"]
     if not targets:
         return review
 
@@ -56,9 +57,7 @@ def _build_prompt(document_name: str, targets) -> str:
 
 
 def _apply_enhancements(review: ReviewResult, content: str) -> ReviewResult:
-    import json
-
-    payload = json.loads(content)
+    payload = json.loads(_extract_json_array(content))
     updates = {item["finding_id"]: item for item in payload}
     result = deepcopy(review)
     for finding in result.findings:
@@ -69,3 +68,14 @@ def _apply_enhancements(review: ReviewResult, content: str) -> ReviewResult:
         finding.why_it_is_risky = update.get("why_it_is_risky", finding.why_it_is_risky)
         finding.rewrite_suggestion = update.get("rewrite_suggestion", finding.rewrite_suggestion)
     return result
+
+
+def _extract_json_array(content: str) -> str:
+    text = content.strip()
+    if text.startswith("[") and text.endswith("]"):
+        return text
+    start = text.find("[")
+    end = text.rfind("]")
+    if start != -1 and end != -1 and end > start:
+        return text[start : end + 1]
+    raise ValueError("LLM response does not contain a JSON array")

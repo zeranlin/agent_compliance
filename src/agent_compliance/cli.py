@@ -131,5 +131,6 @@ def _resolved_llm_config(args) -> LLMConfig:
         enabled=bool(args.use_llm or config.enabled),
         base_url=(args.llm_base_url or config.base_url).rstrip("/"),
         model=args.llm_model or config.model,
+        api_key=config.api_key,
         timeout_seconds=config.timeout_seconds,
     )

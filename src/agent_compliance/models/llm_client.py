@@ -27,9 +27,15 @@ class OpenAICompatibleLLMClient:
         req = request.Request(
             url=f"{self._config.base_url}/chat/completions",
             data=data,
-            headers={"Content-Type": "application/json"},
+            headers=self._headers(),
             method="POST",
         )
         with request.urlopen(req, timeout=self._config.timeout_seconds) as response:
             body = json.loads(response.read().decode("utf-8"))
         return body["choices"][0]["message"]["content"]
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        if self._config.api_key:
+            headers["Authorization"] = f"Bearer {self._config.api_key}"
+        return headers
