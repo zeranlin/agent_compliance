@@ -21,6 +21,7 @@ from agent_compliance.cache.review_cache import (
     save_review_cache,
 )
 from agent_compliance.config import LLMConfig, detect_llm_config, detect_paths
+from agent_compliance.improvement.rule_management import load_rule_management_payload, save_rule_decision
 from agent_compliance.parsers.pagination import page_hint_for_line
 from agent_compliance.pipelines.llm_enhance import enhance_review_result
 from agent_compliance.pipelines.llm_review import apply_llm_review_tasks
@@ -40,8 +41,12 @@ def run_web_server(host: str = "127.0.0.1", port: int = 8765) -> None:
 
 class ReviewWebHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
-        if urlparse(self.path).path == "/":
+        path = urlparse(self.path).path
+        if path == "/":
             self._send_html(_index_html())
+            return
+        if path == "/api/rules":
+            self._send_json(load_rule_management_payload())
             return
         self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
 
@@ -49,6 +54,9 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/open-source":
             self._handle_open_source()
+            return
+        if path == "/api/rules/decision":
+            self._handle_rule_decision()
             return
         if path != "/api/review":
             self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
@@ -71,7 +79,7 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         paths = detect_paths()
         source_path = _persist_upload(str(upload["filename"]), bytes(upload["content"]))
         normalized = run_normalize(source_path)
-        review, cache_key, cache_used = _run_review(normalized, use_cache=use_cache, use_llm=use_llm, paths=paths)
+        review, llm_artifacts, cache_key, cache_used = _run_review(normalized, use_cache=use_cache, use_llm=use_llm, paths=paths)
         json_path, md_path = write_review_outputs(review, normalized.file_hash[:12])
 
         self._send_json(
@@ -84,6 +92,7 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
                 },
                 "document": _build_document_payload(normalized),
                 "review": review.to_dict(),
+                "llm_review": llm_artifacts.to_dict(),
                 "outputs": {"json": str(json_path), "markdown": str(md_path)},
             }
         )
@@ -120,6 +129,21 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self._send_json({"error": f"打开原文件失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
 
+    def _handle_rule_decision(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            candidate_rule_id = str(payload.get("candidate_rule_id", "")).strip()
+            decision = str(payload.get("decision", "")).strip()
+            note = str(payload.get("note", "")).strip()
+            if not candidate_rule_id:
+                self._send_json({"error": "缺少 candidate_rule_id"}, status=HTTPStatus.BAD_REQUEST)
+                return
+            save_rule_decision(candidate_rule_id, decision, note)
+            self._send_json(load_rule_management_payload())
+        except Exception as exc:
+            self._send_json({"error": f"保存规则决策失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
+
 
 def _run_review(
     normalized: NormalizedDocument,
@@ -152,13 +176,13 @@ def _run_review(
                 },
             )
     review = enhance_review_result(review, _web_llm_config(use_llm))
-    review, _ = apply_llm_review_tasks(
+    review, llm_artifacts = apply_llm_review_tasks(
         normalized,
         review,
         _web_llm_config(use_llm),
         output_stem=normalized.file_hash[:12],
     )
-    return review, cache_key, cache_used
+    return review, llm_artifacts, cache_key, cache_used
 
 
 def _parse_multipart(headers, body: bytes) -> dict[str, dict[str, bytes | str]]:
@@ -486,6 +510,93 @@ def _index_html() -> str:
       gap: 16px;
       align-items: start;
     }
+    .rules-panel {
+      display: none;
+      margin-top: 16px;
+      padding: 16px;
+    }
+    .rules-grid {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 16px;
+      margin-top: 12px;
+    }
+    .rules-col {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      min-height: 420px;
+      overflow: hidden;
+    }
+    .rules-col-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 6px;
+    }
+    .rules-col-head h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+    .rules-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .rules-list {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      max-height: 560px;
+      overflow: auto;
+    }
+    .rule-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fffdfa;
+      display: grid;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .rule-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(157, 74, 36, 0.12);
+      background: #fff8f1;
+    }
+    .rule-card-title {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+    .rule-card-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+    .rule-detail {
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+    .rule-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .rule-note {
+      width: 100%;
+      min-height: 70px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      font: inherit;
+      resize: vertical;
+    }
     .issues,
     .document {
       min-height: 580px;
@@ -739,6 +850,9 @@ def _index_html() -> str:
       .workspace {
         grid-template-columns: 1fr;
       }
+      .rules-grid {
+        grid-template-columns: 1fr;
+      }
       .issues-list,
       .document-body {
         max-height: none;
@@ -781,6 +895,23 @@ def _index_html() -> str:
         <div id="document-body" class="document-body"></div>
       </section>
     </section>
+    <section id="rules-panel" class="panel rules-panel">
+      <h2>规则管理</h2>
+      <div id="rules-summary" class="meta">正在加载规则候选...</div>
+      <div class="rules-grid">
+        <section class="rules-col">
+          <div id="rules-col-head" class="rules-col-head"></div>
+          <div id="rules-list" class="rules-list"></div>
+        </section>
+        <section class="rules-col">
+          <div class="rules-col-head">
+            <h3>规则详情</h3>
+            <div class="meta">查看候选规则、benchmark gate 状态，并记录是否确认入库。</div>
+          </div>
+          <div id="rule-detail" class="rule-detail"></div>
+        </section>
+      </div>
+    </section>
   </div>
 
   <script>
@@ -794,10 +925,20 @@ def _index_html() -> str:
     const issuesListNode = document.getElementById('issues-list');
     const documentHeadNode = document.getElementById('document-head');
     const documentBodyNode = document.getElementById('document-body');
+    const rulesPanelNode = document.getElementById('rules-panel');
+    const rulesSummaryNode = document.getElementById('rules-summary');
+    const rulesColHeadNode = document.getElementById('rules-col-head');
+    const rulesListNode = document.getElementById('rules-list');
+    const ruleDetailNode = document.getElementById('rule-detail');
 
     let latestDocument = null;
     let latestFindings = [];
     let currentFindingFilter = 'all';
+    let latestRulePayload = { formal_rules: [], candidate_rules: [], decision_summary: {} };
+    let currentRuleFilter = 'pending';
+    let selectedCandidateId = '';
+
+    loadRuleManagement();
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -817,6 +958,7 @@ def _index_html() -> str:
         renderSummary(payload);
         renderIssues(payload.review.findings);
         renderDocument(payload.document);
+        await loadRuleManagement();
         if (payload.review.findings.length) {
           selectFinding(payload.review.findings[0].finding_id);
         }
@@ -850,6 +992,117 @@ def _index_html() -> str:
           <div class="stat"><div class="label">缓存 / 模型</div><div class="value">${payload.cache.enabled ? '缓存开' : '缓存关'} / ${payload.llm.enabled ? '模型开' : '模型关'}</div></div>
         </div>`;
       summaryNode.style.display = 'block';
+    }
+
+    async function loadRuleManagement() {
+      try {
+        const response = await fetch('/api/rules');
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '规则管理加载失败');
+        latestRulePayload = payload;
+        if (!selectedCandidateId && payload.candidate_rules.length) {
+          selectedCandidateId = payload.candidate_rules[0].candidate_rule_id;
+        }
+        renderRules(payload);
+      } catch (error) {
+        rulesPanelNode.style.display = 'block';
+        rulesSummaryNode.textContent = `规则管理加载失败：${error.message}`;
+      }
+    }
+
+    function renderRules(payload) {
+      const summary = payload.decision_summary || {};
+      rulesSummaryNode.textContent = `正式规则 ${payload.formal_rules.length} 条；候选规则 ${payload.candidate_rules.length} 条；待确认 ${summary.pending || 0} 条；已确认 ${summary.confirmed || 0} 条。`;
+      rulesColHeadNode.innerHTML = `
+        <h3>候选规则</h3>
+        <div class="meta">候选规则来自模型新增问题和 benchmark gate 结果。确认入库表示进入本地规则候选确认状态，不会自动改代码。</div>
+        <div class="rules-toolbar">
+          <button type="button" class="filter-chip ${currentRuleFilter === 'pending' ? 'active' : ''}" data-rule-filter="pending">待确认</button>
+          <button type="button" class="filter-chip ${currentRuleFilter === 'confirmed' ? 'active' : ''}" data-rule-filter="confirmed">已确认</button>
+          <button type="button" class="filter-chip ${currentRuleFilter === 'all' ? 'active' : ''}" data-rule-filter="all">全部</button>
+        </div>`;
+      rulesColHeadNode.querySelectorAll('[data-rule-filter]').forEach((node) => {
+        node.addEventListener('click', () => {
+          currentRuleFilter = node.dataset.ruleFilter;
+          renderRules(latestRulePayload);
+        });
+      });
+      const candidates = applyRuleFilter(payload.candidate_rules || []);
+      rulesListNode.innerHTML = candidates.length
+        ? candidates.map((item) => renderRuleCard(item)).join('')
+        : '<div class="empty">当前没有符合筛选条件的候选规则。</div>';
+      rulesListNode.querySelectorAll('.rule-card').forEach((node) => {
+        node.addEventListener('click', () => {
+          selectedCandidateId = node.dataset.candidateId;
+          renderRules(latestRulePayload);
+        });
+      });
+      const selected = candidates.find((item) => item.candidate_rule_id === selectedCandidateId) || candidates[0] || null;
+      if (selected) selectedCandidateId = selected.candidate_rule_id;
+      renderRuleDetail(selected);
+      rulesPanelNode.style.display = 'block';
+    }
+
+    function renderRuleCard(item) {
+      const active = item.candidate_rule_id === selectedCandidateId ? 'active' : '';
+      return `<article class="rule-card ${active}" data-candidate-id="${escapeHtml(item.candidate_rule_id)}">
+        <div class="rule-card-title">${escapeHtml(item.problem_title)}</div>
+        <div class="rule-card-meta">候选ID：${escapeHtml(item.candidate_rule_id)}</div>
+        <div class="rule-card-meta">问题类型：${escapeHtml(item.issue_type)} ｜ gate：${escapeHtml(item.gate_status)} ｜ 状态：${escapeHtml(decisionLabelText(item.decision))}</div>
+        <div class="rule-card-meta">${escapeHtml(item.source_text || '')}</div>
+      </article>`;
+    }
+
+    function renderRuleDetail(item) {
+      if (!item) {
+        ruleDetailNode.innerHTML = '<div class="empty">当前没有可查看的候选规则。</div>';
+        return;
+      }
+      ruleDetailNode.innerHTML = `
+        <div class="detail-pair"><div class="detail-label">候选规则ID</div><div class="detail-value">${escapeHtml(item.candidate_rule_id)}</div></div>
+        <div class="detail-pair"><div class="detail-label">问题标题</div><div class="detail-value">${escapeHtml(item.problem_title)}</div></div>
+        <div class="detail-pair"><div class="detail-label">问题类型</div><div class="detail-value">${escapeHtml(item.issue_type)}</div></div>
+        <div class="detail-pair"><div class="detail-label">来源位置</div><div class="detail-value">${escapeHtml(item.section_path || '')}</div></div>
+        <div class="detail-pair"><div class="detail-label">原文摘录</div><div class="detail-value">${escapeHtml(item.source_text || '')}</div></div>
+        <div class="detail-pair"><div class="detail-label">风险说明</div><div class="detail-value">${escapeHtml(item.why_it_is_risky || '')}</div></div>
+        <div class="detail-pair"><div class="detail-label">建议改写</div><div class="detail-value">${escapeHtml(item.rewrite_suggestion || '')}</div></div>
+        <div class="detail-pair"><div class="detail-label">触发关键词</div><div class="detail-value">${escapeHtml((item.trigger_keywords || []).join('，'))}</div></div>
+        <div class="detail-pair"><div class="detail-label">benchmark gate</div><div class="detail-value">${escapeHtml(item.gate_status)} ｜ ${escapeHtml(item.gate_reason || '')}</div></div>
+        <div class="detail-pair"><div class="detail-label">当前状态</div><div class="detail-value">${escapeHtml(decisionLabelText(item.decision))}</div></div>
+        <div class="detail-pair">
+          <div class="detail-label">备注</div>
+          <textarea id="rule-note" class="rule-note" placeholder="可选：记录为什么确认、暂缓或忽略">${escapeHtml(item.decision_note || '')}</textarea>
+        </div>
+        <div class="rule-actions">
+          <button type="button" data-rule-action="confirmed">确认入库</button>
+          <button type="button" class="secondary" data-rule-action="deferred">暂缓</button>
+          <button type="button" class="secondary" data-rule-action="ignored">忽略</button>
+        </div>`;
+      ruleDetailNode.querySelectorAll('[data-rule-action]').forEach((node) => {
+        node.addEventListener('click', async () => {
+          await saveRuleDecision(item.candidate_rule_id, node.dataset.ruleAction);
+        });
+      });
+    }
+
+    async function saveRuleDecision(candidateRuleId, decision) {
+      const noteNode = document.getElementById('rule-note');
+      const note = noteNode ? noteNode.value : '';
+      try {
+        const response = await fetch('/api/rules/decision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ candidate_rule_id: candidateRuleId, decision, note }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '规则决策保存失败');
+        latestRulePayload = payload;
+        selectedCandidateId = candidateRuleId;
+        renderRules(payload);
+        statusNode.textContent = `规则候选已更新为：${decisionLabelText(decision)}`;
+      } catch (error) {
+        statusNode.textContent = `保存规则决策失败：${error.message}`;
+      }
     }
 
     function renderIssues(findings) {
@@ -1043,6 +1296,15 @@ def _index_html() -> str:
         return findings.filter((item) => item.finding_origin !== 'llm_added');
       }
       return findings;
+    }
+
+    function applyRuleFilter(candidates) {
+      if (currentRuleFilter === 'all') return candidates;
+      return candidates.filter((item) => item.decision === currentRuleFilter);
+    }
+
+    function decisionLabelText(decision) {
+      return ({ pending: '待确认', confirmed: '已确认入库', deferred: '暂缓', ignored: '忽略' }[decision] || decision || '待确认');
     }
 
     function escapeHtml(text) {
