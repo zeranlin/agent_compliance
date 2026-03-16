@@ -510,19 +510,74 @@ def _index_html() -> str:
     }
     .issue-item {
       width: 100%;
-      text-align: left;
       background: #fff;
       color: var(--ink);
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 14px;
       display: grid;
-      gap: 8px;
+      overflow: hidden;
     }
     .issue-item.active {
       border-color: var(--accent);
       box-shadow: 0 0 0 2px rgba(157, 74, 36, 0.12);
       background: #fff8f1;
+    }
+    .issue-summary {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      padding: 14px;
+      display: grid;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .issue-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .issue-action-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .issue-mini-btn {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--ink);
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .issue-detail {
+      display: none;
+      padding: 0 14px 14px;
+      border-top: 1px solid #f1eadf;
+      background: rgba(255, 252, 247, 0.92);
+    }
+    .issue-item.expanded .issue-detail {
+      display: grid;
+      gap: 10px;
+    }
+    .detail-pair {
+      display: grid;
+      gap: 4px;
+    }
+    .detail-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .detail-value {
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     .issue-top {
       display: flex;
@@ -564,6 +619,10 @@ def _index_html() -> str:
     }
     .issue-snippet {
       color: var(--ink);
+    }
+    .issue-toggle-text {
+      color: var(--muted);
+      font-size: 12px;
     }
     .document-body {
       max-height: calc(100vh - 250px);
@@ -755,27 +814,75 @@ def _index_html() -> str:
     function renderIssues(findings) {
       issuesHeadNode.innerHTML = `
         <h2>审查问题清单</h2>
-        <div class="meta">共 ${findings.length} 条问题。点击左侧问题，右侧正文会自动定位到对应位置。</div>`;
+        <div class="meta">共 ${findings.length} 条问题。点击“定位正文”会跳到对应位置，点击“展开详情”可查看依据、判断和建议。</div>`;
       issuesListNode.innerHTML = findings.length
         ? findings.map((finding, index) => renderIssueItem(finding, index + 1)).join('')
         : '<div class="empty">当前没有识别出需要提示的问题。</div>';
-      issuesListNode.querySelectorAll('.issue-item').forEach((node) => {
-        node.addEventListener('click', () => selectFinding(node.dataset.findingId));
+      issuesListNode.querySelectorAll('.issue-summary').forEach((node) => {
+        node.addEventListener('click', () => {
+          const card = node.closest('.issue-item');
+          selectFinding(card.dataset.findingId);
+        });
+      });
+      issuesListNode.querySelectorAll('.issue-locate-btn').forEach((node) => {
+        node.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const card = node.closest('.issue-item');
+          selectFinding(card.dataset.findingId);
+        });
+      });
+      issuesListNode.querySelectorAll('.issue-toggle-btn').forEach((node) => {
+        node.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const card = node.closest('.issue-item');
+          card.classList.toggle('expanded');
+          node.querySelector('.issue-toggle-text').textContent = card.classList.contains('expanded') ? '收起详情' : '展开详情';
+        });
       });
       workspaceNode.style.display = 'grid';
     }
 
     function renderIssueItem(finding, index) {
-      return `<button type="button" class="issue-item" data-finding-id="${escapeHtml(finding.finding_id)}">
-        <div class="issue-top">
-          <span>问题 ${index}</span>
-          <span class="badge ${escapeHtml(finding.risk_level)}">${escapeHtml(riskLabel(finding.risk_level))}</span>
-          <span class="badge">${escapeHtml(finding.issue_type)}</span>
+      return `<article class="issue-item" data-finding-id="${escapeHtml(finding.finding_id)}">
+        <button type="button" class="issue-summary">
+          <div class="issue-top">
+            <span>问题 ${index}</span>
+            <span class="badge ${escapeHtml(finding.risk_level)}">${escapeHtml(riskLabel(finding.risk_level))}</span>
+            <span class="badge">${escapeHtml(finding.issue_type)}</span>
+          </div>
+          <div class="issue-title">${escapeHtml(finding.problem_title)}</div>
+          <div class="issue-meta">位置：${escapeHtml(finding.section_path || finding.source_section || '待补充')} ｜ 行号：${escapeHtml(formatLineRange(finding.text_line_start, finding.text_line_end))}</div>
+          <div class="issue-snippet">${escapeHtml(finding.source_text)}</div>
+          <div class="issue-actions">
+            <div class="issue-action-buttons">
+              <button type="button" class="issue-mini-btn issue-locate-btn">定位正文</button>
+              <button type="button" class="issue-mini-btn issue-toggle-btn"><span class="issue-toggle-text">展开详情</span></button>
+            </div>
+          </div>
+        </button>
+        <div class="issue-detail">
+          <div class="detail-pair">
+            <div class="detail-label">合规判断</div>
+            <div class="detail-value">${escapeHtml(finding.compliance_judgment)}</div>
+          </div>
+          <div class="detail-pair">
+            <div class="detail-label">页码提示</div>
+            <div class="detail-value">${escapeHtml(finding.page_hint || '待人工翻页复核')}</div>
+          </div>
+          <div class="detail-pair">
+            <div class="detail-label">风险说明</div>
+            <div class="detail-value">${escapeHtml(finding.why_it_is_risky)}</div>
+          </div>
+          <div class="detail-pair">
+            <div class="detail-label">依据</div>
+            <div class="detail-value">${escapeHtml(finding.legal_or_policy_basis || '当前离线链路未单独拆出更细依据，请结合正式审查结果复核。')}</div>
+          </div>
+          <div class="detail-pair">
+            <div class="detail-label">修改建议</div>
+            <div class="detail-value">${escapeHtml(finding.rewrite_suggestion)}</div>
+          </div>
         </div>
-        <div class="issue-title">${escapeHtml(finding.problem_title)}</div>
-        <div class="issue-meta">位置：${escapeHtml(finding.section_path || finding.source_section || '待补充')} ｜ 行号：${escapeHtml(formatLineRange(finding.text_line_start, finding.text_line_end))}</div>
-        <div class="issue-snippet">${escapeHtml(finding.source_text)}</div>
-      </button>`;
+      </article>`;
     }
 
     function renderDocument(documentPayload) {
