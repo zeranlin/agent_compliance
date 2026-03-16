@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from email.parser import BytesParser
 from email.policy import default
 from http import HTTPStatus
@@ -16,6 +17,7 @@ from agent_compliance.cache.review_cache import (
     save_review_cache,
 )
 from agent_compliance.config import LLMConfig, detect_llm_config, detect_paths
+from agent_compliance.parsers.pagination import page_hint_for_line
 from agent_compliance.pipelines.llm_enhance import enhance_review_result
 from agent_compliance.pipelines.normalize import run_normalize
 from agent_compliance.pipelines.render import write_review_outputs
@@ -38,7 +40,11 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
 
     def do_POST(self) -> None:
-        if urlparse(self.path).path != "/api/review":
+        path = urlparse(self.path).path
+        if path == "/api/open-source":
+            self._handle_open_source()
+            return
+        if path != "/api/review":
             self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
             return
 
@@ -93,6 +99,7 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
                     "base_url": llm_config.base_url,
                     "model": llm_config.model,
                 },
+                "document": _build_document_payload(normalized),
                 "review": review.to_dict(),
                 "outputs": {"json": str(json_path), "markdown": str(md_path)},
             }
@@ -116,6 +123,19 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _handle_open_source(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            path = Path(payload.get("path", ""))
+            if not path.exists():
+                self._send_json({"error": "原文件不存在"}, status=HTTPStatus.BAD_REQUEST)
+                return
+            subprocess.run(["open", str(path)], check=True)
+            self._send_json({"ok": True})
+        except Exception as exc:
+            self._send_json({"error": f"打开原文件失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
 
 
 def _parse_multipart(headers, body: bytes) -> dict[str, dict[str, bytes | str]]:
@@ -162,6 +182,25 @@ def _web_llm_config(use_llm: bool) -> LLMConfig:
 
 def _flag_value(value: str | None) -> bool:
     return str(value or "").lower() in {"1", "true", "on", "yes"}
+
+
+def _build_document_payload(normalized) -> dict:
+    text = Path(normalized.normalized_text_path).read_text(encoding="utf-8")
+    lines = []
+    for number, raw_line in enumerate(text.splitlines(), start=1):
+        lines.append(
+            {
+                "number": number,
+                "text": raw_line,
+                "page_hint": page_hint_for_line(number, normalized.page_map),
+            }
+        )
+    return {
+        "source_path": normalized.source_path,
+        "normalized_text_path": normalized.normalized_text_path,
+        "line_count": len(lines),
+        "lines": lines,
+    }
 
 
 def _index_html() -> str:
@@ -230,6 +269,61 @@ def _index_html() -> str:
     }
     .search { min-width: 220px; }
     .finding-list { display: grid; gap: 16px; }
+    .review-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(420px, .9fr); gap: 18px; align-items: start; }
+    .viewer {
+      position: sticky;
+      top: 18px;
+      padding: 0;
+      overflow: hidden;
+    }
+    .viewer-head {
+      padding: 18px 20px 16px;
+      border-bottom: 1px solid rgba(214,198,171,.75);
+      background: linear-gradient(180deg, rgba(255,255,255,.76), rgba(255,248,238,.92));
+      display: grid;
+      gap: 10px;
+    }
+    .viewer-head h2 { margin: 0; font-size: 24px; }
+    .viewer-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .button-ghost {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.7);
+      color: var(--ink);
+    }
+    .viewer-meta { color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .viewer-body {
+      max-height: calc(100vh - 180px);
+      overflow: auto;
+      padding: 8px 0;
+      background: rgba(252,248,241,.82);
+    }
+    .line {
+      display: grid;
+      grid-template-columns: 74px minmax(0, 1fr);
+      gap: 12px;
+      padding: 7px 18px;
+      border-top: 1px solid rgba(214,198,171,.26);
+      align-items: start;
+    }
+    .line:first-child { border-top: 0; }
+    .line-number {
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: .04em;
+      text-align: right;
+      padding-top: 2px;
+    }
+    .line-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .line.active {
+      background: rgba(163,71,39,.09);
+      border-top-color: rgba(163,71,39,.24);
+      border-bottom: 1px solid rgba(163,71,39,.24);
+    }
     .finding-card {
       border: 1px solid var(--line);
       border-radius: 24px;
@@ -259,6 +353,12 @@ def _index_html() -> str:
     }
     .pill.high { background: rgba(163,58,30,.12); color: var(--warn); }
     .pill.medium { background: rgba(155,106,18,.13); color: var(--medium); }
+    .viewer-jump {
+      align-self: start;
+      justify-self: start;
+      padding: 8px 12px;
+      font-size: 13px;
+    }
     .finding-header h3 {
       margin: 0;
       font-size: 24px;
@@ -308,6 +408,9 @@ def _index_html() -> str:
       .layout { grid-template-columns: 1fr; }
       .controls { position: static; }
       .detail-grid { grid-template-columns: 1fr; }
+      .review-grid { grid-template-columns: 1fr; }
+      .viewer { position: static; }
+      .viewer-body { max-height: 460px; }
       .search { min-width: 0; width: 100%; }
     }
   </style>
@@ -335,7 +438,10 @@ def _index_html() -> str:
       </form>
       <main>
         <section id="summary" class="panel summary hidden"></section>
-        <section id="findings" class="panel findings hidden"></section>
+        <div id="review-grid" class="review-grid hidden">
+          <section id="findings" class="panel findings hidden"></section>
+          <section id="viewer" class="panel viewer hidden"></section>
+        </div>
       </main>
     </div>
   </div>
@@ -345,19 +451,25 @@ def _index_html() -> str:
     const statusNode = document.getElementById('status');
     const summaryNode = document.getElementById('summary');
     const findingsNode = document.getElementById('findings');
+    const viewerNode = document.getElementById('viewer');
+    const reviewGridNode = document.getElementById('review-grid');
     let latestFindings = [];
+    let latestDocument = null;
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       submitBtn.disabled = true;
       statusNode.textContent = '正在审查，请稍候...';
       summaryNode.classList.add('hidden');
       findingsNode.classList.add('hidden');
+      viewerNode.classList.add('hidden');
+      reviewGridNode.classList.add('hidden');
       try {
         const formData = new FormData(form);
         const response = await fetch('/api/review', { method: 'POST', body: formData });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || '审查失败');
         renderSummary(payload);
+        renderDocument(payload.document);
         latestFindings = payload.review.findings;
         renderFindings(payload.review.findings);
         statusNode.textContent = '审查完成';
@@ -386,6 +498,25 @@ def _index_html() -> str:
         </div>`;
       summaryNode.classList.remove('hidden');
     }
+    function renderDocument(documentPayload) {
+      latestDocument = documentPayload;
+      viewerNode.innerHTML = `
+        <div class="viewer-head">
+          <h2>被审查文件</h2>
+          <div class="viewer-meta">
+            <div>原文件：${escapeHtml(documentPayload.source_path)}</div>
+            <div>稳定文本：${escapeHtml(documentPayload.normalized_text_path)}</div>
+            <div>总行数：${documentPayload.line_count}</div>
+          </div>
+          <div class="viewer-actions">
+            <button type="button" class="button-ghost" id="open-source-btn">打开原文件</button>
+          </div>
+        </div>
+        <div id="viewer-body" class="viewer-body">${documentPayload.lines.map(renderDocumentLine).join('')}</div>`;
+      viewerNode.classList.remove('hidden');
+      reviewGridNode.classList.remove('hidden');
+      document.getElementById('open-source-btn').addEventListener('click', openSourceFile);
+    }
     function renderFindings(findings) {
       findingsNode.innerHTML = `
         <div class="toolbar">
@@ -407,6 +538,7 @@ def _index_html() -> str:
       latestFindings = findings;
       applyFindingFilters();
       findingsNode.classList.remove('hidden');
+      reviewGridNode.classList.remove('hidden');
     }
     function applyFindingFilters() {
       const risk = document.getElementById('risk-filter')?.value || 'all';
@@ -427,6 +559,7 @@ def _index_html() -> str:
       listNode.innerHTML = filtered.length
         ? filtered.map((finding, index) => renderFinding(finding, index + 1)).join('')
         : '<div class="muted">当前筛选条件下没有匹配的 finding。</div>';
+      bindJumpButtons();
     }
     function renderFinding(finding, index) {
       const basis = formatParagraphs(finding.legal_or_policy_basis || '当前离线链路未单独拆出更细依据，请结合正式 Markdown 结果复核。');
@@ -441,6 +574,7 @@ def _index_html() -> str:
           <h3>${escapeHtml(finding.problem_title)}</h3>
         </div>
         <div class="finding-detail">
+          <button type="button" class="button-ghost viewer-jump" data-line-start="${finding.text_line_start}" data-line-end="${finding.text_line_end}">定位到文档</button>
           <dl class="detail-grid">
             <div class="detail-item full"><dt>位置</dt><dd>${escapeHtml(finding.section_path || finding.source_section || '待补充')}</dd></div>
             <div class="detail-item"><dt>页码提示</dt><dd>${escapeHtml(finding.page_hint || 'Word 原件待人工翻页复核')}</dd></div>
@@ -458,6 +592,43 @@ def _index_html() -> str:
           </dl>
         </div>
       </article>`;
+    }
+    function renderDocumentLine(line) {
+      return `<div class="line" id="line-${line.number}" data-line-number="${line.number}">
+        <div class="line-number">${String(line.number).padStart(4, '0')}${line.page_hint ? `<br><span class="muted">${escapeHtml(line.page_hint)}</span>` : ''}</div>
+        <div class="line-text">${escapeHtml(line.text || ' ')}</div>
+      </div>`;
+    }
+    function bindJumpButtons() {
+      document.querySelectorAll('[data-line-start]').forEach((button) => {
+        button.addEventListener('click', () => {
+          jumpToDocumentLine(Number(button.dataset.lineStart), Number(button.dataset.lineEnd || button.dataset.lineStart));
+        });
+      });
+    }
+    function jumpToDocumentLine(start, end) {
+      document.querySelectorAll('.line.active').forEach((node) => node.classList.remove('active'));
+      for (let line = start; line <= end; line += 1) {
+        document.getElementById(`line-${line}`)?.classList.add('active');
+      }
+      const target = document.getElementById(`line-${start}`);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+    async function openSourceFile() {
+      if (!latestDocument?.source_path) return;
+      try {
+        const response = await fetch('/api/open-source', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: latestDocument.source_path }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '打开失败');
+      } catch (error) {
+        statusNode.textContent = `打开原文件失败：${error.message}`;
+      }
     }
     function formatLineRange(start, end) {
       if (!start && !end) return '—';

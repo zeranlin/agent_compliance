@@ -71,7 +71,7 @@ tests/
 - review 后处理已可压缩过长 `section_path`，并去掉投标文件格式附件中的重复技术参数 finding
 - review 后处理已可将长 `source_text` 压成代表性摘录，并将跨章节重复的同类技术参数归并为更少的主 finding
 - 已预留本地大模型兜底接口，兼容 OpenAI 风格 `/v1/chat/completions`，默认关闭
-- `web/`: 已具备第一版本地页面，支持上传文件、切换缓存与本地模型开关、浏览审查结果
+- `web/`: 已具备第一版本地页面，支持上传文件、切换缓存与本地模型开关、浏览审查结果，并基于稳定文本视图按 finding 跳转到对应行
 - `pipelines/render.py`: Markdown 和 JSON 落盘
 - `tests/test_smoke.py`: CLI 冒烟测试
 
