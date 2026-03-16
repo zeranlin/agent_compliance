@@ -187,6 +187,7 @@ def _expand_rationale(group: HitGroup) -> str:
         "narrow_technical_parameter": "如缺少市场调研和必要性说明，容易形成对少数产品体系的实质偏向。",
         "unclear_acceptance_standard": "验收清单、触发条件和费用边界不清时，后续履约争议风险会升高。",
         "one_sided_commercial_term": "将付款、责任或验收风险过度转嫁给供应商，容易造成合同权利义务失衡。",
+        "payment_acceptance_linkage": "当抽检、终验和付款深度绑定时，供应商回款预期和履约成本都更难稳定评估。",
         "other": "这类条款通常需要进一步判断是否超出采购标的实际需要或属于模板残留。",
     }
     prefix = "相邻条款存在同类问题，建议作为一个风险点统筹修改。" if len(group.hits) > 1 else ""
@@ -212,6 +213,7 @@ def _problem_title(group: HitGroup, clause) -> str:
         "narrow_technical_parameter": "技术参数组合存在定向或过窄风险",
         "unclear_acceptance_standard": "验收标准或检测边界不清",
         "one_sided_commercial_term": "商务条款存在单方风险转嫁",
+        "payment_acceptance_linkage": "付款条件与抽检终验深度绑定",
         "other": "条款内容可能存在模板残留或义务外扩",
     }
     base = titles.get(issue, "条款存在合规风险")
@@ -233,6 +235,7 @@ def _impact_text(issue_type: str) -> str:
         "narrow_technical_parameter": "可能压缩可竞争的品牌和型号范围，并提高投诉风险。",
         "unclear_acceptance_standard": "可能导致验收标准不稳定、成本难估算和后续争议升级。",
         "one_sided_commercial_term": "可能抬高供应商报价和履约风险，增加合同争议概率。",
+        "payment_acceptance_linkage": "可能导致回款周期不稳定、履约成本难估算和付款争议增多。",
         "other": "可能扩张供应商义务范围或引入与项目不直接相关的履约成本。",
     }
     return mapping.get(issue_type, "可能影响公平竞争、履约可执行性或复核稳定性。")
@@ -257,13 +260,14 @@ def _confidence(issue_type: str, severity_score: int) -> str:
 
 
 def _needs_human_review(issue_type: str) -> bool:
-    return issue_type in {"narrow_technical_parameter", "one_sided_commercial_term", "other"}
+    return issue_type in {"narrow_technical_parameter", "one_sided_commercial_term", "payment_acceptance_linkage", "other"}
 
 
 def _human_review_reason(issue_type: str) -> str | None:
     reasons = {
         "narrow_technical_parameter": "需结合市场调研、兼容性边界和临床必要性判断参数是否具有正当性。",
         "one_sided_commercial_term": "需结合采购人内控、财政支付流程和合同谈判边界判断条款是否可保留。",
+        "payment_acceptance_linkage": "需结合抽检机制、终验流程和财政支付安排判断付款节点设置是否合理。",
         "other": "需结合项目背景判断该义务是否属于模板残留或确有政策和业务必要性。",
     }
     return reasons.get(issue_type)

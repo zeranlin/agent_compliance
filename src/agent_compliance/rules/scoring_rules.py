@@ -78,4 +78,16 @@ RULES = [
         rewrite_hint="降低单类因素分值上限，并将高分项拆散到与履约直接相关的多个可验证指标中。",
         merge_key="scoring-weight-balance",
     ),
+    RuleDefinition(
+        rule_id="SCORE-007",
+        issue_type="excessive_scoring_weight",
+        pattern=re.compile(r"评审为优加\s*80\s*分|评审为良加\s*50\s*分|评审为中加\s*20\s*分"),
+        rationale="样品主观评价分值过高，可能使样品感观判断对总分产生过强影响。",
+        severity_score=2,
+        related_rule_ids=("RULE-004", "RULE-011"),
+        related_reference_ids=("CASESRC-003",),
+        source_section="评标信息",
+        rewrite_hint="降低样品主观评价分值，并改为按具体缺陷、尺寸、材质、工艺等可核验指标评分。",
+        merge_key="scoring-sample-weight",
+    ),
 ]

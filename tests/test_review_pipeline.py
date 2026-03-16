@@ -256,6 +256,37 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("post_award_proof_substitution", issue_types)
         self.assertTrue(any("中标后补证" in finding.problem_title or "补证" in finding.problem_title for finding in review.findings))
 
+    def test_review_flags_sample_scoring_weight_and_commercial_risk_shift(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "样品",
+                "（1）材质好，质量好，做工优秀，完全满足采购单位需求，评审为优加 80 分；",
+                "第三章 用户需求书",
+                "商务要求",
+                "★2.5 中标后，实际供货均需满足投标文件及国家标准要求，否则采购人有权拒绝收货，相关损失及责任均与采购人无关。",
+                "3.3 中标人负责安装、调试。安装调试中发生的一切事故，相关责任全部由供应商承担，采购人对此不承担任何责任。",
+                "★4.1 采购方有权实施抽样检测。出现抽样或检测不合格的，中标人需承担检测费、抽样人工费、差旅费及相关费用。",
+                "（3）终验款：货物通过有关部门抽检终验后，采购人支付合同总金额30%的货款。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        issue_types = {finding.issue_type for finding in review.findings}
+        self.assertIn("excessive_scoring_weight", issue_types)
+        self.assertIn("one_sided_commercial_term", issue_types)
+        self.assertIn("payment_acceptance_linkage", issue_types)
+
 
 if __name__ == "__main__":
     unittest.main()
