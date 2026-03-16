@@ -16,11 +16,13 @@
 2. [openai-harness-notes.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/openai-harness-notes.md)
 3. [procurement-compliance-review-workflow.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/procurement-compliance-review-workflow.md)
 4. [initial-harness-bootstrap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/exec-plans/active/initial-harness-bootstrap.md)
+5. [local-offline-runtime-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/exec-plans/active/local-offline-runtime-roadmap.md)
 
 能力建设重点文档：
 - [capability-overview.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/capability-overview.md)
 - [full-capability-profile.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/full-capability-profile.md)
 - [local-runtime-skeleton.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-runtime-skeleton.md)
+- [local-codeification-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-codeification-roadmap.md)
 - [legal-authority-system.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/legal-authority-system.md)
 - [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)
 - [continuous-update-mechanism.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/continuous-update-mechanism.md)
