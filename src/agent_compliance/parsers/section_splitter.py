@@ -26,6 +26,16 @@ SECTION_KEYWORDS = (
     "评分项",
 )
 TABLE_LABEL_KEYWORDS = ("评分项", "评分因素", "技术部分", "商务部分", "价格", "其他", "验收条件")
+GENERIC_TABLE_LABELS = ("序号", "内容", "权重(%)", "评分准则")
+SEMANTIC_TABLE_LABEL_RANKS = {
+    "评分项": 1,
+    "价格": 2,
+    "技术部分": 2,
+    "商务部分": 2,
+    "其他": 2,
+    "验收条件": 2,
+    "评分因素": 3,
+}
 
 
 def split_into_clauses(text: str, *, page_map=None) -> list[Clause]:
@@ -48,9 +58,10 @@ def split_into_clauses(text: str, *, page_map=None) -> list[Clause]:
                 current_table_label = None
 
         if _looks_like_table_label(line):
-            current_table_label = line
-            section_stack = _update_table_label_stack(section_stack, line)
-            current_source_section = _best_source_section(section_stack)
+            if _is_semantic_table_label(line):
+                current_table_label = line
+                section_stack = _update_table_label_stack(section_stack, line)
+                current_source_section = _best_source_section(section_stack)
 
         clause_id = _infer_clause_id(line, line_number)
         clauses.append(
@@ -97,9 +108,17 @@ def _update_section_stack(section_stack: list[str], section_info: tuple[int, str
 
 def _update_table_label_stack(section_stack: list[str], line: str) -> list[str]:
     normalized = line.strip("：: ")
+    rank = SEMANTIC_TABLE_LABEL_RANKS.get(normalized)
+    if rank is None:
+        return section_stack
     if section_stack and section_stack[-1] == normalized:
         return section_stack
-    stack = section_stack.copy()
+    stack: list[str] = []
+    for item in section_stack:
+        item_rank = SEMANTIC_TABLE_LABEL_RANKS.get(item)
+        if item_rank is not None and item_rank >= rank:
+            continue
+        stack.append(item)
     stack.append(normalized)
     return stack
 
@@ -117,9 +136,16 @@ def _looks_like_table_label(line: str) -> bool:
     normalized = line.strip("：: ")
     if any(keyword == normalized for keyword in TABLE_LABEL_KEYWORDS):
         return True
+    if normalized in GENERIC_TABLE_LABELS:
+        return True
     if len(normalized) <= 12 and re.fullmatch(r"(序号|内容|评分项|评分因素|权重\(%\)|评分准则)", normalized):
         return True
     return False
+
+
+def _is_semantic_table_label(line: str) -> bool:
+    normalized = line.strip("：: ")
+    return normalized in SEMANTIC_TABLE_LABEL_RANKS
 
 
 def _infer_table_label(current_table_label: str | None, line: str) -> str | None:

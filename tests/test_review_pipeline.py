@@ -69,6 +69,27 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertEqual(page_hint_for_line(3, page_map), "第2页（估算）")
         self.assertEqual(clauses[2].page_hint, "第2页（估算）")
 
+    def test_generic_table_headers_do_not_pollute_section_path(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "评标信息",
+                "序号",
+                "内容",
+                "评分项",
+                "技术部分",
+                "序号",
+                "评分因素",
+                "评分准则",
+                "方案极合理、条理极清晰、可操作性极强的得 40 分；",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        target = clauses[-1]
+
+        self.assertEqual(target.section_path, "第一章 招标公告-评标信息-评分项-技术部分-评分因素")
+        self.assertEqual(target.table_or_item_label, "评分因素")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -57,6 +57,7 @@ tests/
 - `parsers/`: 文本抽取和基础条款切分
 - `parsers/section_splitter.py`: 已可输出层级化 `section_path`、`source_section` 和 `table_or_item_label`
 - `parsers/pagination.py`: 已可生成 `page_map`，并为 finding 回填 `page_hint`
+- 复杂评分表已支持区分“语义标签”和“普通列头”，减少 `section_path` 噪声
 - `rules/`: 资格、评分、技术、合同四类高频规则
 - `pipelines/normalize.py`: 标准化输出
 - `pipelines/rule_scan.py`: 规则命中结果
