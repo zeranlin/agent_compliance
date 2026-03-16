@@ -310,7 +310,9 @@ def _refine_findings(findings: list[Finding]) -> list[Finding]:
             continue
         refined.append(finding)
 
+    refined = _merge_sample_scoring_findings(refined)
     refined = _merge_similar_technical_findings(refined)
+    refined = _merge_nearby_liability_findings(refined)
     for finding in refined:
         finding.source_text = _representative_excerpt(finding.source_text)
     return refined
@@ -380,6 +382,132 @@ def _merge_similar_technical_findings(findings: list[Finding]) -> list[Finding]:
     merged.extend(tech_groups.values())
     merged.sort(key=lambda item: (item.text_line_start, item.issue_type, item.section_path or ""))
     return merged
+
+
+def _merge_sample_scoring_findings(findings: list[Finding]) -> list[Finding]:
+    merged: list[Finding] = []
+    pending: list[Finding] = []
+
+    def flush_pending() -> None:
+        if not pending:
+            return
+        if len(pending) == 1:
+            merged.append(pending[0])
+        else:
+            merged.append(_build_sample_scoring_finding(pending))
+        pending.clear()
+
+    for finding in sorted(findings, key=lambda item: (item.text_line_start, item.text_line_end, item.issue_type)):
+        if _is_sample_scoring_candidate(finding):
+            if pending and not _can_merge_sample_scoring(pending[-1], finding):
+                flush_pending()
+            pending.append(finding)
+            continue
+        flush_pending()
+        merged.append(finding)
+
+    flush_pending()
+    merged.sort(key=lambda item: (item.text_line_start, item.issue_type, item.section_path or ""))
+    return merged
+
+
+def _is_sample_scoring_candidate(finding: Finding) -> bool:
+    if finding.issue_type not in {"ambiguous_requirement", "excessive_scoring_weight"}:
+        return False
+    sample_markers = ("评审为优加", "评审为良加", "评审为中加", "评审为差不加分")
+    source_text = finding.source_text or ""
+    clause_id = finding.clause_id or ""
+    return any(marker in source_text or marker in clause_id for marker in sample_markers)
+
+
+def _can_merge_sample_scoring(left: Finding, right: Finding) -> bool:
+    if left.section_path != right.section_path:
+        return False
+    return right.text_line_start - left.text_line_end <= 2
+
+
+def _build_sample_scoring_finding(candidates: list[Finding]) -> Finding:
+    ordered = sorted(candidates, key=lambda item: (item.text_line_start, item.text_line_end, item.issue_type))
+    base = next((item for item in ordered if item.issue_type == "excessive_scoring_weight"), ordered[0])
+    merged = Finding(**base.to_dict())
+    merged.text_line_start = min(item.text_line_start for item in ordered)
+    merged.text_line_end = max(item.text_line_end for item in ordered)
+    merged.page_hint = _merge_optional_text((item.page_hint for item in ordered))
+    merged.section_path = _merge_optional_text((item.section_path for item in ordered), separator=" / ")
+    merged.source_text = "；".join(list(OrderedDict.fromkeys(item.source_text for item in ordered if item.source_text)))
+    merged.problem_title = "样品评分主观性强且分值过高（同一评分项已合并）"
+    merged.issue_type = "excessive_scoring_weight"
+    merged.risk_level = "medium"
+    merged.severity_score = 2
+    merged.confidence = "high"
+    merged.compliance_judgment = "potentially_problematic"
+    merged.why_it_is_risky = (
+        "样品评分同时采用“优/良/中/差”等主观分档，并设置较高分值，容易让感观判断对总分产生过强影响。"
+        "当主观分档缺少量化锚点且分值偏高时，评审自由裁量和评分结构失衡风险都会上升。"
+    )
+    merged.impact_on_competition_or_performance = "可能过度放大样品感观判断对中标结果的影响，并增加评委尺度不一致风险。"
+    merged.legal_or_policy_basis = _merge_optional_text(
+        item.legal_or_policy_basis for item in ordered if item.legal_or_policy_basis
+    )
+    merged.rewrite_suggestion = (
+        "建议将样品评分改为按尺寸、材质、做工、阻燃等可核验指标分项评分，并显著降低单项主观分值。"
+    )
+    merged.needs_human_review = False
+    merged.human_review_reason = None
+    return merged
+
+
+def _merge_nearby_liability_findings(findings: list[Finding]) -> list[Finding]:
+    others = [finding for finding in findings if finding.issue_type != "one_sided_commercial_term"]
+    liabilities = sorted(
+        (finding for finding in findings if finding.issue_type == "one_sided_commercial_term"),
+        key=lambda item: (item.text_line_start, item.text_line_end, item.section_path or ""),
+    )
+    if not liabilities:
+        return findings
+
+    merged_liabilities: list[Finding] = []
+    pending = liabilities[0]
+    for finding in liabilities[1:]:
+        if _can_merge_liability_finding(pending, finding):
+            _merge_liability_finding_into(pending, finding)
+            continue
+        merged_liabilities.append(pending)
+        pending = finding
+    merged_liabilities.append(pending)
+
+    merged = [*others, *merged_liabilities]
+    merged.sort(key=lambda item: (item.text_line_start, item.issue_type, item.section_path or ""))
+    return merged
+
+
+def _can_merge_liability_finding(left: Finding, right: Finding) -> bool:
+    if left.section_path != right.section_path:
+        return False
+    return right.text_line_start - left.text_line_end <= 6
+
+
+def _merge_liability_finding_into(target: Finding, finding: Finding) -> None:
+    target.text_line_start = min(target.text_line_start, finding.text_line_start)
+    target.text_line_end = max(target.text_line_end, finding.text_line_end)
+    target.page_hint = _merge_page_hint(target.page_hint, finding.page_hint)
+    target.source_text = "；".join(
+        list(OrderedDict.fromkeys([part for part in [target.source_text, finding.source_text] if part]))
+    )
+    target.legal_or_policy_basis = _merge_optional_text(
+        [target.legal_or_policy_basis, finding.legal_or_policy_basis]
+    )
+    target.rewrite_suggestion = (
+        "建议对同一风险点下的相邻条款统一改写：按过错和责任来源划分责任，"
+        "删除“采购人不承担任何责任”“一切事故全部由供应商承担”等绝对化表述。"
+    )
+    if "相邻条款已合并" not in target.problem_title:
+        target.problem_title = "商务条款存在单方风险转嫁（相邻条款已合并）"
+    target.why_it_is_risky = (
+        "相邻条款存在同类问题，建议作为一个风险点统筹修改。"
+        "条款采用绝对免责或无限扩大供应商责任的表述，容易造成合同权利义务明显失衡。"
+        "将付款、责任或验收风险过度转嫁给供应商，容易造成合同权利义务失衡。"
+    )
 
 
 def _technical_family_key(source_text: str) -> str | None:
@@ -457,6 +585,13 @@ def _representative_excerpt(source_text: str) -> str:
     if len(normalized_parts) > 2:
         excerpt = f"{excerpt} 等{len(normalized_parts)}项"
     return excerpt
+
+
+def _merge_optional_text(values, separator: str = "；") -> str | None:
+    merged = [value for value in OrderedDict.fromkeys(value for value in values if value)]
+    if not merged:
+        return None
+    return separator.join(merged)
 
 
 def _clip_excerpt(text: str, *, limit: int = 60) -> str:

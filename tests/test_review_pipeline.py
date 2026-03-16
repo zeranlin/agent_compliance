@@ -262,10 +262,14 @@ class ReviewPipelineTest(unittest.TestCase):
                 "评标信息",
                 "样品",
                 "（1）材质好，质量好，做工优秀，完全满足采购单位需求，评审为优加 80 分；",
+                "（2）材质一般，质量一般，做工一般，满足采购单位需求，评审为良加 50 分；",
+                "（3）材质粗糙，质量及格，做工及格，符合采购单位需求，评审为中加 20 分；",
+                "（4）材质差，质量差，做工差，不能满足采购单位需求，评审为差不加分。",
                 "第三章 用户需求书",
                 "商务要求",
                 "★2.5 中标后，实际供货均需满足投标文件及国家标准要求，否则采购人有权拒绝收货，相关损失及责任均与采购人无关。",
                 "3.3 中标人负责安装、调试。安装调试中发生的一切事故，相关责任全部由供应商承担，采购人对此不承担任何责任。",
+                "3.4 中标人在供货、运输及安装等阶段应为人员负全部安全责任，安装期间发生意外均由中标人负全责。",
                 "★4.1 采购方有权实施抽样检测。出现抽样或检测不合格的，中标人需承担检测费、抽样人工费、差旅费及相关费用。",
                 "（3）终验款：货物通过有关部门抽检终验后，采购人支付合同总金额30%的货款。",
             ]
@@ -286,6 +290,8 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("excessive_scoring_weight", issue_types)
         self.assertIn("one_sided_commercial_term", issue_types)
         self.assertIn("payment_acceptance_linkage", issue_types)
+        self.assertEqual(sum(1 for finding in review.findings if "样品评分主观性强且分值过高" in finding.problem_title), 1)
+        self.assertEqual(sum(1 for finding in review.findings if finding.issue_type == "one_sided_commercial_term"), 1)
 
 
 if __name__ == "__main__":
