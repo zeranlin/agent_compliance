@@ -6,10 +6,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from tests._bootstrap import REPO_ROOT
 from agent_compliance.evals.runner import benchmark_summary
-
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CliSmokeTest(unittest.TestCase):
@@ -30,6 +28,7 @@ class CliSmokeTest(unittest.TestCase):
             check=True,
             capture_output=True,
             text=True,
+            env={**dict(__import__("os").environ), "PYTHONPATH": str(REPO_ROOT / "src")},
         )
         self.assertIn("rule_hits", result.stdout)
 

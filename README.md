@@ -32,9 +32,9 @@
 - `tests/`
 
 当前最小可运行命令：
-- `python -m agent_compliance normalize <file>`
-- `python -m agent_compliance scan-rules <file> --json`
-- `python -m agent_compliance review <file> --json`
+- `PYTHONPATH=src python3 -m agent_compliance normalize <file>`
+- `PYTHONPATH=src python3 -m agent_compliance scan-rules <file> --json`
+- `PYTHONPATH=src python3 -m agent_compliance review <file> --json`
 
 本地引用资料：
 - [法规依据本地引用库](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/legal-authorities/README.md)

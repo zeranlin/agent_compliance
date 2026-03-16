@@ -5,11 +5,9 @@ import re
 from agent_compliance.schemas import Clause
 
 
-SECTION_PATTERNS = [
-    re.compile(r"^第.+章"),
-    re.compile(r"^[一二三四五六七八九十]+、"),
-    re.compile(r"^\d+(\.\d+)+"),
-]
+SECTION_PATTERNS = [re.compile(r"^第.+章"), re.compile(r"^[一二三四五六七八九十]+、")]
+
+SECTION_KEYWORDS = ("资格要求", "评标信息", "技术要求", "商务要求", "验收条件", "用户需求书", "招标公告")
 
 
 def split_into_clauses(text: str) -> list[Clause]:
@@ -40,7 +38,11 @@ def split_into_clauses(text: str) -> list[Clause]:
 
 
 def _looks_like_section(line: str) -> bool:
-    return any(pattern.match(line) for pattern in SECTION_PATTERNS)
+    if any(pattern.match(line) for pattern in SECTION_PATTERNS):
+        return True
+    if any(keyword in line for keyword in SECTION_KEYWORDS) and len(line) <= 40 and "。" not in line and "；" not in line:
+        return True
+    return False
 
 
 def _infer_clause_id(line: str, line_number: int) -> str:

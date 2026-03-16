@@ -47,6 +47,7 @@ class NormalizedDocument:
 @dataclass
 class RuleHit:
     rule_hit_id: str
+    rule_id: str
     rule_set_version: str
     issue_type_candidate: str
     matched_text: str
@@ -55,6 +56,10 @@ class RuleHit:
     line_end: int
     rationale: str
     severity_score: int
+    related_rule_ids: tuple[str, ...]
+    related_reference_ids: tuple[str, ...]
+    source_section: str
+    rewrite_hint: str
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

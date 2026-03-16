@@ -45,10 +45,10 @@ tests/
 
 当前骨架包含以下命令：
 
-- `agent-compliance normalize <file>`
-- `agent-compliance scan-rules <file>`
-- `agent-compliance review <file>`
-- `agent-compliance eval`
+- `PYTHONPATH=src python3 -m agent_compliance normalize <file>`
+- `PYTHONPATH=src python3 -m agent_compliance scan-rules <file>`
+- `PYTHONPATH=src python3 -m agent_compliance review <file>`
+- `PYTHONPATH=src python3 -m agent_compliance eval`
 
 ## 当前能力与后续补强关系
 
@@ -58,15 +58,16 @@ tests/
 - `rules/`: 资格、评分、技术、合同四类高频规则
 - `pipelines/normalize.py`: 标准化输出
 - `pipelines/rule_scan.py`: 规则命中结果
-- `pipelines/review.py`: 第一阶段 finding 组装
+- `knowledge/references_index.py`: 本地引用资料检索
+- `pipelines/review.py`: 第二阶段 finding 组装，已可消费本地规则映射和引用资料
 - `pipelines/render.py`: Markdown 和 JSON 落盘
 - `tests/test_smoke.py`: CLI 冒烟测试
 
 ### 后续优先补强
 
 - 章节路径识别和页码映射精度
-- 本地法规和案例全文检索
-- 规则映射到法规依据和案例依据
+- 本地法规和案例全文检索排序能力
+- 规则映射到更细粒度法规依据和案例依据
 - 本地模型边界判断与改写建议
 - findings 缓存和增量复审
 - benchmark 自动跑分

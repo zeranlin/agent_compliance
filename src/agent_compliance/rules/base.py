@@ -11,6 +11,10 @@ class RuleDefinition:
     pattern: re.Pattern[str]
     rationale: str
     severity_score: int
+    related_rule_ids: tuple[str, ...]
+    related_reference_ids: tuple[str, ...]
+    source_section: str
+    rewrite_hint: str
 
 
 RULE_SET_VERSION = "v0.1.0"

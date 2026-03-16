@@ -22,6 +22,7 @@ def run_rule_scan(document: NormalizedDocument) -> list[RuleHit]:
                 hits.append(
                     RuleHit(
                         rule_hit_id=f"RH-{counter:04d}",
+                        rule_id=rule.rule_id,
                         rule_set_version=RULE_SET_VERSION,
                         issue_type_candidate=rule.issue_type,
                         matched_text=clause.text,
@@ -30,6 +31,10 @@ def run_rule_scan(document: NormalizedDocument) -> list[RuleHit]:
                         line_end=clause.line_end,
                         rationale=rule.rationale,
                         severity_score=rule.severity_score,
+                        related_rule_ids=rule.related_rule_ids,
+                        related_reference_ids=rule.related_reference_ids,
+                        source_section=rule.source_section,
+                        rewrite_hint=rule.rewrite_hint,
                     )
                 )
                 counter += 1
