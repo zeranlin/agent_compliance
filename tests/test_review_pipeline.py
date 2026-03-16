@@ -588,6 +588,30 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("固定年份", findings[0].problem_title)
         self.assertIn("市场可得性", findings[0].why_it_is_risky)
 
+    def test_review_orders_high_risk_findings_before_medium_risk_findings(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "样品",
+                "评审为优加 80 分；评审为良加 50 分；评审为中加 20 分。",
+                "申请人的资格要求",
+                "投标人须有A级有害生物防制（治）服务企业资质证书。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="sort123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = build_review_result(document, run_rule_scan(document))
+
+        self.assertGreaterEqual(len(review.findings), 2)
+        self.assertEqual(review.findings[0].risk_level, "high")
+
     def test_review_flags_geographic_restriction_in_service_response_clause(self) -> None:
         text = "\n".join(
             [

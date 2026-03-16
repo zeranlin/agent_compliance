@@ -46,6 +46,7 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
 
     findings = _drop_false_positive_findings(findings)
     findings = _refine_findings(findings)
+    findings = _sort_findings(findings)
     findings = _renumber_findings(findings)
 
     return ReviewResult(
@@ -388,6 +389,20 @@ def _renumber_findings(findings: list[Finding]) -> list[Finding]:
     for index, finding in enumerate(findings, start=1):
         finding.finding_id = f"F-{index:03d}"
     return findings
+
+
+def _sort_findings(findings: list[Finding]) -> list[Finding]:
+    priority = {"high": 0, "medium": 1, "low": 2, "none": 3}
+    return sorted(
+        findings,
+        key=lambda item: (
+            priority.get(item.risk_level, 9),
+            item.text_line_start,
+            item.text_line_end,
+            item.issue_type,
+            item.problem_title,
+        ),
+    )
 
 
 def _shorten_section_path(section_path: str | None) -> str | None:

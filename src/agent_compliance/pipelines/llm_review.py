@@ -510,7 +510,7 @@ def _merge_added_findings(review: ReviewResult, added_findings: list[Finding]) -
         if key not in existing_keys:
             result.findings.append(finding)
             existing_keys.add(key)
-    result.findings.sort(key=lambda item: (item.text_line_start, item.issue_type, item.problem_title))
+    result.findings = _sort_findings(result.findings)
     for index, finding in enumerate(result.findings, start=1):
         finding.finding_id = f"F-{index:03d}"
     risk_counts = {"high": 0, "medium": 0}
@@ -829,3 +829,17 @@ def _dedupe_added_findings(findings: list[Finding]) -> list[Finding]:
 
 def _normalized_summary_signature(text: str) -> str:
     return "".join(ch for ch in text if ch.isalnum())[:96]
+
+
+def _sort_findings(findings: list[Finding]) -> list[Finding]:
+    priority = {"high": 0, "medium": 1, "low": 2, "none": 3}
+    return sorted(
+        findings,
+        key=lambda item: (
+            priority.get(item.risk_level, 9),
+            item.text_line_start,
+            item.text_line_end,
+            item.issue_type,
+            item.problem_title,
+        ),
+    )
