@@ -320,6 +320,14 @@
 - [ARCHITECTURE.md](/Users/linzeran/code/2026-zn/agent_compliance/ARCHITECTURE.md)
 - [openai-harness-notes.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/openai-harness-notes.md)
 
+当前还新增了本地执行骨架能力：
+- 已具备可安装的本地 CLI 入口
+- 已具备文档标准化、规则初筛、结果渲染的第一阶段代码骨架
+- 已预留 parsers、rules、knowledge、cache、evals 等模块边界，便于后续离线化和算法增强
+
+相关设计：
+- [local-runtime-skeleton.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-runtime-skeleton.md)
+
 ## 十四、结果一致性与可复现能力
 
 当前已将“同一输入在相同条件下应输出一致结果”作为正式能力要求。
@@ -352,6 +360,7 @@
 - 能积累案例和失败样本
 - 能设计并运行持续更新机制
 - 能为自动化更新和能力回归准备标准产物
+- 能在本地执行骨架中运行文档标准化、规则初筛和结果输出
 - 能沉淀
 - 能更新设计
 - 能形成标准输出

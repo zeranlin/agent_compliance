@@ -1,0 +1,83 @@
+# 本地执行引擎第一阶段骨架
+
+## 目标
+
+在不破坏现有文档型 harness 结构的前提下，为本仓库补齐一层可本地运行的执行引擎骨架，使后续能够逐步把审查能力代码化、离线化，并减少大模型调用。
+
+## 设计原则
+
+- 文档和知识库仍保留在当前仓库，不拆分到新项目。
+- 先实现“确定性能力”，再接入本地模型。
+- 先实现“规则初筛”，再实现“检索增强判断”。
+- 先保证本地可运行，再逐步补强精度和覆盖面。
+
+## 目录结构
+
+```text
+setup.py
+src/
+  agent_compliance/
+    __init__.py
+    __main__.py
+    cli.py
+    config.py
+    schemas.py
+    parsers/
+    pipelines/
+    rules/
+    knowledge/
+    cache/
+    evals/
+tests/
+```
+
+## 第一阶段范围
+
+第一阶段不追求完整复刻当前全部人工审查能力，重点完成以下最小闭环：
+
+1. 本地文件抽取和标准化
+2. 基于规则的高频风险初筛
+3. 结构化 findings 和 Markdown 结果输出
+4. 本地 CLI 入口
+5. 后续可接本地模型和检索层的模块边界
+
+## CLI 命令
+
+当前骨架包含以下命令：
+
+- `agent-compliance normalize <file>`
+- `agent-compliance scan-rules <file>`
+- `agent-compliance review <file>`
+- `agent-compliance eval`
+
+## 当前能力与后续补强关系
+
+### 当前已落地
+
+- `parsers/`: 文本抽取和基础条款切分
+- `rules/`: 资格、评分、技术、合同四类高频规则
+- `pipelines/normalize.py`: 标准化输出
+- `pipelines/rule_scan.py`: 规则命中结果
+- `pipelines/review.py`: 第一阶段 finding 组装
+- `pipelines/render.py`: Markdown 和 JSON 落盘
+- `tests/test_smoke.py`: CLI 冒烟测试
+
+### 后续优先补强
+
+- 章节路径识别和页码映射精度
+- 本地法规和案例全文检索
+- 规则映射到法规依据和案例依据
+- 本地模型边界判断与改写建议
+- findings 缓存和增量复审
+- benchmark 自动跑分
+
+## 为什么先做规则骨架
+
+因为离线运行和减少模型调用的关键，不是先部署更大的模型，而是先把以下能力代码化：
+
+- 文档标准化
+- 规则命中
+- 本地知识索引
+- 结果缓存
+
+只有这四层先稳住，后续本地模型才会变成“少量复杂条款的兜底判断器”，而不是“整篇文档自由推理器”。
