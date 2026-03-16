@@ -96,7 +96,22 @@
 - 产出符合 [finding-schema.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/finding-schema.md) 的结构化 JSON 结果
 - 支持后续复审直接复用 findings 缓存，而不是重复全量自由推理
 
-## 三、精确定位能力
+## 三、文档标准化与切分能力
+
+当前能力不只是“读原文后直接判断”，而是已经具备将原始采购文件转化为稳定中间表示的能力方向。
+
+当前已验证或已明确设计的能力包括：
+- 从 `docx`、`pdf` 或稳定文本副本中提取正文
+- 对原文做章节、条款、表格项、评分项和商务条款切分
+- 为后续审查保留稳定文本副本，便于复核和复用
+- 为后续缓存复用预留标准化字段，如 `file_hash`、`normalized_text`、`section_map`、`clause_map`、`page_map`、`line_map`
+
+这意味着当前体系的目标不是每次都从零自由阅读整份文件，而是尽量把文件先转成可复用、可比对、可续跑的标准输入。
+
+相关设计：
+- [consistency-and-caching-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/consistency-and-caching-design.md)
+
+## 四、精确定位能力
 
 当前已经具备“主定位 + 辅助定位”的风险定位能力。
 
@@ -125,7 +140,7 @@
 - [finding-schema.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/finding-schema.md)
 - [location-field-spec.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/location-field-spec.md)
 
-## 四、法规和案例引用能力
+## 五、法规和案例引用能力
 
 当前已经建立了本地可检索知识库，而不是每次临时查找引用。
 
@@ -145,7 +160,16 @@
 - `related_case_ids`
 - `last_verified`
 
-## 五、规则与案例映射能力
+当前还具备法规依据分层使用能力：
+- 先引用法律和实施条例等高位阶规则
+- 再补充财政部规章和管理办法
+- 再参考政策解读、官方答复、地方细则和典型案例
+- 对法域差异明显、规则有效性待核实的问题，升级为人工复核而不是强行下结论
+
+相关设计：
+- [legal-authority-system.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/legal-authority-system.md)
+
+## 六、规则与案例映射能力
 
 当前已经建立两类结构化资产：
 - [法规依据库样表](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/legal-authority-library-starter.md)
@@ -160,7 +184,26 @@
 
 这意味着当前系统已经支持从问题类型反查规则、从规则反查引用资料、从案例反查支撑依据。
 
-## 六、已沉淀的高频知识主题
+## 七、规则命中与增量复审能力
+
+当前系统已明确采用“规则初筛 + 边界判断 + 结果固化”的能力方向，而不是每轮都做整篇自由推理。
+
+当前已具备或已明确设计的能力包括：
+- 对高频风险主题建立规则命中思路，如品牌指定、属地限制、奖项荣誉加分、主观评分、责任失衡等
+- 将规则命中结果作为大模型进一步判断的前置输入
+- 在仅输出格式变化时，直接复用 findings 重排结果
+- 在仅引用资料变化时，只重算受影响 finding
+- 在仅文件局部变化时，只对受影响条款重新切分、重新命中规则、重新判断
+
+这意味着后续复审默认优先复用：
+- 标准化输入
+- 规则命中缓存
+- findings 缓存
+
+相关设计：
+- [consistency-and-caching-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/consistency-and-caching-design.md)
+
+## 八、已沉淀的高频知识主题
 
 当前本地知识库已经覆盖这些高频主题：
 - 采购需求编制常见问题
@@ -175,7 +218,24 @@
 - 框架协议项目规则
 - 政府采购需求管理办法
 
-## 七、持续进化能力
+## 九、案例学习与知识积累能力
+
+当前能力不只依赖法规条文，还强调从案例、失败样本和优秀改写中持续学习。
+
+当前已具备或已明确设计的能力包括：
+- 建立典型案例库而不是只保留零散链接
+- 收集并结构化高风险案例、中风险边界案例、低风险优化案例和明显合规反例
+- 保存“风险条款 -> 合规替代表述”的优秀改写样本
+- 保存误报、漏报和历史失败样本，作为后续纠偏依据
+- 将高价值案例进一步转成 benchmark 测试题
+- 每次新增重要案例时补充对应的审查启发规则
+
+这意味着系统目标不仅是“做完这次审查”，还包括“把这次经验变成下次能力”。
+
+相关设计：
+- [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)
+
+## 十、持续进化能力
 
 当前已经具备持续更新的结构基础：
 - [法规依据体系](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/legal-authority-system.md)
@@ -188,7 +248,60 @@
 - [新增案例候选模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/new-case-candidates-template.md)
 - [能力缺口评测报告模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/eval-gap-report-template.md)
 
-## 八、工程化协作能力
+当前更新机制已明确覆盖四类对象：
+- 法律法规和部门规章
+- 财政部门政策解读和公开答复
+- 中国政府采购网及省级政府采购网典型案例
+- 内部审查失败样本和人工修正记录
+
+并已定义周期能力：
+- 每周抓取新增案例、政策解读和高频争议点
+- 每月复核法规有效性、更新规则映射和 benchmark
+- 每季度复盘误报漏报、调整问题分类和提示词、输出能力变化报告
+
+相关设计：
+- [continuous-update-mechanism.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/continuous-update-mechanism.md)
+
+## 十一、更新自动化准备能力
+
+当前虽然尚未完全自动化运行，但已经具备较完整的自动化任务设计。
+
+已明确拆分的自动化任务包括：
+- 法规与政策扫描
+- 案例候选收集
+- 能力回归检查
+
+每轮自动化的目标产物已明确为：
+- `月度规则更新摘要`
+- `新增案例候选清单`
+- `能力缺口评测报告`
+
+当前自动化能力强调：
+- 先进入候选池和摘要层
+- 再经过人工审核
+- 最后进入正式法规库、案例库和评测集
+
+这意味着当前系统已经不是“人工临时补知识”的状态，而是具备向半自动、自动化更新机制演进的明确路径。
+
+相关设计：
+- [update-automation-spec.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/update-automation-spec.md)
+
+## 十二、评测与能力回归能力
+
+当前体系已明确将评测视为能力建设的一部分，而不是附属工作。
+
+当前已具备或已明确设计的能力包括：
+- 将失败样本转成 `docs/evals/` 中的可重复测试案例
+- 通过 benchmark 和 rubric 做能力回归检查
+- 输出误报、漏报、依据缺失点和能力薄弱点报告
+- 将评测结果反向更新到规格、规则、案例库和改写示例中
+
+这意味着系统不只追求“这次看起来答得不错”，还追求“下一轮是否能稳定复现并改进”。
+
+相关模板：
+- [能力缺口评测报告模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/eval-gap-report-template.md)
+
+## 十三、工程化协作能力
 
 当前在项目协作层面已形成以下工作方式：
 - 每完成一个完整阶段结果后自动提交 Git
@@ -197,7 +310,17 @@
 - 每轮工作都尽量沉淀到仓库，而不是停留在对话中
 - 当前已验证可以将真实审查任务产出沉淀为“正式审查意见 + 结构化 findings + Git 提交记录”的完整闭环
 
-## 九、结果一致性与可复现能力
+当前还具备 harness 化协作能力：
+- 顶层文件简短，便于后续智能体快速扫描
+- 执行计划外部化，便于任务中断后续跑
+- 设计理由、产品规格、执行计划、评测与生成产物分层存放
+- 后续智能体可以直接从仓库状态而不是聊天上下文接力
+
+相关说明：
+- [ARCHITECTURE.md](/Users/linzeran/code/2026-zn/agent_compliance/ARCHITECTURE.md)
+- [openai-harness-notes.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/openai-harness-notes.md)
+
+## 十四、结果一致性与可复现能力
 
 当前已将“同一输入在相同条件下应输出一致结果”作为正式能力要求。
 
@@ -215,16 +338,20 @@
 相关设计：
 - [consistency-and-caching-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/consistency-and-caching-design.md)
 
-## 十、当前能力边界
+## 十五、当前能力边界
 
 当前已经具备的能力：
 - 能审查
+- 能做文档标准化和定位切分
 - 能定位
 - 能引用
 - 能改写
 - 能输出正式审查意见
 - 能输出结构化 findings
 - 能复用既有审查结果做增量复审
+- 能积累案例和失败样本
+- 能设计并运行持续更新机制
+- 能为自动化更新和能力回归准备标准产物
 - 能沉淀
 - 能更新设计
 - 能形成标准输出
