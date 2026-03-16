@@ -203,9 +203,9 @@ class LLMIntegrationTest(unittest.TestCase):
         with patch("agent_compliance.pipelines.llm_review.OpenAICompatibleLLMClient.chat", side_effect=responses):
             result, artifacts = apply_llm_review_tasks(document, review, llm_config, output_stem="llmtest")
 
-        self.assertEqual(len(result.findings), 3)
-        self.assertEqual(len(artifacts.added_findings), 3)
-        self.assertEqual(len(artifacts.rule_candidates), 3)
+        self.assertGreaterEqual(len(result.findings), 3)
+        self.assertGreaterEqual(len(artifacts.added_findings), 3)
+        self.assertGreaterEqual(len(artifacts.rule_candidates), 3)
         self.assertTrue(Path(artifacts.candidate_json_path).exists())
         self.assertTrue(Path(artifacts.benchmark_json_path).exists())
         self.assertIn("当前结果已接入本地规则映射、引用资料检索和本地大模型边界判断", result.overall_risk_summary)
@@ -235,6 +235,62 @@ class LLMIntegrationTest(unittest.TestCase):
         self.assertEqual(gate["covered_count"], 1)
         self.assertEqual(gate["needs_benchmark_count"], 1)
         self.assertEqual(gate["status"], "needs_attention")
+
+    def test_llm_review_tasks_fallback_adds_scoring_and_commercial_findings(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "样品",
+                "5.1 优：样品外观整洁无破损，生产工艺很好，材料质感很好，样品整体制作效果很好，得80%分。",
+                "认证证书",
+                "6.1 投标人提供环境标志产品认证得100%分。",
+                "商务要求",
+                "5.4 如投标人届时不派人来，则验收结果应以采购人的验收报告为最终验收结果。",
+                "9.7 如提供货物与实际需求不符，以采购人的实际需求为准。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="fallback123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = ReviewResult(
+            document_name="sample.txt",
+            review_scope="资格条件、评分规则、技术要求、商务及验收条款",
+            jurisdiction="中国",
+            review_timestamp="2026-03-16T00:00:00+00:00",
+            overall_risk_summary="summary",
+            findings=[],
+            items_for_human_review=[],
+            review_limitations=[],
+        )
+        llm_config = LLMConfig(
+            enabled=True,
+            base_url="http://112.111.54.86:10011/v1",
+            model="local-model",
+            api_key=None,
+            timeout_seconds=60,
+        )
+
+        with patch("agent_compliance.pipelines.llm_review.OpenAICompatibleLLMClient.chat", return_value='{"findings":[]}'):
+            result, artifacts = apply_llm_review_tasks(document, review, llm_config, output_stem="llmfallback")
+
+        issue_types = {finding.issue_type for finding in artifacts.added_findings}
+        self.assertIn("ambiguous_requirement", issue_types)
+        self.assertIn("scoring_structure_imbalance", issue_types)
+        self.assertIn("unclear_acceptance_standard", issue_types)
+
+        for path in [
+            artifacts.candidate_json_path,
+            artifacts.candidate_md_path,
+            artifacts.benchmark_json_path,
+            artifacts.benchmark_md_path,
+        ]:
+            Path(path).unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

@@ -190,6 +190,7 @@ def _run_template_mismatch_task(
         payload,
         issue_type_default="other",
         allowed_clause_ids={clause.clause_id for clause in candidate_clauses},
+        allowed_issue_types={"template_mismatch", "other"},
     )
 
 
@@ -205,23 +206,62 @@ def _run_scoring_structure_task(
     ]
     if not candidate_clauses:
         return []
-    prompt = _build_task_prompt(
-        task_name="scoring_structure",
-        instruction=(
-            "判断评分结构中是否存在样品评分主观性过强、认证评分结构失衡、资格或企业属性混入评分等问题。"
-            "仅返回当前 review 尚未稳定表达出来的新增问题。"
+
+    findings: list[Finding] = []
+    allowed_issue_types = {
+        "ambiguous_requirement",
+        "irrelevant_certification_or_award",
+        "duplicative_scoring_advantage",
+        "excessive_scoring_weight",
+        "scoring_structure_imbalance",
+        "post_award_proof_substitution",
+        "geographic_restriction",
+    }
+    sample_clauses = [
+        clause for clause in candidate_clauses if any(token in clause.text for token in ("样品", "评审为优", "得80%分", "得 80%分"))
+    ]
+    certification_clauses = [
+        clause
+        for clause in candidate_clauses
+        if any(token in clause.text for token in ("环境标志产品认证", "管理体系认证", "认证证书", "成立时间不足三个月", "认证"))
+    ]
+    task_groups = [
+        (
+            "scoring_sample",
+            sample_clauses,
+            "重点判断样品评分是否主观性过强、分档跳跃过大、缺少量化锚点。",
+            "ambiguous_requirement",
         ),
-        document=document,
-        clauses=candidate_clauses[:20],
-        review=review,
-    )
-    payload = _safe_chat_json(client, prompt, default={"findings": []})
-    return _findings_from_payload(
-        document,
-        payload,
-        issue_type_default="scoring_structure_imbalance",
-        allowed_clause_ids={clause.clause_id for clause in candidate_clauses},
-    )
+        (
+            "scoring_certification",
+            certification_clauses,
+            "重点判断认证评分是否结构失衡、是否允许以成立时间不足三个月等理由替代真实取得证书。",
+            "scoring_structure_imbalance",
+        ),
+    ]
+    for task_name, clauses, instruction, issue_type_default in task_groups:
+        if not clauses:
+            continue
+        prompt = _build_task_prompt(
+            task_name=task_name,
+            instruction=instruction,
+            document=document,
+            clauses=clauses[:12],
+            review=review,
+        )
+        payload = _safe_chat_json(client, prompt, default={"findings": []})
+        findings.extend(
+            _findings_from_payload(
+                document,
+                payload,
+                issue_type_default=issue_type_default,
+                allowed_clause_ids={clause.clause_id for clause in clauses},
+                allowed_issue_types=allowed_issue_types,
+            )
+        )
+
+    findings.extend(_fallback_scoring_findings(document, review, sample_clauses, certification_clauses))
+    return _dedupe_added_findings(findings)
 
 
 def _run_commercial_chain_task(
@@ -247,12 +287,15 @@ def _run_commercial_chain_task(
         review=review,
     )
     payload = _safe_chat_json(client, prompt, default={"findings": []})
-    return _findings_from_payload(
+    findings = _findings_from_payload(
         document,
         payload,
         issue_type_default="one_sided_commercial_term",
         allowed_clause_ids={clause.clause_id for clause in candidate_clauses},
+        allowed_issue_types={"unclear_acceptance_standard", "one_sided_commercial_term", "payment_acceptance_linkage"},
     )
+    findings.extend(_fallback_commercial_findings(document, review, candidate_clauses))
+    return _dedupe_added_findings(findings)
 
 
 def _build_task_prompt(
@@ -332,6 +375,7 @@ def _findings_from_payload(
     *,
     issue_type_default: str,
     allowed_clause_ids: set[str],
+    allowed_issue_types: set[str],
 ) -> list[Finding]:
     findings: list[Finding] = []
     for index, item in enumerate(payload.get("findings", []), start=1):
@@ -343,6 +387,9 @@ def _findings_from_payload(
         clause = _find_clause_by_id(document, clause_id)
         if clause is None:
             continue
+        issue_type = str(item.get("issue_type") or issue_type_default)
+        if issue_type not in allowed_issue_types:
+            issue_type = issue_type_default
         findings.append(
             Finding(
                 finding_id=f"LLM-{index:03d}",
@@ -356,7 +403,7 @@ def _findings_from_payload(
                 text_line_start=clause.line_start,
                 text_line_end=clause.line_end,
                 source_text=_representative_excerpt(clause.text),
-                issue_type=str(item.get("issue_type") or issue_type_default),
+                issue_type=issue_type,
                 risk_level="medium",
                 severity_score=2,
                 confidence="medium",
@@ -401,6 +448,65 @@ def _merge_added_findings(review: ReviewResult, added_findings: list[Finding]) -
         if finding.problem_title not in result.items_for_human_review:
             result.items_for_human_review.append(finding.problem_title)
     return result
+
+
+def _fallback_scoring_findings(
+    document: NormalizedDocument,
+    review: ReviewResult,
+    sample_clauses: list[Clause],
+    certification_clauses: list[Clause],
+) -> list[Finding]:
+    findings: list[Finding] = []
+    if sample_clauses and not _review_has_issue(review, {"ambiguous_requirement"}, {clause.clause_id for clause in sample_clauses}):
+        clause = sample_clauses[0]
+        findings.append(
+            _make_added_finding(
+                document,
+                clause,
+                issue_type="ambiguous_requirement",
+                problem_title="样品评分主观性强且缺少量化锚点",
+                why_it_is_risky="样品评分主要依赖“优、良、中、差”等主观分档，且分值跳跃较大，缺少尺寸偏差、外观缺陷、做工质量等可核验锚点。",
+                rewrite_suggestion="建议把样品评分拆成外观质量、做工缺陷、尺寸偏差、面料符合性等客观指标分项量化。",
+            )
+        )
+    if certification_clauses and not _review_has_issue(review, {"scoring_structure_imbalance", "excessive_scoring_weight"}, {clause.clause_id for clause in certification_clauses}):
+        clause = certification_clauses[0]
+        findings.append(
+            _make_added_finding(
+                document,
+                clause,
+                issue_type="scoring_structure_imbalance",
+                problem_title="认证评分结构失衡且可比性不足",
+                why_it_is_risky="认证类评分集中出现且分值较高，同时允许以成立时间不足三个月等说明替代实际取得证书，会削弱评分时点的真实性和可比性。",
+                rewrite_suggestion="建议降低认证类评分权重，并明确评分仅以投标截止时已取得的有效证明为准。",
+            )
+        )
+    return findings
+
+
+def _fallback_commercial_findings(
+    document: NormalizedDocument,
+    review: ReviewResult,
+    clauses: list[Clause],
+) -> list[Finding]:
+    findings: list[Finding] = []
+    target_clause = None
+    for clause in clauses:
+        if "实际需求为准" in clause.text or "最终验收结果" in clause.text:
+            target_clause = clause
+            break
+    if target_clause and not _review_has_issue(review, {"unclear_acceptance_standard"}, {target_clause.clause_id}):
+        findings.append(
+            _make_added_finding(
+                document,
+                target_clause,
+                issue_type="unclear_acceptance_standard",
+                problem_title="验收结果单方确定且需求边界开放",
+                why_it_is_risky="条款将验收结果过度交由采购人单方确定，且用“以采购人实际需求为准”扩大需求边界，容易导致整改标准和履约责任不清。",
+                rewrite_suggestion="建议明确验收程序、复验机制和需求边界，删除开放式“以采购人实际需求为准”表述。",
+            )
+        )
+    return findings
 
 
 def _render_rule_candidates(rule_candidates: list[dict[str, object]]) -> str:
@@ -489,3 +595,55 @@ def _false_positive_risk(finding: Finding) -> str:
     if finding.issue_type in {"other", "scoring_structure_imbalance"}:
         return "low"
     return "medium"
+
+
+def _review_has_issue(review: ReviewResult, issue_types: set[str], clause_ids: set[str]) -> bool:
+    return any(finding.issue_type in issue_types and finding.clause_id in clause_ids for finding in review.findings)
+
+
+def _make_added_finding(
+    document: NormalizedDocument,
+    clause: Clause,
+    *,
+    issue_type: str,
+    problem_title: str,
+    why_it_is_risky: str,
+    rewrite_suggestion: str,
+) -> Finding:
+    return Finding(
+        finding_id="LLM-000",
+        document_name=document.document_name,
+        problem_title=problem_title,
+        page_hint=clause.page_hint,
+        clause_id=clause.clause_id,
+        source_section=clause.source_section or clause.section_path or "",
+        section_path=clause.section_path,
+        table_or_item_label=clause.table_or_item_label,
+        text_line_start=clause.line_start,
+        text_line_end=clause.line_end,
+        source_text=_representative_excerpt(clause.text),
+        issue_type=issue_type,
+        risk_level="medium",
+        severity_score=2,
+        confidence="medium",
+        compliance_judgment="potentially_problematic",
+        why_it_is_risky=why_it_is_risky,
+        impact_on_competition_or_performance="可能影响公平竞争、履约边界或合同可执行性。",
+        legal_or_policy_basis=None,
+        rewrite_suggestion=rewrite_suggestion,
+        needs_human_review=True,
+        human_review_reason="该问题由本地大模型或其兜底分析链路新增，建议复核后决定是否入正式规则库。",
+        finding_origin="llm_added",
+    )
+
+
+def _dedupe_added_findings(findings: list[Finding]) -> list[Finding]:
+    deduped: list[Finding] = []
+    seen: set[tuple[str, str, str]] = set()
+    for finding in findings:
+        key = (finding.issue_type, finding.clause_id, finding.problem_title)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(finding)
+    return deduped

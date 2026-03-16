@@ -2,79 +2,77 @@
   {
     "candidate_rule_id": "CAND-06B78999-001",
     "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
-    "issue_type": "template_mismatch",
-    "problem_title": "货物采购中混入服务义务条款",
-    "source_section": "其他",
-    "section_path": "第二章   招标项目需求-六、项目商务需求-其他",
-    "clause_id": "供应商提供包括公共区域、室外公共场所、地面、通道、楼层、天台、办公室、功能室等室",
-    "source_text": "供应商提供包括公共区域、室外公共场所、地面、通道、楼层、天台、办公室、功能室等室内的卫生清洁、保洁，垃圾的分类收集、清运",
-    "why_it_is_risky": "采购标的为低值易耗物品（货物），但条款要求供应商提供卫生清洁、保洁及垃圾清运服务，属于服务类采购内容。此类条款混入货物采购文件中，可能导致采购需求不明确、履约验收困难，甚至引发供应商投诉或法律风险。",
-    "rewrite_suggestion": "删除该条款。如确需保洁服务，应单独作为服务类项目采购，或在货物合同中明确约定货物交付后的基础清理责任，而非整体保洁服务。",
-    "suggested_merge_key": "llm-template_mismatch",
+    "issue_type": "ambiguous_requirement",
+    "problem_title": "样品评分标准主观性强，缺乏量化指标",
+    "source_section": "技术要求偏离情况",
+    "section_path": "评标信息-一、评标方法：综合评分法（新价格分算法）-技术要求偏离情况",
+    "clause_id": "1）",
+    "source_text": "1） 评定是否偏离以投标人响应及提供的检测报告是否符合招标技术标准为准， 没有要求提供检测报告的以投标人响应为准。单个产品要求提供的检测报告， 必须在同一份报告中呈现， 否则…",
+    "why_it_is_risky": "评分标准使用“很好”、“好”、“较好”、“一般”等模糊词汇，未设定具体量化指标（如尺寸误差、瑕疵数量、颜色偏差值等），评审专家自由裁量权过大，易引发质疑投诉，不符合政府采购客观公正原则。",
+    "rewrite_suggestion": "建议将评分标准量化，例如：外观无破损得满分，轻微瑕疵（如划痕长度<1cm）扣 X 分；工艺符合图纸要求得满分，偏差在允许范围内得 X 分等。明确各档次的具体判定依据。",
+    "suggested_merge_key": "llm-ambiguous_requirement",
     "trigger_keywords": [
-      "保洁",
-      "清运"
+      "同一份报告"
     ],
     "false_positive_risk": "medium",
     "generation_reason": "LLM 在 review 阶段新增了该问题点，当前规则链路未稳定覆盖。",
-    "benchmark_hint": "template_mismatch"
+    "benchmark_hint": "ambiguous_requirement"
   },
   {
     "candidate_rule_id": "CAND-06B78999-002",
     "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
-    "issue_type": "template_mismatch",
-    "problem_title": "特定医院系统对接要求与采购标的不符",
-    "source_section": "其他",
-    "section_path": "第二章   招标项目需求-六、项目商务需求-5.4 货物和设备运抵安装现场后，采购人将与投标人共同验收，-其他",
-    "clause_id": "★9.6",
-    "source_text": "★9.6 中标人提供的芯片及系统需无缝对接医院现有的设备及系统，以保障正常运行。",
-    "why_it_is_risky": "采购文件标题为“低值易耗物品采购”，但条款要求中标人提供的芯片及系统需无缝对接“医院现有的设备及系统”。这明显是医院信息化或专用设备项目的模板残留，与低值易耗品采购无关，限制了非特定供应商参与，存在排他性风险。",
-    "rewrite_suggestion": "删除该条款。如确需系统对接，应核实采购标的是否包含信息化系统，并明确具体的对接标准，而非使用“医院现有设备”等模糊且特定的表述。",
-    "suggested_merge_key": "llm-template_mismatch",
+    "issue_type": "ambiguous_requirement",
+    "problem_title": "样品评分主观性强且缺少量化锚点",
+    "source_section": "技术要求偏离情况",
+    "section_path": "评标信息-一、评标方法：综合评分法（新价格分算法）-技术要求偏离情况",
+    "clause_id": "1）",
+    "source_text": "1） 措施全面很具体、针对性很强、实施流程很清晰合理， 质量标准很具体， 得 80%分；",
+    "why_it_is_risky": "样品评分主要依赖“优、良、中、差”等主观分档，且分值跳跃较大，缺少尺寸偏差、外观缺陷、做工质量等可核验锚点。",
+    "rewrite_suggestion": "建议把样品评分拆成外观质量、做工缺陷、尺寸偏差、面料符合性等客观指标分项量化。",
+    "suggested_merge_key": "llm-ambiguous_requirement",
     "trigger_keywords": [
-      "芯片",
-      "系统"
+      "1） 措施全面很具体、针对性很强"
     ],
     "false_positive_risk": "medium",
     "generation_reason": "LLM 在 review 阶段新增了该问题点，当前规则链路未稳定覆盖。",
-    "benchmark_hint": "template_mismatch"
+    "benchmark_hint": "ambiguous_requirement"
   },
   {
     "candidate_rule_id": "CAND-06B78999-003",
     "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
-    "issue_type": "template_mismatch",
-    "problem_title": "技术参数与采购标的领域错位",
-    "source_section": "五、具体技术要求",
-    "section_path": "第二章   招标项目需求-五、具体技术要求-1.2 织物密度（根/10cm） ：经密 830-840 纬密 455-465；",
-    "clause_id": "1.2",
-    "source_text": "1.2 织物密度（根/10cm） ：经密 830-840 纬密 455-465；",
-    "why_it_is_risky": "条款要求“低于安卓 7.1 系统、≥21.5 寸触摸屏”等 IT 设备参数，而采购标的为“低值易耗物品”。这属于典型的模板错贴，将 IT 设备或智能终端的采购需求错误地复制到了低值易耗品采购文件中，导致需求混乱。",
-    "rewrite_suggestion": "核实采购标的真实需求。如为低值易耗品，删除所有 IT 设备相关技术参数；如为智能终端采购，应修改采购文件标题及整体需求描述。",
-    "suggested_merge_key": "llm-template_mismatch",
+    "issue_type": "scoring_structure_imbalance",
+    "problem_title": "认证评分结构失衡且可比性不足",
+    "source_section": "技术要求偏离情况",
+    "section_path": "评标信息-一、评标方法：综合评分法（新价格分算法）-技术要求偏离情况",
+    "clause_id": "环境标志产品认证",
+    "source_text": "环境标志产品认证",
+    "why_it_is_risky": "认证类评分集中出现且分值较高，同时允许以成立时间不足三个月等说明替代实际取得证书，会削弱评分时点的真实性和可比性。",
+    "rewrite_suggestion": "建议降低认证类评分权重，并明确评分仅以投标截止时已取得的有效证明为准。",
+    "suggested_merge_key": "llm-scoring_structure_imbalance",
     "trigger_keywords": [
-      "1.2 织物密度（根/10cm）"
+      "认证"
     ],
-    "false_positive_risk": "medium",
+    "false_positive_risk": "low",
     "generation_reason": "LLM 在 review 阶段新增了该问题点，当前规则链路未稳定覆盖。",
-    "benchmark_hint": "template_mismatch"
+    "benchmark_hint": "scoring_structure_imbalance"
   },
   {
     "candidate_rule_id": "CAND-06B78999-004",
     "document_name": "[LGDL2025000044-A]低值易耗物品采购.docx",
-    "issue_type": "template_mismatch",
-    "problem_title": "政策附件内容模板残留",
-    "source_section": "第十二章    附件：相关政策",
-    "section_path": "第十二章    附件：相关政策",
-    "clause_id": "三、本规定适用的行业包括：",
-    "source_text": "三、本规定适用的行业包括： 农、林、牧、渔业， 工业（包括采矿业， 制造 业， 电力、热力、燃气及水生产和供应业），建筑业， 批发业，零售业，交通运输 业（不含铁路运输业），…",
-    "why_it_is_risky": "条款内容为各行业划型标准（如软件和信息技术服务业从业人员标准），属于政策附件或中小企业划型说明的模板文本。此类内容通常不应直接出现在采购需求章节中，尤其是当采购标的与软件服务业无关时，属于明显的模板残留。",
-    "rewrite_suggestion": "删除该条款。中小企业划型标准应依据国家统一规定执行，无需在采购文件中重复列出，除非有特定的政策优惠要求且需明确说明。",
-    "suggested_merge_key": "llm-template_mismatch",
+    "issue_type": "unclear_acceptance_standard",
+    "problem_title": "验收结果单方确定且需求边界开放",
+    "source_section": "5.4 货物和设备运抵安装现场后，采购人将与投标人共同验收，",
+    "section_path": "第二章   招标项目需求-六、项目商务需求-5.4 货物和设备运抵安装现场后，采购人将与投标人共同验收，",
+    "clause_id": "如投标人届时不派人来，",
+    "source_text": "如投标人届时不派人来， 则验收结果应以采购人的验收报告为最终验收结果。验收时发现短缺、破损，采购人有权要求投标人立即补发和负责更换。",
+    "why_it_is_risky": "条款将验收结果过度交由采购人单方确定，且用“以采购人实际需求为准”扩大需求边界，容易导致整改标准和履约责任不清。",
+    "rewrite_suggestion": "建议明确验收程序、复验机制和需求边界，删除开放式“以采购人实际需求为准”表述。",
+    "suggested_merge_key": "llm-unclear_acceptance_standard",
     "trigger_keywords": [
-      "三、本规定适用的行业包括： 农、"
+      "最终验收结果"
     ],
     "false_positive_risk": "medium",
     "generation_reason": "LLM 在 review 阶段新增了该问题点，当前规则链路未稳定覆盖。",
-    "benchmark_hint": "template_mismatch"
+    "benchmark_hint": "unclear_acceptance_standard"
   }
 ]

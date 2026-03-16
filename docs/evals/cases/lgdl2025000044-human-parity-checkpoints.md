@@ -29,3 +29,13 @@
 - `expected_risk_level`: `medium`
 - `expected_judgment`: `potentially_problematic`
 - `why_expected`: 货物采购中使用“完工期”表述，疑似工程或服务类模板残留。
+
+## Case 4
+
+- `case_id`: `lgdl2025000044-sample-scoring-ambiguous`
+- `source_document`: `[LGDL2025000044-A]低值易耗物品采购.docx`
+- `source_clause`: `优：样品外观整洁无破损，生产工艺很好，材料质感很好，样品整体制作效果很好，得80%分；良得40%分；中得20%分。`
+- `expected_issue_type`: `ambiguous_requirement`
+- `expected_risk_level`: `medium`
+- `expected_judgment`: `potentially_problematic`
+- `why_expected`: 样品评分主要依赖主观分档，且缺少尺寸偏差、做工缺陷、材质符合性等可核验锚点。
