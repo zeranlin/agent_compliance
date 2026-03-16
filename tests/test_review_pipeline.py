@@ -121,6 +121,33 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("同一评分项已合并", review.findings[0].problem_title)
         self.assertIn("统一改写", review.findings[0].rewrite_suggestion)
 
+    def test_review_drops_appendix_duplicate_findings(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "一、电子图像处理器",
+                "17.具备无线插拔技术、无线连接技术。",
+                "第四章 投标文件组成要求及格式",
+                "一、电子图像处理器",
+                "17.具备无线插拔技术、无线连接技术。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertEqual(len(review.findings), 1)
+        self.assertIn("第三章 用户需求书", review.findings[0].section_path)
+        self.assertNotIn("第四章 投标文件组成要求及格式", review.findings[0].section_path)
+
 
 if __name__ == "__main__":
     unittest.main()

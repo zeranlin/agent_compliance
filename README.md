@@ -38,6 +38,9 @@
 - `PYTHONPATH=src python3 -m agent_compliance scan-rules <file> --json`
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json`
 
+测试阶段默认关闭 review 缓存；如需复用缓存，可显式加：
+- `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-cache`
+
 本地引用资料：
 - [法规依据本地引用库](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/legal-authorities/README.md)
 - [案例口径本地引用库](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/case-sources/README.md)

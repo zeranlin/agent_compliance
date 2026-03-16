@@ -70,7 +70,7 @@ class CliSmokeTest(unittest.TestCase):
             cache_path.unlink()
 
         first = subprocess.run(
-            [sys.executable, "-m", "agent_compliance", "review", str(temp_path), "--json", "--refresh-cache"],
+            [sys.executable, "-m", "agent_compliance", "review", str(temp_path), "--json", "--use-cache", "--refresh-cache"],
             cwd=REPO_ROOT,
             check=True,
             capture_output=True,
@@ -78,7 +78,7 @@ class CliSmokeTest(unittest.TestCase):
             env=env,
         )
         second = subprocess.run(
-            [sys.executable, "-m", "agent_compliance", "review", str(temp_path), "--json"],
+            [sys.executable, "-m", "agent_compliance", "review", str(temp_path), "--json", "--use-cache"],
             cwd=REPO_ROOT,
             check=True,
             capture_output=True,
@@ -88,7 +88,9 @@ class CliSmokeTest(unittest.TestCase):
 
         first_payload = json.loads(first.stdout)
         second_payload = json.loads(second.stdout)
+        self.assertTrue(first_payload["cache"]["enabled"])
         self.assertFalse(first_payload["cache"]["used"])
+        self.assertTrue(second_payload["cache"]["enabled"])
         self.assertTrue(second_payload["cache"]["used"])
         self.assertTrue(cache_path.exists())
 

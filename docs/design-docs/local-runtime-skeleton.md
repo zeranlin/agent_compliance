@@ -66,6 +66,8 @@ tests/
 - `pipelines/review.py`: 已支持同区段、同类问题的相邻命中聚合，减少重复 findings
 - `pipelines/review.py`: 已可为聚合后的 finding 生成问题标题和统一改写建议
 - `cache/review_cache.py`: 已支持 review 结果缓存和缓存命中复用
+- `review` 命令现支持显式缓存开关，测试阶段默认关闭缓存，避免影响验证
+- review 后处理已可压缩过长 `section_path`，并去掉投标文件格式附件中的重复技术参数 finding
 - `pipelines/render.py`: Markdown 和 JSON 落盘
 - `tests/test_smoke.py`: CLI 冒烟测试
 

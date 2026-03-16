@@ -44,6 +44,9 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
         )
         findings.append(finding)
 
+    findings = _refine_findings(findings)
+    findings = _renumber_findings(findings)
+
     return ReviewResult(
         document_name=document.document_name,
         review_scope="资格条件、评分规则、技术要求、商务及验收条款",
@@ -275,3 +278,69 @@ def _human_review_items(findings: list[Finding]) -> list[str]:
         if finding.needs_human_review and finding.human_review_reason:
             items.append(f"{finding.finding_id}：{finding.human_review_reason}")
     return items
+
+
+def _refine_findings(findings: list[Finding]) -> list[Finding]:
+    refined: list[Finding] = []
+    primary_signatures: list[tuple[str, str]] = []
+    appendix_findings: list[Finding] = []
+
+    for finding in findings:
+        finding.section_path = _shorten_section_path(finding.section_path)
+        signature = (finding.issue_type, _normalized_source_signature(finding.source_text))
+        if _is_appendix_duplicate_candidate(finding):
+            appendix_findings.append(finding)
+            continue
+        primary_signatures.append(signature)
+        refined.append(finding)
+
+    for finding in appendix_findings:
+        signature = (finding.issue_type, _normalized_source_signature(finding.source_text))
+        if _matches_existing_signature(signature, primary_signatures):
+            continue
+        refined.append(finding)
+
+    return refined
+
+
+def _renumber_findings(findings: list[Finding]) -> list[Finding]:
+    for index, finding in enumerate(findings, start=1):
+        finding.finding_id = f"F-{index:03d}"
+    return findings
+
+
+def _shorten_section_path(section_path: str | None) -> str | None:
+    if not section_path:
+        return None
+    parts = [part.strip() for part in section_path.split("-") if part.strip()]
+    shortened = [_shorten_segment(part) for part in parts]
+    return "-".join(shortened)
+
+
+def _shorten_segment(segment: str) -> str:
+    if len(segment) <= 36:
+        return segment
+    return f"{segment[:30]}..."
+
+
+def _normalized_source_signature(source_text: str) -> str:
+    normalized = "".join(ch for ch in source_text if ch.isalnum())
+    return normalized[:80]
+
+
+def _is_appendix_duplicate_candidate(finding: Finding) -> bool:
+    return bool(finding.section_path and "第四章 投标文件组成要求及格式" in finding.section_path)
+
+
+def _matches_existing_signature(
+    candidate: tuple[str, str], primary_signatures: list[tuple[str, str]]
+) -> bool:
+    candidate_issue, candidate_text = candidate
+    for issue_type, primary_text in primary_signatures:
+        if issue_type != candidate_issue:
+            continue
+        if candidate_text == primary_text:
+            return True
+        if candidate_text and primary_text and (candidate_text in primary_text or primary_text in candidate_text):
+            return True
+    return False

@@ -36,6 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     review_parser.add_argument("file", type=Path)
     review_parser.add_argument("--json", action="store_true")
     review_parser.add_argument("--output-stem", default=None)
+    review_parser.add_argument("--use-cache", action="store_true")
     review_parser.add_argument("--refresh-cache", action="store_true")
 
     eval_parser = subparsers.add_parser("eval", help="Show benchmark entry points")
@@ -69,27 +70,29 @@ def main(argv: list[str] | None = None) -> int:
         )
         review = None
         cache_used = False
-        if not args.refresh_cache:
+        cache_enabled = args.use_cache
+        if cache_enabled and not args.refresh_cache:
             review = load_review_cache(cache_key)
             cache_used = review is not None
         if review is None:
             hits = run_rule_scan(normalized)
             review = build_review_result(normalized, hits)
-            save_review_cache(
-                cache_key,
-                review,
-                metadata={
-                    "file_hash": normalized.file_hash,
-                    "rule_set_version": RULE_SET_VERSION,
-                    "reference_snapshot": reference_snapshot,
-                    "review_pipeline_version": REVIEW_CACHE_VERSION,
-                },
-            )
+            if cache_enabled:
+                save_review_cache(
+                    cache_key,
+                    review,
+                    metadata={
+                        "file_hash": normalized.file_hash,
+                        "rule_set_version": RULE_SET_VERSION,
+                        "reference_snapshot": reference_snapshot,
+                        "review_pipeline_version": REVIEW_CACHE_VERSION,
+                    },
+                )
         output_stem = args.output_stem or normalized.file_hash[:12]
         json_path, md_path = write_review_outputs(review, output_stem)
         payload = {
             "review": review.to_dict(),
-            "cache": {"used": cache_used, "key": cache_key},
+            "cache": {"enabled": cache_enabled, "used": cache_used, "key": cache_key},
             "outputs": {"json": str(json_path), "markdown": str(md_path)},
         }
         return _print_result(payload, args.json)
