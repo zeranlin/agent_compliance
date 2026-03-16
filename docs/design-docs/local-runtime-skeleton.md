@@ -63,6 +63,7 @@ tests/
 - `pipelines/rule_scan.py`: 规则命中结果
 - `knowledge/references_index.py`: 本地引用资料检索
 - `pipelines/review.py`: 第二阶段 finding 组装，已可消费本地规则映射和引用资料
+- `pipelines/review.py`: 已支持同区段、同类问题的相邻命中聚合，减少重复 findings
 - `pipelines/render.py`: Markdown 和 JSON 落盘
 - `tests/test_smoke.py`: CLI 冒烟测试
 

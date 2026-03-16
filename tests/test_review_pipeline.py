@@ -90,6 +90,35 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertEqual(target.section_path, "第一章 招标公告-评标信息-评分项-技术部分-评分因素")
         self.assertEqual(target.table_or_item_label, "评分因素")
 
+    def test_review_groups_adjacent_same_issue_hits(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "评标信息",
+                "技术部分",
+                "评分因素",
+                "若供应商提供守合同重信用企业，可得10分。",
+                "若供应商提供全国科技型中小企业证明，可得10分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertEqual(len(review.findings), 1)
+        self.assertEqual(review.findings[0].text_line_start, 5)
+        self.assertEqual(review.findings[0].text_line_end, 6)
+        self.assertIn("守合同重信用企业", review.findings[0].source_text)
+        self.assertIn("科技型中小企业", review.findings[0].source_text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from dataclasses import dataclass
 
 from agent_compliance.knowledge.references_index import ReferenceRecord, find_references
 from agent_compliance.schemas import Finding, NormalizedDocument, ReviewResult, RuleHit, utc_now_iso
 
 
 def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> ReviewResult:
-    deduped_hits = _dedupe_hits(hits)
+    grouped_hits = _group_hits(document, _dedupe_hits(hits))
     findings: list[Finding] = []
-    for index, hit in enumerate(deduped_hits, start=1):
+    for index, group in enumerate(grouped_hits, start=1):
+        hit = group.primary_hit
         clause = _find_clause(document, hit)
         references = find_references(
-            reference_ids=hit.related_reference_ids,
-            rule_ids=hit.related_rule_ids,
+            reference_ids=group.reference_ids,
+            rule_ids=group.rule_ids,
             issue_type=hit.issue_type_candidate,
         )
         finding = Finding(
@@ -24,18 +26,18 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
             source_section=clause.source_section if clause and clause.source_section else hit.source_section,
             section_path=clause.section_path if clause else hit.source_section,
             table_or_item_label=clause.table_or_item_label if clause else None,
-            text_line_start=hit.line_start,
-            text_line_end=hit.line_end,
-            source_text=hit.matched_text,
+            text_line_start=group.line_start,
+            text_line_end=group.line_end,
+            source_text=group.source_text,
             issue_type=hit.issue_type_candidate,
             risk_level=_risk_level(hit.severity_score),
             severity_score=hit.severity_score,
             confidence=_confidence(hit.issue_type_candidate, hit.severity_score),
             compliance_judgment=_judgment(hit.issue_type_candidate, hit.severity_score),
-            why_it_is_risky=_expand_rationale(hit),
+            why_it_is_risky=_expand_rationale(group),
             impact_on_competition_or_performance=_impact_text(hit.issue_type_candidate),
             legal_or_policy_basis=_legal_basis_text(references),
-            rewrite_suggestion=hit.rewrite_hint,
+            rewrite_suggestion=_rewrite_suggestion(group),
             needs_human_review=_needs_human_review(hit.issue_type_candidate),
             human_review_reason=_human_review_reason(hit.issue_type_candidate),
         )
@@ -98,7 +100,79 @@ def _dedupe_hits(hits: list[RuleHit]) -> list[RuleHit]:
     return list(unique.values())
 
 
-def _expand_rationale(hit: RuleHit) -> str:
+@dataclass
+class HitGroup:
+    primary_hit: RuleHit
+    hits: list[RuleHit]
+    section_path: str | None
+    line_start: int
+    line_end: int
+    source_text: str
+    rule_ids: tuple[str, ...]
+    reference_ids: tuple[str, ...]
+
+
+def _group_hits(document: NormalizedDocument, hits: list[RuleHit]) -> list[HitGroup]:
+    groups: list[HitGroup] = []
+    sorted_hits = sorted(hits, key=lambda item: (item.line_start, item.line_end, item.rule_id))
+    for hit in sorted_hits:
+        clause = _find_clause(document, hit)
+        if groups and _should_merge(groups[-1], hit, clause):
+            groups[-1] = _merge_group(groups[-1], hit)
+            continue
+        groups.append(
+            HitGroup(
+                primary_hit=hit,
+                hits=[hit],
+                section_path=clause.section_path if clause else hit.source_section,
+                line_start=hit.line_start,
+                line_end=hit.line_end,
+                source_text=hit.matched_text,
+                rule_ids=hit.related_rule_ids,
+                reference_ids=hit.related_reference_ids,
+            )
+        )
+    return groups
+
+
+def _should_merge(group: HitGroup, hit: RuleHit, clause) -> bool:
+    primary = group.primary_hit
+    if primary.issue_type_candidate != hit.issue_type_candidate:
+        return False
+    if hit.line_start - group.line_end > 3:
+        return False
+    if clause is None:
+        return False
+    return group.section_path == clause.section_path
+
+
+def _merge_group(group: HitGroup, hit: RuleHit) -> HitGroup:
+    hits = [*group.hits, hit]
+    primary_hit = max(hits, key=lambda item: (item.severity_score, -item.line_start))
+    source_texts = list(OrderedDict.fromkeys(item.matched_text for item in hits))
+    return HitGroup(
+        primary_hit=primary_hit,
+        hits=hits,
+        section_path=group.section_path,
+        line_start=min(item.line_start for item in hits),
+        line_end=max(item.line_end for item in hits),
+        source_text="；".join(source_texts[:3]),
+        rule_ids=_merge_tuple_values(item.related_rule_ids for item in hits),
+        reference_ids=_merge_tuple_values(item.related_reference_ids for item in hits),
+    )
+
+
+def _merge_tuple_values(values) -> tuple[str, ...]:
+    merged: list[str] = []
+    for group in values:
+        for item in group:
+            if item not in merged:
+                merged.append(item)
+    return tuple(merged)
+
+
+def _expand_rationale(group: HitGroup) -> str:
+    hit = group.primary_hit
     suffix = {
         "excessive_supplier_qualification": "这类条件通常会把与履约无直接关系的企业属性、规模或年限要求变成准入门槛。",
         "irrelevant_certification_or_award": "这类企业称号、荣誉或认证通常不能直接替代项目履约能力判断。",
@@ -109,7 +183,13 @@ def _expand_rationale(hit: RuleHit) -> str:
         "one_sided_commercial_term": "将付款、责任或验收风险过度转嫁给供应商，容易造成合同权利义务失衡。",
         "other": "这类条款通常需要进一步判断是否超出采购标的实际需要或属于模板残留。",
     }
-    return f"{hit.rationale}{suffix.get(hit.issue_type_candidate, '')}"
+    prefix = "相邻条款存在同类问题，建议作为一个风险点统筹修改。" if len(group.hits) > 1 else ""
+    return f"{prefix}{hit.rationale}{suffix.get(hit.issue_type_candidate, '')}"
+
+
+def _rewrite_suggestion(group: HitGroup) -> str:
+    hints = list(OrderedDict.fromkeys(hit.rewrite_hint for hit in group.hits if hit.rewrite_hint))
+    return "；".join(hints[:2]) if hints else group.primary_hit.rewrite_hint
 
 
 def _impact_text(issue_type: str) -> str:
