@@ -41,6 +41,10 @@
 测试阶段默认关闭 review 缓存；如需复用缓存，可显式加：
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-cache`
 
+本地大模型兜底接口已预留，默认关闭；如需显式启用：
+- `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-llm`
+- 可选覆盖模型和地址：`--llm-model <model>`、`--llm-base-url <base_url>`
+
 本地引用资料：
 - [法规依据本地引用库](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/legal-authorities/README.md)
 - [案例口径本地引用库](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/case-sources/README.md)

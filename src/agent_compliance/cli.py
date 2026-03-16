@@ -11,8 +11,9 @@ from agent_compliance.cache.review_cache import (
     reference_snapshot_id,
     save_review_cache,
 )
-from agent_compliance.config import detect_paths
+from agent_compliance.config import LLMConfig, detect_llm_config, detect_paths
 from agent_compliance.evals.runner import benchmark_summary
+from agent_compliance.pipelines.llm_enhance import enhance_review_result
 from agent_compliance.pipelines.normalize import run_normalize
 from agent_compliance.pipelines.render import write_review_outputs
 from agent_compliance.pipelines.review import build_review_result
@@ -38,6 +39,9 @@ def build_parser() -> argparse.ArgumentParser:
     review_parser.add_argument("--output-stem", default=None)
     review_parser.add_argument("--use-cache", action="store_true")
     review_parser.add_argument("--refresh-cache", action="store_true")
+    review_parser.add_argument("--use-llm", action="store_true")
+    review_parser.add_argument("--llm-base-url", default=None)
+    review_parser.add_argument("--llm-model", default=None)
 
     eval_parser = subparsers.add_parser("eval", help="Show benchmark entry points")
     eval_parser.add_argument("--json", action="store_true")
@@ -61,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "review":
         paths = detect_paths()
         normalized = run_normalize(args.file)
+        llm_config = _resolved_llm_config(args)
         reference_snapshot = reference_snapshot_id(paths.repo_root / "docs" / "references")
         cache_key = build_review_cache_key(
             file_hash=normalized.file_hash,
@@ -88,11 +93,17 @@ def main(argv: list[str] | None = None) -> int:
                         "review_pipeline_version": REVIEW_CACHE_VERSION,
                     },
                 )
+        review = enhance_review_result(review, llm_config)
         output_stem = args.output_stem or normalized.file_hash[:12]
         json_path, md_path = write_review_outputs(review, output_stem)
         payload = {
             "review": review.to_dict(),
             "cache": {"enabled": cache_enabled, "used": cache_used, "key": cache_key},
+            "llm": {
+                "enabled": llm_config.enabled,
+                "base_url": llm_config.base_url,
+                "model": llm_config.model,
+            },
             "outputs": {"json": str(json_path), "markdown": str(md_path)},
         }
         return _print_result(payload, args.json)
@@ -112,3 +123,13 @@ def _print_result(payload: dict, as_json: bool) -> int:
     for key, value in payload.items():
         print(f"{key}: {value}")
     return 0
+
+
+def _resolved_llm_config(args) -> LLMConfig:
+    config = detect_llm_config()
+    return LLMConfig(
+        enabled=bool(args.use_llm or config.enabled),
+        base_url=(args.llm_base_url or config.base_url).rstrip("/"),
+        model=args.llm_model or config.model,
+        timeout_seconds=config.timeout_seconds,
+    )

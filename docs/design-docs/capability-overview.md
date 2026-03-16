@@ -333,6 +333,7 @@
 - 已具备可安装的本地 CLI 入口
 - 已具备文档标准化、规则初筛、结果渲染的第一阶段代码骨架
 - 已预留 parsers、rules、knowledge、cache、evals 等模块边界，便于后续离线化和算法增强
+- 已预留本地大模型兜底接口，默认关闭，显式启用时可用于边界判断和改写增强
 
 相关设计：
 - [local-runtime-skeleton.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-runtime-skeleton.md)
