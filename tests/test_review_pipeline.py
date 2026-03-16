@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from tests._bootstrap import REPO_ROOT
+from agent_compliance.parsers.pagination import build_page_map, page_hint_for_line
 from agent_compliance.parsers.section_splitter import split_into_clauses
 from agent_compliance.pipelines.review import build_review_result
 from agent_compliance.pipelines.rule_scan import run_rule_scan
@@ -51,6 +52,22 @@ class ReviewPipelineTest(unittest.TestCase):
         target = clauses[-1]
         self.assertEqual(target.section_path, "第一章 招标公告-评标信息-技术部分-评分因素")
         self.assertEqual(target.table_or_item_label, "评分因素")
+
+    def test_page_map_assigns_estimated_page_hint(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "投标单位须为外商投资及民营企业，国资企业不具备投标资格。",
+                "评标信息",
+                "评分因素",
+            ]
+        )
+        page_map = build_page_map(text, lines_per_page=2)
+        clauses = split_into_clauses(text, page_map=page_map)
+
+        self.assertEqual(page_hint_for_line(3, page_map), "第2页（估算）")
+        self.assertEqual(clauses[2].page_hint, "第2页（估算）")
 
 
 if __name__ == "__main__":

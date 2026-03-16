@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from agent_compliance.parsers.pagination import page_hint_for_line
 from agent_compliance.schemas import Clause
 
 
@@ -27,7 +28,7 @@ SECTION_KEYWORDS = (
 TABLE_LABEL_KEYWORDS = ("评分项", "评分因素", "技术部分", "商务部分", "价格", "其他", "验收条件")
 
 
-def split_into_clauses(text: str) -> list[Clause]:
+def split_into_clauses(text: str, *, page_map=None) -> list[Clause]:
     lines = text.splitlines()
     clauses: list[Clause] = []
     section_stack: list[str] = []
@@ -61,7 +62,7 @@ def split_into_clauses(text: str) -> list[Clause]:
                 source_section=current_source_section,
                 section_path="-".join(section_stack) if section_stack else current_source_section,
                 table_or_item_label=_infer_table_label(current_table_label, line),
-                page_hint=None,
+                page_hint=page_hint_for_line(line_number, page_map or []),
             )
         )
 

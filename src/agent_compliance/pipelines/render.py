@@ -42,6 +42,7 @@ def _render_markdown(review: ReviewResult) -> str:
                 f"### {finding.finding_id} {finding.issue_type}",
                 f"- 条款编号：`{finding.clause_id}`",
                 f"- 位置：`{finding.section_path}`",
+                f"- 页码提示：`{finding.page_hint}`",
                 f"- 表格/评分项：`{finding.table_or_item_label}`",
                 f"- 辅助行号：`{finding.text_line_start}-{finding.text_line_end}`",
                 f"- 风险等级：`{finding.risk_level}`",

@@ -26,6 +26,17 @@ class Clause:
 
 
 @dataclass
+class PageSpan:
+    page_number: int
+    line_start: int
+    line_end: int
+    is_estimated: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class NormalizedDocument:
     source_path: str
     document_name: str
@@ -33,6 +44,7 @@ class NormalizedDocument:
     normalized_text_path: str
     clause_count: int
     clauses: list[Clause]
+    page_map: list[PageSpan] = field(default_factory=list)
     created_at: str = field(default_factory=utc_now_iso)
 
     def to_dict(self) -> dict[str, Any]:
@@ -43,6 +55,7 @@ class NormalizedDocument:
             "normalized_text_path": self.normalized_text_path,
             "clause_count": self.clause_count,
             "clauses": [clause.to_dict() for clause in self.clauses],
+            "page_map": [page.to_dict() for page in self.page_map],
             "created_at": self.created_at,
         }
 

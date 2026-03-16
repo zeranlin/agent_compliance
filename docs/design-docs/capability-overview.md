@@ -130,7 +130,7 @@
 
 这意味着当前输出已经不仅能指出“有问题”，还能尽量帮助使用者快速回到原文件中的具体风险位置。
 
-当前离线执行引擎已能在无网络情况下把常见章节标题、评分表标签和条款片段映射到 `section_path`、`source_section`、`table_or_item_label`。`page_hint` 字段已保留在 schema 中，但对 `docx` 文本抽取结果仍主要为预留状态，后续需结合页映射继续补强。
+当前离线执行引擎已能在无网络情况下把常见章节标题、评分表标签和条款片段映射到 `section_path`、`source_section`、`table_or_item_label`，并基于本地 `page_map` 为 finding 回填 `page_hint`。当原文缺少显式分页标记时，当前会回退为估算页号，后续仍需继续补强精确页映射。
 
 该能力已适用于：
 - Word
