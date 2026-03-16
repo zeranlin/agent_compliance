@@ -68,6 +68,7 @@ tests/
 - `cache/review_cache.py`: 已支持 review 结果缓存和缓存命中复用
 - `review` 命令现支持显式缓存开关，测试阶段默认关闭缓存，避免影响验证
 - review 后处理已可压缩过长 `section_path`，并去掉投标文件格式附件中的重复技术参数 finding
+- review 后处理已可将长 `source_text` 压成代表性摘录，并将跨章节重复的同类技术参数归并为更少的主 finding
 - `pipelines/render.py`: Markdown 和 JSON 落盘
 - `tests/test_smoke.py`: CLI 冒烟测试
 

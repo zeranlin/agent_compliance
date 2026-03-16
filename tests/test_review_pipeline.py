@@ -148,6 +148,56 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("第三章 用户需求书", review.findings[0].section_path)
         self.assertNotIn("第四章 投标文件组成要求及格式", review.findings[0].section_path)
 
+    def test_review_merges_same_technical_family_across_sections(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "三、电子上消化道内窥镜",
+                "10.具备无线插拔技术、无线连接技术，内镜无需防水盖，可直接浸泡消毒。",
+                "四、电子下消化道内窥镜",
+                "10.具备无线插拔技术、无线连接技术，内镜无需防水盖，可直接浸泡消毒。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertEqual(len(review.findings), 1)
+        self.assertIn("多个设备章节", review.findings[0].problem_title)
+        self.assertIn("电子上消化道内窥镜 / 四、电子下消化道内窥镜", review.findings[0].section_path)
+
+    def test_review_uses_representative_excerpt_for_long_source_text(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "10.供应商注册资本不低于100万元。同时，供应商年收入不低于50万元，净利润不低于20万元。",
+                "该企业的股权结构由国有资本持股51%以确保控股地位。经营年限不低于10年。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertEqual(len(review.findings), 1)
+        self.assertLess(len(review.findings[0].source_text), 90)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -300,6 +300,9 @@ def _refine_findings(findings: list[Finding]) -> list[Finding]:
             continue
         refined.append(finding)
 
+    refined = _merge_similar_technical_findings(refined)
+    for finding in refined:
+        finding.source_text = _representative_excerpt(finding.source_text)
     return refined
 
 
@@ -344,3 +347,109 @@ def _matches_existing_signature(
         if candidate_text and primary_text and (candidate_text in primary_text or primary_text in candidate_text):
             return True
     return False
+
+
+def _merge_similar_technical_findings(findings: list[Finding]) -> list[Finding]:
+    merged: list[Finding] = []
+    tech_groups: dict[str, Finding] = {}
+
+    for finding in findings:
+        if finding.issue_type != "narrow_technical_parameter":
+            merged.append(finding)
+            continue
+        family = _technical_family_key(finding.source_text)
+        if family is None:
+            merged.append(finding)
+            continue
+        existing = tech_groups.get(family)
+        if existing is None:
+            tech_groups[family] = finding
+            continue
+        _merge_finding_into(existing, finding, family)
+
+    merged.extend(tech_groups.values())
+    merged.sort(key=lambda item: (item.text_line_start, item.issue_type, item.section_path or ""))
+    return merged
+
+
+def _technical_family_key(source_text: str) -> str | None:
+    normalized = _normalized_source_signature(source_text)
+    if "无线插拔技术无线连接技术" in normalized:
+        return "wireless_connection"
+    if "工作频率12MHz20MHz支持两个频率一键切换" in normalized:
+        return "ultrasound_frequency"
+    if "兼容高清电子胃肠镜" in normalized:
+        return "compatibility"
+    if "探头外径" in normalized:
+        return "probe_diameter"
+    return None
+
+
+def _merge_finding_into(target: Finding, finding: Finding, family: str) -> None:
+    target.text_line_start = min(target.text_line_start, finding.text_line_start)
+    target.text_line_end = max(target.text_line_end, finding.text_line_end)
+    target.page_hint = _merge_page_hint(target.page_hint, finding.page_hint)
+    target.source_text = "；".join(
+        list(OrderedDict.fromkeys([part for part in [target.source_text, finding.source_text] if part]))
+    )
+    target.section_path = _merge_section_path(target.section_path, finding.section_path)
+    target.problem_title = _merged_technical_title(family)
+    target.why_it_is_risky = "同类技术参数在多个设备章节中重复出现，建议合并评估其必要性和市场兼容范围。" + target.why_it_is_risky
+    target.rewrite_suggestion = "建议将同类技术参数统一改为功能效果导向表述，并一次性说明适用设备范围、必要性和兼容边界。"
+    target.human_review_reason = "需结合市场调研、兼容性边界、适用设备范围和临床必要性统一判断参数是否具有正当性。"
+
+
+def _merge_page_hint(left: str | None, right: str | None) -> str | None:
+    if not left:
+        return right
+    if not right or left == right:
+        return left
+    return f"{left} / {right}"
+
+
+def _merge_section_path(left: str | None, right: str | None) -> str | None:
+    if not left:
+        return right
+    if not right or left == right:
+        return left
+    left_parts = left.split("-")
+    right_parts = right.split("-")
+    common: list[str] = []
+    for l_part, r_part in zip(left_parts, right_parts):
+        if l_part == r_part:
+            common.append(l_part)
+        else:
+            break
+    suffixes = [left_parts[-1], right_parts[-1]]
+    merged_suffix = " / ".join(list(OrderedDict.fromkeys(suffixes)))
+    if common:
+        return "-".join([*common, merged_suffix])
+    return merged_suffix
+
+
+def _merged_technical_title(family: str) -> str:
+    titles = {
+        "wireless_connection": "同类无线连接和防水消毒参数在多个设备章节重复出现",
+        "ultrasound_frequency": "同类超声频率参数在多个设备章节重复出现",
+        "compatibility": "兼容性参数存在定向或过窄风险",
+        "probe_diameter": "探头尺寸参数在多个设备章节中较为集中",
+    }
+    return titles.get(family, "同类技术参数在多个设备章节重复出现")
+
+
+def _representative_excerpt(source_text: str) -> str:
+    parts = [part.strip() for part in source_text.split("；") if part.strip()]
+    if not parts:
+        return source_text
+    normalized_parts = list(OrderedDict.fromkeys(parts))
+    snippets = [_clip_excerpt(part) for part in normalized_parts[:2]]
+    excerpt = "；".join(snippets)
+    if len(normalized_parts) > 2:
+        excerpt = f"{excerpt} 等{len(normalized_parts)}项"
+    return excerpt
+
+
+def _clip_excerpt(text: str, *, limit: int = 60) -> str:
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}..."
