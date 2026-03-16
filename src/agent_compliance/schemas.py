@@ -24,6 +24,10 @@ class Clause:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "Clause":
+        return cls(**payload)
+
 
 @dataclass
 class PageSpan:
@@ -34,6 +38,10 @@ class PageSpan:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "PageSpan":
+        return cls(**payload)
 
 
 @dataclass
@@ -59,6 +67,19 @@ class NormalizedDocument:
             "created_at": self.created_at,
         }
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "NormalizedDocument":
+        return cls(
+            source_path=payload["source_path"],
+            document_name=payload["document_name"],
+            file_hash=payload["file_hash"],
+            normalized_text_path=payload["normalized_text_path"],
+            clause_count=payload["clause_count"],
+            clauses=[Clause.from_dict(item) for item in payload["clauses"]],
+            page_map=[PageSpan.from_dict(item) for item in payload.get("page_map", [])],
+            created_at=payload.get("created_at", utc_now_iso()),
+        )
+
 
 @dataclass
 class RuleHit:
@@ -79,6 +100,10 @@ class RuleHit:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "RuleHit":
+        return cls(**payload)
 
 
 @dataclass
@@ -109,6 +134,10 @@ class Finding:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "Finding":
+        return cls(**payload)
+
 
 @dataclass
 class ReviewResult:
@@ -132,3 +161,16 @@ class ReviewResult:
             "items_for_human_review": self.items_for_human_review,
             "review_limitations": self.review_limitations,
         }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "ReviewResult":
+        return cls(
+            document_name=payload["document_name"],
+            review_scope=payload["review_scope"],
+            jurisdiction=payload.get("jurisdiction"),
+            review_timestamp=payload["review_timestamp"],
+            overall_risk_summary=payload["overall_risk_summary"],
+            findings=[Finding.from_dict(item) for item in payload["findings"]],
+            items_for_human_review=payload.get("items_for_human_review", []),
+            review_limitations=payload.get("review_limitations", []),
+        )

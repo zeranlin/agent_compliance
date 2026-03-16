@@ -65,6 +65,7 @@ tests/
 - `pipelines/review.py`: 第二阶段 finding 组装，已可消费本地规则映射和引用资料
 - `pipelines/review.py`: 已支持同区段、同类问题的相邻命中聚合，减少重复 findings
 - `pipelines/review.py`: 已可为聚合后的 finding 生成问题标题和统一改写建议
+- `cache/review_cache.py`: 已支持 review 结果缓存和缓存命中复用
 - `pipelines/render.py`: Markdown 和 JSON 落盘
 - `tests/test_smoke.py`: CLI 冒烟测试
 

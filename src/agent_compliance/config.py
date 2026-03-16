@@ -10,6 +10,7 @@ class AppPaths:
     generated_root: Path
     normalized_root: Path
     review_root: Path
+    cache_root: Path
 
 
 def detect_paths() -> AppPaths:
@@ -20,4 +21,5 @@ def detect_paths() -> AppPaths:
         generated_root=generated_root,
         normalized_root=generated_root / "normalized-documents",
         review_root=generated_root / "reviews",
+        cache_root=generated_root / "cache",
     )
