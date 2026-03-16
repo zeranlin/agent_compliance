@@ -44,6 +44,7 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
         )
         findings.append(finding)
 
+    findings = _drop_false_positive_findings(findings)
     findings = _refine_findings(findings)
     findings = _renumber_findings(findings)
 
@@ -250,6 +251,26 @@ def _impact_text(issue_type: str) -> str:
         "other": "可能扩张供应商义务范围或引入与项目不直接相关的履约成本。",
     }
     return mapping.get(issue_type, "可能影响公平竞争、履约可执行性或复核稳定性。")
+
+
+def _drop_false_positive_findings(findings: list[Finding]) -> list[Finding]:
+    filtered: list[Finding] = []
+    for finding in findings:
+        section_path = finding.section_path or ""
+        if (
+            finding.issue_type == "ambiguous_requirement"
+            and any(
+                token in section_path
+                for token in (
+                    "政府采购履约异常情况反馈表",
+                    "评审程序及评审方法",
+                    "通用条款",
+                )
+            )
+        ):
+            continue
+        filtered.append(finding)
+    return filtered
 
 
 def _legal_basis_text(references: list[ReferenceRecord]) -> str | None:

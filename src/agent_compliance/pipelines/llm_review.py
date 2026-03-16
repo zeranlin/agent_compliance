@@ -54,6 +54,7 @@ def apply_llm_review_tasks(
 
     client = OpenAICompatibleLLMClient(llm_config)
     added_findings: list[Finding] = []
+    added_findings.extend(_run_document_audit_task(document, review, client))
     added_findings.extend(_run_template_mismatch_task(document, review, client))
     added_findings.extend(_run_scoring_structure_task(document, review, client))
     added_findings.extend(_run_commercial_chain_task(document, review, client))
@@ -192,6 +193,64 @@ def _run_template_mismatch_task(
         allowed_clause_ids={clause.clause_id for clause in candidate_clauses},
         allowed_issue_types={"template_mismatch", "other"},
     )
+
+
+def _run_document_audit_task(
+    document: NormalizedDocument,
+    review: ReviewResult,
+    client: OpenAICompatibleLLMClient,
+) -> list[Finding]:
+    candidate_clauses = [
+        clause
+        for clause in document.clauses
+        if any(
+            token in clause.text
+            for token in (
+                "资质证书",
+                "登记证书",
+                "年均纳税额",
+                "经营业绩证明",
+                "单项合同金额不低于",
+                "生产日期必须是",
+                "专业工程师",
+                "采购人不承担任何责任",
+                "正常运行三个月后",
+                "复检费用",
+            )
+        )
+    ]
+    if not candidate_clauses:
+        return []
+    prompt = _build_task_prompt(
+        task_name="document_audit",
+        instruction=(
+            "你正在做全文辅助扫描。请只补充当前 review 里尚未稳定出现的显性风险，"
+            "重点关注资格条件中的行业错位资质和一般财务门槛、评分项中的内容错位、"
+            "技术要求中过窄的固定年份限制，以及付款、免责、复检费用等商务边界问题。"
+            "不要重复已有 findings，不要输出泛化结论。"
+        ),
+        document=document,
+        clauses=candidate_clauses[:24],
+        review=review,
+    )
+    payload = _safe_chat_json(client, prompt, default={"findings": []})
+    findings = _findings_from_payload(
+        document,
+        payload,
+        issue_type_default="other",
+        allowed_clause_ids={clause.clause_id for clause in candidate_clauses},
+        allowed_issue_types={
+            "excessive_supplier_qualification",
+            "duplicative_scoring_advantage",
+            "geographic_restriction",
+            "technical_justification_needed",
+            "one_sided_commercial_term",
+            "unclear_acceptance_standard",
+            "other",
+        },
+    )
+    findings.extend(_fallback_document_audit_findings(document, review, candidate_clauses))
+    return _dedupe_added_findings(findings)
 
 
 def _run_scoring_structure_task(
@@ -509,6 +568,73 @@ def _fallback_commercial_findings(
     return findings
 
 
+def _fallback_document_audit_findings(
+    document: NormalizedDocument,
+    review: ReviewResult,
+    clauses: list[Clause],
+) -> list[Finding]:
+    findings: list[Finding] = []
+    checks = [
+        (
+            ("有害生物防制", "SPCA"),
+            {"other", "excessive_supplier_qualification"},
+            "与采购标的领域不匹配的资格资质要求",
+            "资格条件中出现与柴油发电机组供货安装明显不匹配的资质或登记要求，疑似模板错贴或无关门槛。",
+            "建议删除与项目标的不相称的资质和登记要求，仅保留与供货安装履约直接相关的条件。",
+            "other",
+        ),
+        (
+            ("年均纳税额", "经营业绩证明", "单项合同金额不低于"),
+            {"excessive_supplier_qualification"},
+            "资格条件中设置一般财务或经营门槛",
+            "将一般纳税额、经营年限或单项合同金额直接设置为资格门槛，容易超出法定资格和必要履约能力范围。",
+            "建议删除一般财务与经营门槛，改为与项目规模和履约直接相关的必要能力要求。",
+            "excessive_supplier_qualification",
+        ),
+        (
+            ("生产日期必须是",),
+            {"technical_justification_needed"},
+            "核心设备生产日期限定过窄",
+            "将核心设备生产日期限定为固定自然年度，会在形式上压缩可选范围，应补充必要性和市场可得性说明。",
+            "建议将固定年份改为全新、未使用且符合交付要求的表述，或说明限定年份的必要性。",
+            "technical_justification_needed",
+        ),
+        (
+            ("专业工程师", "5 年以上"),
+            {"excessive_supplier_qualification"},
+            "安装人员来源和经验要求指定过细",
+            "要求现场人员必须来自制造商厂且具备多年同类经验，容易把供应链体系优势固化为准入条件。",
+            "建议改为具备相应专业背景和安装调试经验，不宜限定人员必须来自制造商厂。",
+            "excessive_supplier_qualification",
+        ),
+        (
+            ("采购人不承担任何责任", "正常运行三个月后", "复检费用"),
+            {"one_sided_commercial_term", "unclear_acceptance_standard"},
+            "付款和责任边界明显向中标人倾斜",
+            "尾款与试运行周期绑定、运输条款绝对免责、复检费用由中标人承担，容易造成责任和回款风险失衡。",
+            "建议明确试运行、验收和复检机制，并按过错来源合理划分责任与费用承担。",
+            "one_sided_commercial_term",
+        ),
+    ]
+    for tokens, issue_types, title, rationale, rewrite, issue_type in checks:
+        clause = next((item for item in clauses if any(token in item.text for token in tokens)), None)
+        if clause is None:
+            continue
+        if _review_has_issue(review, issue_types, {clause.clause_id}):
+            continue
+        findings.append(
+            _make_added_finding(
+                document,
+                clause,
+                issue_type=issue_type,
+                problem_title=title,
+                why_it_is_risky=rationale,
+                rewrite_suggestion=rewrite,
+            )
+        )
+    return findings
+
+
 def _render_rule_candidates(rule_candidates: list[dict[str, object]]) -> str:
     lines = ["# 规则候选", ""]
     if not rule_candidates:
@@ -550,6 +676,8 @@ def _document_domain_summary(document: NormalizedDocument) -> str:
         return "当前文件主标的更接近医用服装、病员服、床品等纺织类货物。"
     if any(token in text for token in ("内窥镜", "探头", "医用设备", "主机")):
         return "当前文件主标的更接近医疗设备类货物。"
+    if any(token in text for token in ("柴油发电机", "发电机组", "机电设备", "安装调试")):
+        return "当前文件主标的更接近柴油发电机组供货及安装类项目。"
     return "当前文件主标的需要结合候选条款进一步判断。"
 
 
@@ -580,7 +708,23 @@ def _suggested_merge_key(finding: Finding) -> str:
 
 def _keyword_candidates(text: str) -> list[str]:
     tokens = []
-    for token in ("芯片", "系统", "保洁", "清运", "实际需求为准", "样品", "认证", "同一份报告", "负全责", "最终验收结果"):
+    for token in (
+        "芯片",
+        "系统",
+        "保洁",
+        "清运",
+        "实际需求为准",
+        "样品",
+        "认证",
+        "同一份报告",
+        "负全责",
+        "最终验收结果",
+        "有害生物防制",
+        "SPCA",
+        "年均纳税额",
+        "生产日期必须是",
+        "专业工程师",
+    ):
         if token in text and token not in tokens:
             tokens.append(token)
     if tokens:

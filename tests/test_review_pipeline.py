@@ -256,6 +256,67 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("post_award_proof_substitution", issue_types)
         self.assertTrue(any("中标后补证" in finding.problem_title or "补证" in finding.problem_title for finding in review.findings))
 
+    def test_review_flags_qualification_domain_mismatch_and_general_thresholds(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "投标人须有A级有害生物防制（治）服务企业资质证书。",
+                "投标人须具备SPCA登记证书。",
+                "投标人须提供近三年年均纳税额不低于50万元的完税证明。",
+                "投标人须具备连续3年以上经营业绩证明。",
+                "投标人须具备单项合同金额不低于100万元的柴油发电机组供货业绩。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="qualx123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = build_review_result(document, run_rule_scan(document))
+
+        issue_types = {finding.issue_type for finding in review.findings}
+        self.assertIn("other", issue_types)
+        self.assertIn("excessive_supplier_qualification", issue_types)
+        self.assertTrue(any("有害生物防制" in finding.source_text or "SPCA" in finding.source_text for finding in review.findings))
+        self.assertTrue(any("年均纳税额" in finding.source_text or "单项合同金额" in finding.source_text for finding in review.findings))
+
+    def test_review_flags_scoring_content_mismatch_and_filters_non_scoring_noise(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "施工组织方案及安全保障措施",
+                "发电机组安装的工程案例。",
+                "投标人须提供具有CMA标识的第三方检测报告。",
+                "商务条款偏离情况",
+                "投标人从业人员超过100人的，得3分；资产总额达到3000万元以上的，得3分；成立时间满3年的得2分。",
+                "供应商认证情况",
+                "投标人具备有机产品认证证书。",
+                "制造商发电机组资质证书",
+                "投标人具备水运机电工程专项监理企业资质认定的，得5分。",
+                "第六章 政府采购履约异常情况反馈表",
+                "履约情况评价分为优、良、中、差四个等级。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="scorex123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = build_review_result(document, run_rule_scan(document))
+
+        self.assertTrue(any(finding.issue_type == "duplicative_scoring_advantage" for finding in review.findings))
+        self.assertTrue(any(finding.issue_type == "other" for finding in review.findings))
+        self.assertFalse(any("履约异常情况反馈表" in (finding.section_path or "") for finding in review.findings))
+
     def test_review_flags_sample_scoring_weight_and_commercial_risk_shift(self) -> None:
         text = "\n".join(
             [

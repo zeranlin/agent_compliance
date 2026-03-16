@@ -18,4 +18,4 @@ class RuleDefinition:
     merge_key: str | None = None
 
 
-RULE_SET_VERSION = "v0.2.0"
+RULE_SET_VERSION = "v0.3.0"

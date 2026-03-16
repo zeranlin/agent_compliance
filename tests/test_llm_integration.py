@@ -195,6 +195,7 @@ class LLMIntegrationTest(unittest.TestCase):
             timeout_seconds=60,
         )
         responses = [
+            '{"findings":[{"should_flag":true,"clause_id":"6.1","issue_type":"duplicative_scoring_advantage","problem_title":"评分项内容与采购标的不完全匹配","why_it_is_risky":"认证条款与当前采购标的直接履约关联不足。","rewrite_suggestion":"删除与标的不直接相关的评分内容。"}]}',
             '{"findings":[{"should_flag":true,"clause_id":"9.6","issue_type":"other","problem_title":"条款疑似跨领域模板错贴","why_it_is_risky":"芯片及系统对接与纺织类货物采购标的不一致。","rewrite_suggestion":"删除系统对接要求。"}]}',
             '{"findings":[{"should_flag":true,"clause_id":"5.1","issue_type":"ambiguous_requirement","problem_title":"样品评分主观性强且缺少量化锚点","why_it_is_risky":"样品评分使用优良中差主观分档，评委自由裁量空间过大。","rewrite_suggestion":"将样品评分拆成可核验指标。"}]}',
             '{"findings":[{"should_flag":true,"clause_id":"5.4","issue_type":"unclear_acceptance_standard","problem_title":"验收结果单方确定且需求边界开放","why_it_is_risky":"验收结果完全由采购人单方确认，且实际需求边界不清。","rewrite_suggestion":"明确复验和异议处理机制。"}]}',
@@ -203,9 +204,9 @@ class LLMIntegrationTest(unittest.TestCase):
         with patch("agent_compliance.pipelines.llm_review.OpenAICompatibleLLMClient.chat", side_effect=responses):
             result, artifacts = apply_llm_review_tasks(document, review, llm_config, output_stem="llmtest")
 
-        self.assertGreaterEqual(len(result.findings), 3)
-        self.assertGreaterEqual(len(artifacts.added_findings), 3)
-        self.assertGreaterEqual(len(artifacts.rule_candidates), 3)
+        self.assertGreaterEqual(len(result.findings), 4)
+        self.assertGreaterEqual(len(artifacts.added_findings), 4)
+        self.assertGreaterEqual(len(artifacts.rule_candidates), 4)
         self.assertTrue(Path(artifacts.candidate_json_path).exists())
         self.assertTrue(Path(artifacts.benchmark_json_path).exists())
         self.assertIn("当前结果已接入本地规则映射、引用资料检索和本地大模型边界判断", result.overall_risk_summary)

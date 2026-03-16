@@ -38,6 +38,20 @@
 - 先补“查点覆盖率”和“问题找全率”，暂不把分值精算作为主线
 - 先把各一级、二级审查查点盘清，再按查点矩阵逐项补规则、结构分析和局部模型判断
 - 每次增强都要能映射回具体查点，而不是只做零散表达优化
+- 不再按单个项目逐个补差异，而是优先升级审查主链路：规则初筛、全文辅助扫描、局部 LLM 判断和 finding 仲裁协同工作
+
+## 当前最新触发
+
+- [2026-03-16-szdl2025000495-comparison.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/reviews/2026-03-16-szdl2025000495-comparison.md)
+- [review-orchestrator-upgrade.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/review-orchestrator-upgrade.md)
+
+当前最新差距说明：
+- 代码在柴油发电机样本中仍明显漏掉资格异常、评分内容错位、技术固定年份和商务责任边界问题
+- 当前问题根源不再只是“规则太少”，而是候选生成不足、全文辅助扫描缺失、误报抑制不够和仲裁层偏弱
+
+当前最新阶段目标：
+- 先完成 `P0` 主链路升级
+- 让资格异常识别、评分内容错位识别和全文辅助扫描成为正式能力
 
 ## 阶段一：差异驱动的规则增强
 
@@ -110,10 +124,11 @@
 
 ## 当前最优先的下一步
 
-1. 继续收紧本地模型新增 finding 的降噪和归并  
-2. 将评分结构判断与商务链路判断转化为更稳定的规则候选  
-3. 扩充 `template_mismatch` 之外的新 benchmark 问题类型  
-4. 让 benchmark gate 进一步走向 case-by-case 自动回归
+1. 落地 `qualification_anomaly_engine`，稳定识别行业错位资质和一般财务门槛  
+2. 落地 `scoring_content_mismatch_engine`，稳定识别评分项内容错位  
+3. 接入 `document_audit_llm`，用全文辅助扫描补候选条款  
+4. 加强误报抑制，优先压掉履约反馈表和评审程序章节中的评分噪声  
+5. 再把模型新增问题稳定转入规则候选和 benchmark gate
 
 ## 风险提醒
 
