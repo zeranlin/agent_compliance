@@ -57,6 +57,7 @@
 ## 二、输出能力
 
 当前可以按正式审查意见结构输出结果，至少包括：
+- `问题标题`
 - `条款位置`
 - `原文摘录`
 - `问题类型`
@@ -95,6 +96,7 @@
 当前也支持一类机器可复用交付：
 - 产出符合 [finding-schema.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/finding-schema.md) 的结构化 JSON 结果
 - 支持后续复审直接复用 findings 缓存，而不是重复全量自由推理
+- 对已聚合的相邻命中，生成更接近正式审查意见写法的问题标题和统一改写建议
 
 ## 三、文档标准化与切分能力
 

@@ -33,6 +33,7 @@
 {
   "finding_id": "string",
   "document_name": "string",
+  "problem_title": "string",
   "page_hint": "string or null",
   "clause_id": "string",
   "source_section": "string",
@@ -64,6 +65,12 @@
 ### `document_name`
 
 填写来源文件名或来源文档标识，方便在多文件场景下快速回溯。
+
+### `problem_title`
+
+用于输出更适合人工复核和正式审查意见展示的问题标题，例如：
+- `评分中设置与履约弱相关的荣誉资质加分`
+- `技术参数组合存在定向或过窄风险`
 
 ### `page_hint`
 

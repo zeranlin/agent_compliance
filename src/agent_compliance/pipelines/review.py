@@ -21,6 +21,7 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
         finding = Finding(
             finding_id=f"F-{index:03d}",
             document_name=document.document_name,
+            problem_title=_problem_title(group, clause),
             page_hint=clause.page_hint if clause else None,
             clause_id=hit.matched_clause_id,
             source_section=clause.source_section if clause and clause.source_section else hit.source_section,
@@ -189,7 +190,29 @@ def _expand_rationale(group: HitGroup) -> str:
 
 def _rewrite_suggestion(group: HitGroup) -> str:
     hints = list(OrderedDict.fromkeys(hit.rewrite_hint for hit in group.hits if hit.rewrite_hint))
+    if len(group.hits) > 1 and hints:
+        return f"建议对同一风险点下的相邻条款统一改写：{'；'.join(hints[:2])}"
     return "；".join(hints[:2]) if hints else group.primary_hit.rewrite_hint
+
+
+def _problem_title(group: HitGroup, clause) -> str:
+    issue = group.primary_hit.issue_type_candidate
+    titles = {
+        "excessive_supplier_qualification": "资格条件设置与履约关联不足",
+        "irrelevant_certification_or_award": "评分中设置与履约弱相关的荣誉资质加分",
+        "duplicative_scoring_advantage": "评分中重复放大资格证明材料",
+        "ambiguous_requirement": "评分分档缺少明确量化锚点",
+        "narrow_technical_parameter": "技术参数组合存在定向或过窄风险",
+        "unclear_acceptance_standard": "验收标准或检测边界不清",
+        "one_sided_commercial_term": "商务条款存在单方风险转嫁",
+        "other": "条款内容可能存在模板残留或义务外扩",
+    }
+    base = titles.get(issue, "条款存在合规风险")
+    if len(group.hits) > 1:
+        if clause and clause.section_path and "评标信息" in clause.section_path:
+            return f"{base}（同一评分项已合并）"
+        return f"{base}（相邻条款已合并）"
+    return base
 
 
 def _impact_text(issue_type: str) -> str:

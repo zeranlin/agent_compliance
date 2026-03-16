@@ -85,6 +85,7 @@ class RuleHit:
 class Finding:
     finding_id: str
     document_name: str
+    problem_title: str
     page_hint: str | None
     clause_id: str
     source_section: str

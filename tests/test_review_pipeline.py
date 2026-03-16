@@ -118,6 +118,8 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertEqual(review.findings[0].text_line_end, 6)
         self.assertIn("守合同重信用企业", review.findings[0].source_text)
         self.assertIn("科技型中小企业", review.findings[0].source_text)
+        self.assertIn("同一评分项已合并", review.findings[0].problem_title)
+        self.assertIn("统一改写", review.findings[0].rewrite_suggestion)
 
 
 if __name__ == "__main__":

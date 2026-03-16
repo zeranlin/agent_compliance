@@ -39,7 +39,8 @@ def _render_markdown(review: ReviewResult) -> str:
     for finding in review.findings:
         lines.extend(
             [
-                f"### {finding.finding_id} {finding.issue_type}",
+                f"### {finding.finding_id} {finding.problem_title}",
+                f"- 问题类型：`{finding.issue_type}`",
                 f"- 条款编号：`{finding.clause_id}`",
                 f"- 位置：`{finding.section_path}`",
                 f"- 页码提示：`{finding.page_hint}`",
