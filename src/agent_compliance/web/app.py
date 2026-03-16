@@ -611,6 +611,34 @@ def _index_html() -> str:
       background: rgba(143, 103, 20, 0.12);
       color: var(--medium);
     }
+    .badge.origin-llm {
+      background: rgba(40, 88, 162, 0.12);
+      color: #2858a2;
+    }
+    .badge.origin-rule {
+      background: rgba(61, 120, 74, 0.12);
+      color: #2f6f42;
+    }
+    .issues-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .filter-chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .filter-chip.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: #fff5ea;
+    }
     .issue-title {
       font-size: 16px;
       font-weight: 700;
@@ -769,6 +797,7 @@ def _index_html() -> str:
 
     let latestDocument = null;
     let latestFindings = [];
+    let currentFindingFilter = 'all';
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -784,6 +813,7 @@ def _index_html() -> str:
         if (!response.ok) throw new Error(payload.error || '审查失败');
         latestDocument = payload.document;
         latestFindings = payload.review.findings;
+        currentFindingFilter = 'all';
         renderSummary(payload);
         renderIssues(payload.review.findings);
         renderDocument(payload.document);
@@ -819,12 +849,26 @@ def _index_html() -> str:
     }
 
     function renderIssues(findings) {
+      const filtered = applyFindingFilter(findings, currentFindingFilter);
+      const llmCount = findings.filter((item) => item.finding_origin === 'llm_added').length;
+      const ruleCount = findings.filter((item) => item.finding_origin !== 'llm_added').length;
       issuesHeadNode.innerHTML = `
         <h2>审查问题清单</h2>
-        <div class="meta">共 ${findings.length} 条问题。点击“定位正文”会跳到对应位置，点击“展开详情”可查看依据、判断和建议。</div>`;
-      issuesListNode.innerHTML = findings.length
-        ? findings.map((finding, index) => renderIssueItem(finding, index + 1)).join('')
+        <div class="meta">共 ${findings.length} 条问题，其中规则命中 ${ruleCount} 条、模型新增 ${llmCount} 条。点击“定位正文”会跳到对应位置，点击“展开详情”可查看依据、判断和建议。</div>
+        <div class="issues-filters">
+          <button type="button" class="filter-chip ${currentFindingFilter === 'all' ? 'active' : ''}" data-filter="all">全部</button>
+          <button type="button" class="filter-chip ${currentFindingFilter === 'rule' ? 'active' : ''}" data-filter="rule">规则</button>
+          <button type="button" class="filter-chip ${currentFindingFilter === 'llm' ? 'active' : ''}" data-filter="llm">模型新增</button>
+        </div>`;
+      issuesListNode.innerHTML = filtered.length
+        ? filtered.map((finding, index) => renderIssueItem(finding, index + 1)).join('')
         : '<div class="empty">当前没有识别出需要提示的问题。</div>';
+      issuesHeadNode.querySelectorAll('.filter-chip').forEach((node) => {
+        node.addEventListener('click', () => {
+          currentFindingFilter = node.dataset.filter;
+          renderIssues(latestFindings);
+        });
+      });
       issuesListNode.querySelectorAll('.issue-summary').forEach((node) => {
         node.addEventListener('click', () => {
           const card = node.closest('.issue-item');
@@ -850,12 +894,15 @@ def _index_html() -> str:
     }
 
     function renderIssueItem(finding, index) {
+      const originLabel = finding.finding_origin === 'llm_added' ? '模型新增' : '规则命中';
+      const originClass = finding.finding_origin === 'llm_added' ? 'origin-llm' : 'origin-rule';
       return `<article class="issue-item" data-finding-id="${escapeHtml(finding.finding_id)}">
         <button type="button" class="issue-summary">
           <div class="issue-top">
             <span>问题 ${index}</span>
             <span class="badge ${escapeHtml(finding.risk_level)}">${escapeHtml(riskLabel(finding.risk_level))}</span>
             <span class="badge">${escapeHtml(finding.issue_type)}</span>
+            <span class="badge ${originClass}">${originLabel}</span>
           </div>
           <div class="issue-title">${escapeHtml(finding.problem_title)}</div>
           <div class="issue-meta">位置：${escapeHtml(finding.section_path || finding.source_section || '待补充')} ｜ 行号：${escapeHtml(formatLineRange(finding.text_line_start, finding.text_line_end))}</div>
@@ -875,6 +922,10 @@ def _index_html() -> str:
           <div class="detail-pair">
             <div class="detail-label">页码提示</div>
             <div class="detail-value">${escapeHtml(finding.page_hint || '待人工翻页复核')}</div>
+          </div>
+          <div class="detail-pair">
+            <div class="detail-label">来源</div>
+            <div class="detail-value">${escapeHtml(originLabel)}</div>
           </div>
           <div class="detail-pair">
             <div class="detail-label">风险说明</div>
@@ -978,6 +1029,16 @@ def _index_html() -> str:
 
     function riskLabel(level) {
       return ({ high: '高风险', medium: '中风险', low: '低风险' }[level] || level || '未标注');
+    }
+
+    function applyFindingFilter(findings, filter) {
+      if (filter === 'llm') {
+        return findings.filter((item) => item.finding_origin === 'llm_added');
+      }
+      if (filter === 'rule') {
+        return findings.filter((item) => item.finding_origin !== 'llm_added');
+      }
+      return findings;
     }
 
     function escapeHtml(text) {

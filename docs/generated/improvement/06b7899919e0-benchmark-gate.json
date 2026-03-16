@@ -1,28 +1,52 @@
 {
-  "candidate_count": 4,
-  "covered_count": 4,
+  "candidate_count": 8,
+  "covered_count": 8,
   "needs_benchmark_count": 0,
   "results": [
     {
       "candidate_rule_id": "CAND-06B78999-001",
-      "issue_type": "ambiguous_requirement",
+      "issue_type": "other",
       "status": "covered",
       "reason": "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
     },
     {
       "candidate_rule_id": "CAND-06B78999-002",
-      "issue_type": "ambiguous_requirement",
+      "issue_type": "other",
       "status": "covered",
       "reason": "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
     },
     {
       "candidate_rule_id": "CAND-06B78999-003",
-      "issue_type": "scoring_structure_imbalance",
+      "issue_type": "other",
       "status": "covered",
       "reason": "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
     },
     {
       "candidate_rule_id": "CAND-06B78999-004",
+      "issue_type": "other",
+      "status": "covered",
+      "reason": "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
+    },
+    {
+      "candidate_rule_id": "CAND-06B78999-005",
+      "issue_type": "other",
+      "status": "covered",
+      "reason": "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
+    },
+    {
+      "candidate_rule_id": "CAND-06B78999-006",
+      "issue_type": "ambiguous_requirement",
+      "status": "covered",
+      "reason": "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
+    },
+    {
+      "candidate_rule_id": "CAND-06B78999-007",
+      "issue_type": "scoring_structure_imbalance",
+      "status": "covered",
+      "reason": "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
+    },
+    {
+      "candidate_rule_id": "CAND-06B78999-008",
       "issue_type": "unclear_acceptance_standard",
       "status": "covered",
       "reason": "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
