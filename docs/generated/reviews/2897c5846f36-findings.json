@@ -2,8 +2,8 @@
   "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
   "review_scope": "资格条件、评分规则、技术要求、商务及验收条款",
   "jurisdiction": "中国",
-  "review_timestamp": "2026-03-16T08:17:17+00:00",
-  "overall_risk_summary": "本地离线审查共形成 18 条去重 findings，其中高风险 6 条、中风险 12 条。 当前结果已接入本地规则映射和引用资料检索，可作为正式审查前的离线初筛与复审输入。",
+  "review_timestamp": "2026-03-16T08:19:14+00:00",
+  "overall_risk_summary": "本地离线审查共形成 19 条去重 findings，其中高风险 7 条、中风险 12 条。 当前结果已接入本地规则映射和引用资料检索，可作为正式审查前的离线初筛与复审输入。",
   "findings": [
     {
       "finding_id": "F-001",
@@ -80,6 +80,30 @@
     {
       "finding_id": "F-004",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
+      "problem_title": "评分结构中多类高分因素集中出现",
+      "page_hint": "第9页（估算） / 第10页（估算） / 第11页（估算）",
+      "clause_id": "（1）材质好，质量好，做工优秀，完全满足采购单位需求，评审为优加",
+      "source_section": "技术要求偏离情况",
+      "section_path": "评标信息-评分项-技术要求偏离情况",
+      "table_or_item_label": null,
+      "text_line_start": 370,
+      "text_line_end": 482,
+      "source_text": "（1）材质好，质量好，做工优秀，完全满足采购单位需求，评审为优加 80 分；（2）材质一般，质量一般，做工一般， 满足采购单位需求，评审为良加 50 分 等8项",
+      "issue_type": "scoring_structure_imbalance",
+      "risk_level": "high",
+      "severity_score": 3,
+      "confidence": "high",
+      "compliance_judgment": "likely_non_compliant",
+      "why_it_is_risky": "评分表中同时对样品、认证和业绩设置较高分值，容易使结构性高分集中在少数非价格因素上。当多类高分因素叠加时，个别供应商可凭既有资质和样品优势快速拉开总分，削弱综合评分的平衡性。",
+      "impact_on_competition_or_performance": "可能导致评分结构整体失衡，使少数高分因素对中标结果形成决定性影响。",
+      "legal_or_policy_basis": "主观评审客观化分析（中国政府采购网）；政府采购需求编制常见问题分析（中国政府采购网）；奖项荣誉信用等级评分问题（中国政府采购网）；同类项目业绩案例解析（中国政府采购网）；主观评审客观化分析（中国政府采购网）；综合评分法边界分析（中国政府采购网）",
+      "rewrite_suggestion": "建议对样品、认证、业绩等非价格因素重新分配权重，压降单类高分项，并将评分拆解为与履约直接相关的多个可核验指标。",
+      "needs_human_review": false,
+      "human_review_reason": null
+    },
+    {
+      "finding_id": "F-005",
+      "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "单一评分因素权重设置过高（同一评分项已合并）",
       "page_hint": "第10页（估算）",
       "clause_id": "1、投标人通过质量管理体系认证（认证范围需包含窗帘，",
@@ -102,7 +126,7 @@
       "human_review_reason": null
     },
     {
-      "finding_id": "F-005",
+      "finding_id": "F-006",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "评分证明材料允许中标后补证",
       "page_hint": "第10页（估算）",
@@ -126,7 +150,7 @@
       "human_review_reason": null
     },
     {
-      "finding_id": "F-006",
+      "finding_id": "F-007",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "单一评分因素权重设置过高",
       "page_hint": "第11页（估算）",
@@ -150,7 +174,7 @@
       "human_review_reason": null
     },
     {
-      "finding_id": "F-007",
+      "finding_id": "F-008",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "资格条件设置与履约关联不足",
       "page_hint": "第14页（估算）",
@@ -174,7 +198,7 @@
       "human_review_reason": null
     },
     {
-      "finding_id": "F-008",
+      "finding_id": "F-009",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "资格条件设置与履约关联不足（相邻条款已合并）",
       "page_hint": "第14页（估算）",
@@ -198,7 +222,7 @@
       "human_review_reason": null
     },
     {
-      "finding_id": "F-009",
+      "finding_id": "F-010",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "资格条件设置与履约关联不足",
       "page_hint": "第14页（估算）",
@@ -222,7 +246,7 @@
       "human_review_reason": null
     },
     {
-      "finding_id": "F-010",
+      "finding_id": "F-011",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "资格条件设置与履约关联不足",
       "page_hint": "第14页（估算）",
@@ -246,7 +270,7 @@
       "human_review_reason": null
     },
     {
-      "finding_id": "F-011",
+      "finding_id": "F-012",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "评分中设置与履约弱相关的荣誉资质加分",
       "page_hint": "第14页（估算）",
@@ -270,7 +294,7 @@
       "human_review_reason": null
     },
     {
-      "finding_id": "F-012",
+      "finding_id": "F-013",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "条款内容可能存在模板残留或义务外扩",
       "page_hint": "第31页（估算）",
@@ -294,7 +318,7 @@
       "human_review_reason": "需结合项目背景判断该义务是否属于模板残留或确有政策和业务必要性。"
     },
     {
-      "finding_id": "F-013",
+      "finding_id": "F-014",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "商务条款存在单方风险转嫁",
       "page_hint": "第32页（估算）",
@@ -318,7 +342,7 @@
       "human_review_reason": "需结合采购人内控、财政支付流程和合同谈判边界判断条款是否可保留。"
     },
     {
-      "finding_id": "F-014",
+      "finding_id": "F-015",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "商务条款存在单方风险转嫁（相邻条款已合并）",
       "page_hint": "第32页（估算） / 第33页（估算）",
@@ -342,7 +366,7 @@
       "human_review_reason": "需结合采购人内控、财政支付流程和合同谈判边界判断条款是否可保留。"
     },
     {
-      "finding_id": "F-015",
+      "finding_id": "F-016",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "验收标准或检测边界不清",
       "page_hint": "第32页（估算）",
@@ -366,7 +390,7 @@
       "human_review_reason": null
     },
     {
-      "finding_id": "F-016",
+      "finding_id": "F-017",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "付款条件与抽检终验深度绑定（相邻条款已合并）",
       "page_hint": "第33页（估算）",
@@ -390,7 +414,7 @@
       "human_review_reason": "需结合抽检机制、终验流程和财政支付安排判断付款节点设置是否合理。"
     },
     {
-      "finding_id": "F-017",
+      "finding_id": "F-018",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "付款条件与抽检终验深度绑定",
       "page_hint": "第35页（估算）",
@@ -414,7 +438,7 @@
       "human_review_reason": "需结合抽检机制、终验流程和财政支付安排判断付款节点设置是否合理。"
     },
     {
-      "finding_id": "F-018",
+      "finding_id": "F-019",
       "document_name": "[LGCG2025000102-A]龙岗区耳鼻咽喉医院迁址重建工程窗帘采购项目.docx",
       "problem_title": "评分分档缺少明确量化锚点",
       "page_hint": "第71页（估算）",
@@ -439,11 +463,11 @@
     }
   ],
   "items_for_human_review": [
-    "F-012：需结合项目背景判断该义务是否属于模板残留或确有政策和业务必要性。",
-    "F-013：需结合采购人内控、财政支付流程和合同谈判边界判断条款是否可保留。",
+    "F-013：需结合项目背景判断该义务是否属于模板残留或确有政策和业务必要性。",
     "F-014：需结合采购人内控、财政支付流程和合同谈判边界判断条款是否可保留。",
-    "F-016：需结合抽检机制、终验流程和财政支付安排判断付款节点设置是否合理。",
-    "F-017：需结合抽检机制、终验流程和财政支付安排判断付款节点设置是否合理。"
+    "F-015：需结合采购人内控、财政支付流程和合同谈判边界判断条款是否可保留。",
+    "F-017：需结合抽检机制、终验流程和财政支付安排判断付款节点设置是否合理。",
+    "F-018：需结合抽检机制、终验流程和财政支付安排判断付款节点设置是否合理。"
   ],
   "review_limitations": [
     "当前为第二阶段离线骨架，已接入本地引用资料检索，但尚未接入本地大模型做边界判断和改写增强。",

@@ -208,6 +208,7 @@ def _problem_title(group: HitGroup, clause) -> str:
         "irrelevant_certification_or_award": "评分中设置与履约弱相关的荣誉资质加分",
         "duplicative_scoring_advantage": "评分中重复放大资格证明材料",
         "excessive_scoring_weight": "单一评分因素权重设置过高",
+        "scoring_structure_imbalance": "评分结构中多类高分因素集中出现",
         "post_award_proof_substitution": "评分证明材料允许中标后补证",
         "ambiguous_requirement": "评分分档缺少明确量化锚点",
         "narrow_technical_parameter": "技术参数组合存在定向或过窄风险",
@@ -230,6 +231,7 @@ def _impact_text(issue_type: str) -> str:
         "irrelevant_certification_or_award": "可能把综合声誉或企业形象替代为履约能力评价，形成不合理倾斜。",
         "duplicative_scoring_advantage": "可能把本应止于资格审查的因素重复放大为评分优势。",
         "excessive_scoring_weight": "可能导致评分结构明显失衡，过度放大单一因素对中标结果的影响。",
+        "scoring_structure_imbalance": "可能导致评分表整体失衡，使少数高分因素对中标结果形成决定性影响。",
         "post_award_proof_substitution": "可能导致评分依据失真，破坏投标文件在截止时点的可比性。",
         "ambiguous_requirement": "可能导致评审尺度不一致、自由裁量过大和复核难度上升。",
         "narrow_technical_parameter": "可能压缩可竞争的品牌和型号范围，并提高投诉风险。",
@@ -311,6 +313,7 @@ def _refine_findings(findings: list[Finding]) -> list[Finding]:
         refined.append(finding)
 
     refined = _merge_sample_scoring_findings(refined)
+    refined = _add_scoring_structure_finding(refined)
     refined = _merge_similar_technical_findings(refined)
     refined = _merge_nearby_liability_findings(refined)
     for finding in refined:
@@ -382,6 +385,79 @@ def _merge_similar_technical_findings(findings: list[Finding]) -> list[Finding]:
     merged.extend(tech_groups.values())
     merged.sort(key=lambda item: (item.text_line_start, item.issue_type, item.section_path or ""))
     return merged
+
+
+def _add_scoring_structure_finding(findings: list[Finding]) -> list[Finding]:
+    weighted = [finding for finding in findings if _is_scoring_weight_candidate(finding)]
+    categories = OrderedDict()
+    for finding in weighted:
+        category = _scoring_weight_category(finding)
+        if category is None or category in categories:
+            continue
+        categories[category] = finding
+
+    if len(categories) < 3:
+        return findings
+
+    category_list = list(categories.keys())
+    source_findings = list(categories.values())
+    aggregate = Finding(
+        finding_id="F-000",
+        document_name=source_findings[0].document_name,
+        problem_title="评分结构中多类高分因素集中出现",
+        page_hint=_merge_optional_text((finding.page_hint for finding in source_findings), separator=" / "),
+        clause_id=source_findings[0].clause_id,
+        source_section=source_findings[0].source_section,
+        section_path=source_findings[0].section_path,
+        table_or_item_label=source_findings[0].table_or_item_label,
+        text_line_start=min(finding.text_line_start for finding in source_findings),
+        text_line_end=max(finding.text_line_end for finding in source_findings),
+        source_text="；".join(finding.source_text for finding in source_findings if finding.source_text),
+        issue_type="scoring_structure_imbalance",
+        risk_level="high",
+        severity_score=3,
+        confidence="high",
+        compliance_judgment="likely_non_compliant",
+        why_it_is_risky=(
+            f"评分表中同时对{_format_category_list(category_list)}设置较高分值，容易使结构性高分集中在少数非价格因素上。"
+            "当多类高分因素叠加时，个别供应商可凭既有资质和样品优势快速拉开总分，削弱综合评分的平衡性。"
+        ),
+        impact_on_competition_or_performance="可能导致评分结构整体失衡，使少数高分因素对中标结果形成决定性影响。",
+        legal_or_policy_basis=_merge_optional_text(
+            (finding.legal_or_policy_basis for finding in source_findings if finding.legal_or_policy_basis)
+        ),
+        rewrite_suggestion="建议对样品、认证、业绩等非价格因素重新分配权重，压降单类高分项，并将评分拆解为与履约直接相关的多个可核验指标。",
+        needs_human_review=False,
+        human_review_reason=None,
+    )
+    return [*findings, aggregate]
+
+
+def _is_scoring_weight_candidate(finding: Finding) -> bool:
+    if finding.issue_type != "excessive_scoring_weight":
+        return False
+    section_path = finding.section_path or ""
+    source_section = finding.source_section or ""
+    return "评标信息" in section_path or "评分" in source_section
+
+
+def _scoring_weight_category(finding: Finding) -> str | None:
+    text = f"{finding.problem_title} {finding.source_text} {finding.clause_id}"
+    if any(marker in text for marker in ("样品", "评审为优加", "评审为良加", "评审为中加")):
+        return "样品"
+    if any(marker in text for marker in ("体系认证", "质量管理体系认证", "职业健康安全管理体系认证", "环境管理体系认证")):
+        return "认证"
+    if "业绩" in text:
+        return "业绩"
+    return None
+
+
+def _format_category_list(categories: list[str]) -> str:
+    if len(categories) == 1:
+        return categories[0]
+    if len(categories) == 2:
+        return f"{categories[0]}和{categories[1]}"
+    return "、".join(categories[:-1]) + f"和{categories[-1]}"
 
 
 def _merge_sample_scoring_findings(findings: list[Finding]) -> list[Finding]:

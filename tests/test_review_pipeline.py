@@ -293,6 +293,35 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertEqual(sum(1 for finding in review.findings if "样品评分主观性强且分值过高" in finding.problem_title), 1)
         self.assertEqual(sum(1 for finding in review.findings if finding.issue_type == "one_sided_commercial_term"), 1)
 
+    def test_review_adds_scoring_structure_imbalance_when_multiple_high_weight_categories_exist(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "样品",
+                "（1）材质好，质量好，做工优秀，完全满足采购单位需求，评审为优加 80 分；",
+                "认证证书",
+                "投标人通过质量管理体系认证得33分；投标人通过职业健康安全管理体系认证得33分；投标人通过环境管理体系认证得34分。",
+                "供应商同类业绩",
+                "投标人自2021年1月1日至本项目投标截止承接过窗帘采购项目业绩的，每提供1个得20分，最高得100分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        structure_findings = [finding for finding in review.findings if finding.issue_type == "scoring_structure_imbalance"]
+        self.assertEqual(len(structure_findings), 1)
+        self.assertIn("样品、认证和业绩", structure_findings[0].why_it_is_risky)
+        self.assertEqual(structure_findings[0].risk_level, "high")
+
 
 if __name__ == "__main__":
     unittest.main()
