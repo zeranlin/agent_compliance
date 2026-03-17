@@ -1634,6 +1634,67 @@ def _review_next_html() -> str:
       background:
         linear-gradient(180deg, var(--doc-bg-top) 0%, var(--doc-bg-bottom) 100%);
     }
+    .document-tools {
+      display: grid;
+      gap: 10px;
+      padding: 12px 16px 0;
+      background: linear-gradient(180deg, rgba(231, 242, 255, 0.92), rgba(231, 242, 255, 0.72));
+      border-bottom: 1px solid rgba(167, 191, 222, 0.5);
+    }
+    .document-toolbar-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .document-toolbar-row .toolbar {
+      gap: 8px;
+    }
+    .document-mode-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .chapter-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding-bottom: 4px;
+    }
+    .chapter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(126, 153, 186, 0.34);
+      background: rgba(255, 255, 255, 0.78);
+      color: #315476;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .chapter-chip.is-active {
+      background: #e2eefc;
+      border-color: rgba(73, 120, 175, 0.44);
+      color: #274c72;
+      box-shadow: inset 0 0 0 1px rgba(73, 120, 175, 0.14);
+    }
+    .chapter-chip .count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: rgba(73, 120, 175, 0.12);
+      color: inherit;
+      font-size: 11px;
+      font-weight: 800;
+    }
     .detail-head {
       border-bottom: 1px solid var(--line);
       display: flex;
@@ -1719,13 +1780,29 @@ def _review_next_html() -> str:
       overflow: auto;
       background: linear-gradient(180deg, var(--doc-bg-top) 0%, var(--doc-bg-bottom) 100%);
       scroll-behavior: smooth;
+      padding-top: 12px;
     }
     .doc-block {
-      border: 1px solid var(--doc-border);
-      background: rgba(255,255,255,0.92);
+      border: 1px solid rgba(186, 205, 228, 0.24);
+      background: rgba(255,255,255,0.9);
       border-radius: 10px;
-      padding: 10px 12px;
-      margin-bottom: 8px;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+    }
+    .doc-block.chapter-anchor {
+      margin-top: 8px;
+      border-color: rgba(124, 168, 223, 0.3);
+      background: rgba(232, 243, 255, 0.92);
+    }
+    .chapter-anchor-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #36587c;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
     }
     .doc-block p {
       margin: 0;
@@ -1903,6 +1980,16 @@ def _review_next_html() -> str:
       </aside>
 
       <section class="panel detail-pane">
+        <div class="document-tools">
+          <div class="document-toolbar-row">
+            <div class="toolbar" id="document-mode-toolbar">
+              <button type="button" data-document-mode="context" class="is-active">附近上下文</button>
+              <button type="button" data-document-mode="chapter">查看整章</button>
+            </div>
+            <div id="document-mode-note" class="document-mode-note">默认只看当前问题附近上下文，方便快速定位和比对。</div>
+          </div>
+          <div id="chapter-nav" class="chapter-nav"></div>
+        </div>
         <div id="document-pane" class="document-pane">
           <div class="empty">上传文件后，这里会渲染文档原文，并跟随问题卡片定位到对应位置。</div>
         </div>
@@ -1938,6 +2025,8 @@ def _review_next_html() -> str:
       viewMode: 'main',
       riskMode: 'all',
       sectionMode: 'all',
+      documentMode: 'context',
+      activeChapterKey: 'all',
     };
 
     const form = document.getElementById('review-form');
@@ -1951,6 +2040,8 @@ def _review_next_html() -> str:
     const detailGridNode = document.getElementById('detail-grid');
     const documentPaneNode = document.getElementById('document-pane');
     const learningCardNode = document.getElementById('learning-card');
+    const chapterNavNode = document.getElementById('chapter-nav');
+    const documentModeNoteNode = document.getElementById('document-mode-note');
 
     form.addEventListener('submit', submitReview);
     openSourceBtn.addEventListener('click', openSourceFile);
@@ -1964,6 +2055,13 @@ def _review_next_html() -> str:
       node.addEventListener('click', () => {
         state.riskMode = node.dataset.risk;
         render();
+      });
+    });
+    document.getElementById('document-mode-toolbar').querySelectorAll('[data-document-mode]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.documentMode = node.dataset.documentMode;
+        renderDocumentModeState();
+        renderDocument();
       });
     });
     const sectionToolbarNode = document.createElement('div');
@@ -1998,6 +2096,8 @@ def _review_next_html() -> str:
         state.payload = payload;
         state.findings = payload.review.findings || [];
         state.selectedFindingId = null;
+        state.activeChapterKey = 'all';
+        state.documentMode = 'context';
         openSourceBtn.disabled = !payload.document || !payload.document.source_path;
         runMetaNode.textContent = `已完成审查：${payload.review.document_name}；缓存 ${payload.cache.used ? '命中' : '未命中'}；本地模型 ${payload.llm.enabled ? '已启用' : '未启用'}。`;
         render();
@@ -2035,6 +2135,16 @@ def _review_next_html() -> str:
       document.querySelectorAll('#section-toolbar [data-section]').forEach((node) => {
         node.classList.toggle('is-active', node.dataset.section === state.sectionMode);
       });
+      renderDocumentModeState();
+    }
+
+    function renderDocumentModeState() {
+      document.querySelectorAll('#document-mode-toolbar [data-document-mode]').forEach((node) => {
+        node.classList.toggle('is-active', node.dataset.documentMode === state.documentMode);
+      });
+      documentModeNoteNode.textContent = state.documentMode === 'chapter'
+        ? '当前显示选中问题所在章节的连续正文，适合整体判断本章条款结构。'
+        : '当前仅显示选中问题附近上下文，适合快速定位和核对风险点。';
     }
 
     function renderSummary() {
@@ -2112,6 +2222,8 @@ def _review_next_html() -> str:
       issueListNode.querySelectorAll('.issue-card').forEach((node) => {
         node.addEventListener('click', () => {
           state.selectedFindingId = node.dataset.findingId;
+          const finding = state.findings.find((item) => item.finding_id === state.selectedFindingId);
+          state.activeChapterKey = finding ? chapterKeyForFinding(finding) : state.activeChapterKey;
           renderIssues();
           renderDetail();
           renderDocument();
@@ -2199,20 +2311,144 @@ def _review_next_html() -> str:
       const documentPayload = state.payload ? state.payload.document : null;
       if (!documentPayload) {
         documentPaneNode.innerHTML = '<div class="empty">上传文件后，这里会渲染文档原文，并联动定位。</div>';
+        chapterNavNode.innerHTML = '';
         return;
       }
       const finding = state.filtered.find((item) => item.finding_id === state.selectedFindingId) || state.findings.find((item) => item.finding_id === state.selectedFindingId);
       const start = finding ? finding.text_line_start : -1;
       const end = finding ? finding.text_line_end : -1;
-      const blocks = documentPayload.blocks && documentPayload.blocks.length ? documentPayload.blocks : [{ title: '文档正文', lines: documentPayload.lines || [] }];
-      documentPaneNode.innerHTML = blocks.map((block, index) => renderBlock(block, index, start, end)).join('');
+      const chapterKey = finding ? chapterKeyForFinding(finding) : 'all';
+      if (!state.activeChapterKey || state.activeChapterKey === 'all') {
+        state.activeChapterKey = chapterKey;
+      }
+      const chapterNav = buildChapterNav(documentPayload, state.findings);
+      chapterNavNode.innerHTML = chapterNav.map((item) => `
+        <button type="button" class="chapter-chip ${item.key === effectiveChapterKey(chapterKey) ? 'is-active' : ''}" data-chapter-key="${escapeHtml(item.key)}">
+          <span>${escapeHtml(item.label)}</span>
+          <span class="count">${escapeHtml(String(item.count))}</span>
+        </button>
+      `).join('');
+      chapterNavNode.querySelectorAll('[data-chapter-key]').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeChapterKey = node.dataset.chapterKey;
+          state.documentMode = 'chapter';
+          renderDocumentModeState();
+          renderDocument();
+        });
+      });
+      const blocks = buildVisibleBlocks(documentPayload, finding, effectiveChapterKey(chapterKey));
+      documentPaneNode.innerHTML = blocks.length
+        ? blocks.map((block, index) => renderBlock(block, index, start, end)).join('')
+        : '<div class="empty">当前章节暂无可展示正文。</div>';
       if (finding) {
         const node = documentPaneNode.querySelector('[data-target-block="true"]') || documentPaneNode.querySelector('.doc-line.target');
         if (node) scrollDocumentPaneToNode(node);
       }
     }
 
+    function effectiveChapterKey(findingChapterKey) {
+      if (state.documentMode === 'context') return findingChapterKey || state.activeChapterKey || 'all';
+      return state.activeChapterKey && state.activeChapterKey !== 'all'
+        ? state.activeChapterKey
+        : (findingChapterKey || 'all');
+    }
+
+    function buildVisibleBlocks(documentPayload, finding, chapterKey) {
+      const hasBlocks = documentPayload.blocks && documentPayload.blocks.length;
+      const blocks = hasBlocks ? documentPayload.blocks.slice() : [{ kind: 'text', lines: documentPayload.lines || [], start_line: 1, end_line: documentPayload.line_count || 1 }];
+      const normalizedBlocks = addChapterAnchors(blocks);
+      if (!finding) return normalizedBlocks;
+      if (state.documentMode === 'chapter') {
+        return normalizedBlocks.filter((block) => block.chapter_key === chapterKey || block.kind === 'chapter-anchor' && block.chapter_key === chapterKey);
+      }
+      const targetIndex = normalizedBlocks.findIndex((block) => block.kind !== 'chapter-anchor' && blockIntersectsFinding(block, finding));
+      if (targetIndex === -1) return normalizedBlocks.filter((block) => block.chapter_key === chapterKey);
+      const keep = new Set();
+      for (let index = Math.max(0, targetIndex - 3); index <= Math.min(normalizedBlocks.length - 1, targetIndex + 3); index += 1) {
+        keep.add(index);
+      }
+      for (let index = targetIndex; index >= 0; index -= 1) {
+        if (normalizedBlocks[index].kind === 'chapter-anchor') {
+          keep.add(index);
+          break;
+        }
+      }
+      return normalizedBlocks.filter((_, index) => keep.has(index));
+    }
+
+    function addChapterAnchors(blocks) {
+      const output = [];
+      let currentChapterKey = 'all';
+      let currentChapterLabel = '文档正文';
+      blocks.forEach((block, index) => {
+        const detected = detectChapterForBlock(block, index);
+        if (detected && detected.key !== currentChapterKey) {
+          currentChapterKey = detected.key;
+          currentChapterLabel = detected.label;
+          output.push({
+            kind: 'chapter-anchor',
+            block_id: `anchor-${index}-${detected.key}`,
+            chapter_key: currentChapterKey,
+            chapter_label: currentChapterLabel,
+            start_line: block.start_line,
+            end_line: block.start_line,
+            html: `<div class="chapter-anchor-title">${escapeHtml(currentChapterLabel)}</div>`,
+          });
+        }
+        output.push({ ...block, chapter_key: currentChapterKey, chapter_label: currentChapterLabel });
+      });
+      return output;
+    }
+
+    function detectChapterForBlock(block, index) {
+      const text = blockText(block);
+      if (/第一章\s*招标公告|申请人的资格要求/.test(text)) return { key: 'qualification', label: '资格条件' };
+      if (/评标信息|评审因素|评分项|样品|产品设计方案|技术保障措施/.test(text)) return { key: 'scoring', label: '评分标准' };
+      if (/第三章\s*用户需求书-四、技术要求|四、技术要求|技术要求/.test(text)) return { key: 'technical', label: '技术要求' };
+      if (/五、商务要求|履约担保|付款方式|安装、调试和验收|关于违约|关于安全/.test(text)) return { key: 'commercial', label: '商务与验收' };
+      if (index === 0) return { key: 'qualification', label: '资格条件' };
+      return null;
+    }
+
+    function buildChapterNav(documentPayload, findings) {
+      const counts = { qualification: 0, scoring: 0, technical: 0, commercial: 0 };
+      findings.forEach((finding) => {
+        counts[chapterKeyForFinding(finding)] = (counts[chapterKeyForFinding(finding)] || 0) + 1;
+      });
+      const detected = new Set(['qualification', 'scoring', 'technical', 'commercial']);
+      return Array.from(detected).map((key) => ({
+        key,
+        label: sectionLabelFromKey(key),
+        count: counts[key] || 0,
+      }));
+    }
+
+    function chapterKeyForFinding(finding) {
+      return classifySection(finding);
+    }
+
+    function blockIntersectsFinding(block, finding) {
+      const start = Number(block.start_line || 0);
+      const end = Number(block.end_line || start);
+      return start <= finding.text_line_end && end >= finding.text_line_start;
+    }
+
+    function blockText(block) {
+      if (block.html) {
+        return String(block.html).replace(/<[^>]+>/g, ' ');
+      }
+      const blockLines = block.lines || [];
+      return blockLines.map((line) => line.text || '').join(' ');
+    }
+
     function renderBlock(block, index, start, end) {
+      if (block.kind === 'chapter-anchor') {
+        return `
+          <section class="doc-block chapter-anchor" data-target-block="false" data-start-line="${block.start_line}" data-end-line="${block.end_line}">
+            ${block.html}
+          </section>
+        `;
+      }
       const blockLines = block.lines || [];
       const blockStart = Number(block.start_line || (blockLines[0] ? blockLines[0].number : 0));
       const blockEnd = Number(block.end_line || (blockLines.length ? blockLines[blockLines.length - 1].number : 0));
