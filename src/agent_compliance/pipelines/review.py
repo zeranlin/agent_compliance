@@ -580,7 +580,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             ("演示", "原型", "PPT", "视频", "签到", "60分钟", "60 分钟", "得 0 分"),
         )
 
-    if "项目负责人和团队评分过度堆叠证书奖项和项目经验" in title:
+    if "人员与团队评分混入错位证书并过度堆叠条件" in title:
         return finding.issue_type in {
             "scoring_content_mismatch",
             "irrelevant_certification_or_award",
@@ -600,6 +600,16 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             ("注册资本", "营业收入", "净利润", "标准", "标准委员会"),
         )
 
+    if "评分项名称、内容和评分证据之间不一致" in title:
+        return finding.issue_type in {
+            "scoring_content_mismatch",
+            "excessive_supplier_qualification",
+            "irrelevant_certification_or_award",
+        } and _text_contains_any(
+            finding,
+            ("工程案例", "CMA", "检测报告", "资产总额", "营业收入", "净利润", "标准委员会", "科技型中小企业", "ISO20000"),
+        )
+
     if "付款条件与履约评价结果深度绑定且评价标准开放" in title:
         return finding.issue_type in {
             "one_sided_commercial_term",
@@ -608,6 +618,18 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
         } and _text_contains_any(
             finding,
             ("履约评价", "阶段款", "支付", "评价标准", "评价指标", "解除合同", "扣款"),
+        )
+
+    if "履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担" in title:
+        return finding.issue_type in {
+            "one_sided_commercial_term",
+            "payment_acceptance_linkage",
+            "unclear_acceptance_standard",
+            "geographic_restriction",
+            "other",
+        } and _text_contains_any(
+            finding,
+            ("付款", "验收", "送检", "检测", "专家评审", "24小时", "到场", "解除合同", "实际需求", "质保期", "售后服务保证金"),
         )
 
     if "资格条件中存在与标的域不匹配的资质或登记要求" in title:
@@ -1004,14 +1026,17 @@ def _technical_justification_rationale(family: str) -> str:
         "fixed_year_requirement": (
             "相邻技术条款对生产日期、供货时点或新旧程度提出较窄要求，建议作为一个风险点统筹论证。"
             "此类要求不当然违规，但采购人应补充限定固定年份或固定时点的设备性能必要性、市场可得性以及是否存在更中性的替代表达。"
+            "建议论证方向包括：固定时点与性能稳定性是否存在直接关联、市场上可供竞争的型号范围、以及改为“全新未使用且满足交付要求”后是否仍能实现采购目标。"
         ),
         "safety_environment": (
             "相邻技术条款涉及安全、环保、院感或有害物质限制等同类要求，建议作为一个风险点统筹论证。"
             "此类要求不当然违规，但应补充适用场景、标准依据、风险控制目标和市场可竞争性说明。"
+            "建议论证方向包括：该类指标是否由法律法规或临床场景直接要求、拟控制的具体风险是什么、以及是否可以用更通用的国家或行业标准替代表达。"
         ),
         "testing_proof": (
             "相邻技术条款对第三方检测、证明形式或报告时段提出同类要求，建议作为一个风险点统筹论证。"
             "此类要求不当然违规，但应补充为什么必须限定证明机构、报告时段和证明形式，以及是否存在更中性的验证方式。"
+            "建议论证方向包括：证明时点与当前供货质量的关联、是否必须限定本地或特定资质机构、以及投标阶段能否接受等效证明材料。"
         ),
     }
     return mapping.get(
@@ -1022,9 +1047,9 @@ def _technical_justification_rationale(family: str) -> str:
 
 def _technical_justification_rewrite(family: str) -> str:
     mapping = {
-        "fixed_year_requirement": "建议将固定年份改为全新、未使用且满足交付和质保要求的表述；如确需限定时点，应同步说明性能、安全和运维上的必要性。",
-        "safety_environment": "建议按适用标准、场景风险和验收目标统一说明保留范围，能以国家或行业标准表达的尽量避免叠加细化指标。",
-        "testing_proof": "建议统一说明检测证明的适用范围、报告时段和证明机构要求，优先采用国家或行业通用标准和更中性的验证方式。",
+        "fixed_year_requirement": "建议将固定年份改为全新、未使用且满足交付和质保要求的表述；如确需限定时点，应同步补充性能、安全和运维上的必要性说明，并说明不存在更中性替代表达的原因。",
+        "safety_environment": "建议按适用标准、场景风险和验收目标统一说明保留范围，能以国家或行业标准表达的尽量避免叠加细化指标；如保留更高要求，应同步写明对应风险控制目标。",
+        "testing_proof": "建议统一说明检测证明的适用范围、报告时段和证明机构要求，优先采用国家或行业通用标准和更中性的验证方式；如确需限定，应说明限定理由和可接受的等效证明边界。",
     }
     return mapping.get(
         family,
@@ -1050,11 +1075,13 @@ def _add_scoring_structure_findings(document: NormalizedDocument, findings: list
     findings = _add_demo_mechanism_theme_finding(document, findings)
     findings = _add_personnel_scoring_theme_finding(document, findings)
     findings = _add_business_strength_theme_finding(document, findings)
+    findings = _add_scoring_semantic_consistency_theme_finding(document, findings)
     return findings
 
 
 def _add_commercial_chain_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
     findings = _add_payment_evaluation_chain_finding(document, findings)
+    findings = _add_commercial_lifecycle_theme_finding(document, findings)
     return findings
 
 
@@ -1593,37 +1620,54 @@ def _add_demo_mechanism_theme_finding(document: NormalizedDocument, findings: li
 def _add_personnel_scoring_theme_finding(
     document: NormalizedDocument, findings: list[Finding]
 ) -> list[Finding]:
-    if any("项目负责人和团队评分过度堆叠证书奖项和项目经验" in finding.problem_title for finding in findings):
+    if any("人员与团队评分混入错位证书并过度堆叠条件" in finding.problem_title for finding in findings):
         return findings
     clauses = [
         clause
         for clause in document.clauses
         if _is_scoring_clause(clause)
-        and any(marker in (clause.section_path or "") for marker in ("拟安排项目负责人情况", "拟安排的项目团队成员情况"))
+        and any(
+            marker in f"{clause.section_path or ''} {clause.text}"
+            for marker in ("拟安排项目负责人情况", "拟安排的项目团队成员情况", "项目负责人", "团队成员")
+        )
         and any(
             marker in clause.text
-            for marker in ("学位", "职称证书", "CISE", "人工智能应用工程师", "大数据应用工程师", "奖项", "荣誉", "项目经验", "特种设备")
+            for marker in (
+                "学位",
+                "博士",
+                "硕士",
+                "职称证书",
+                "高级工程师",
+                "CISE",
+                "PMP",
+                "人工智能应用工程师",
+                "大数据应用工程师",
+                "奖项",
+                "荣誉",
+                "项目经验",
+                "特种设备",
+            )
         )
     ]
-    if len(clauses) < 4:
+    if len(clauses) < 2:
         return findings
     findings.append(
         _build_theme_finding(
             document=document,
             clauses=clauses,
             issue_type="scoring_content_mismatch",
-            problem_title="项目负责人和团队评分过度堆叠证书奖项和项目经验",
+            problem_title="人员与团队评分混入错位证书并过度堆叠条件",
             risk_level="high",
             severity_score=3,
             confidence="high",
             compliance_judgment="likely_non_compliant",
             why_it_is_risky=(
-                "项目负责人和团队评分同时叠加学历、职称、注册证书、奖项、项目经验等多类因素，且包含与平台建设服务不完全匹配的证书内容。"
-                "这类设计容易把人员包装能力放大为决定性竞争优势。"
+                "人员与团队评分同时叠加学历、职称、注册证书、奖项、项目经验等多类因素，并混入与岗位职责或采购标的不完全匹配的证书内容。"
+                "这类设计容易把团队包装能力放大为决定性竞争优势，弱化对实际岗位能力和项目履约分工的评价。"
             ),
             impact_on_competition_or_performance="可能显著抬高投标门槛，并使评分重心从团队履约能力转向证书与荣誉堆叠。",
             legal_or_policy_basis="政府采购需求管理办法（财政部）；奖项荣誉信用等级评分问题（中国政府采购网）",
-            rewrite_suggestion="建议将人员评分压缩为少量与平台建设、信息安全和项目实施直接相关的核心能力项，删除明显错位证书和高分值奖项设计。",
+            rewrite_suggestion="建议将人员评分压缩为少量与岗位职责、项目实施和成果交付直接相关的核心能力项，删除明显错位证书以及高分值学历、职称、奖项堆叠设计。",
             needs_human_review=True,
             human_review_reason="需结合项目实际岗位需求判断各类证书、奖项和项目经验是否与平台建设履约目标直接相关。",
             finding_origin="analyzer",
@@ -1664,6 +1708,63 @@ def _add_business_strength_theme_finding(
             rewrite_suggestion="建议删除一般财务能力、企业规模和标准研究参与类评分，仅保留与项目履约直接相关的实施保障因素。",
             needs_human_review=False,
             human_review_reason=None,
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_scoring_semantic_consistency_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("评分项名称、内容和评分证据之间不一致" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(
+            marker in clause.text
+            for marker in (
+                "工程案例",
+                "CMA",
+                "检测报告",
+                "从业人员",
+                "资产总额",
+                "成立时间",
+                "营业收入",
+                "净利润",
+                "标准委员会",
+                "科技型中小企业",
+                "高空清洗",
+                "CCRC",
+                "ISO20000",
+                "有机产品认证",
+                "生活垃圾分类",
+            )
+        )
+    ]
+    if len(clauses) < 2:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="scoring_content_mismatch",
+            problem_title="评分项名称、内容和评分证据之间不一致",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "多个评分项在名称上分别对应方案、商务、认证或团队能力，但实际计分内容却混入工程案例、检测证明形式、一般经营指标、企业称号或跨领域证书。"
+                "当评分项名称、评分内容和评分证据之间不一致时，评审重心会明显偏离项目实际履约能力。"
+            ),
+            impact_on_competition_or_performance="可能把与评分主题无关或与标的不匹配的材料转化为得分点，扭曲整张评分表的评审逻辑。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；综合评分法边界分析（中国政府采购网）",
+            rewrite_suggestion="建议逐项校正评分项名称、评分内容与评分证据之间的对应关系，删除与评分主题不一致的案例、证明形式、企业经营指标和跨领域证书。",
+            needs_human_review=True,
+            human_review_reason="需结合每个评分项的评审目标、取证方式和项目履约重点判断其名称、内容和证据是否保持一致。",
             finding_origin="analyzer",
         )
     )
@@ -1715,6 +1816,60 @@ def _add_payment_evaluation_chain_finding(
             rewrite_suggestion="建议预先固定履约评价标准、付款节点、整改条件和解除合同条件，不宜将付款比例和解除后果交由履约过程中单方开放式设定。",
             needs_human_review=True,
             human_review_reason="需结合合同文本、财政支付流程和履约考核制度判断付款与评价绑定的范围、比例和标准是否合理。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_commercial_lifecycle_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if any(
+            marker in clause.text
+            for marker in (
+                "付款",
+                "支付",
+                "验收",
+                "送检",
+                "检测",
+                "专家评审",
+                "24小时",
+                "到场",
+                "解除合同",
+                "实际需求为准",
+                "售后服务保证金",
+                "复检",
+                "最终验收结果",
+            )
+        )
+    ]
+    if len(clauses) < 4:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="one_sided_commercial_term",
+            problem_title="履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "商务与验收条款将付款节点、验收判定、送检复检费用、售后到场时限、解除合同和兜底责任串联在一起，形成对供应商整体偏重的履约后果链。"
+                "当这些后果叠加出现时，供应商不仅承担较高的履约成本，也难以预判回款、整改和责任边界。"
+            ),
+            impact_on_competition_or_performance="可能提高报价不确定性和合同争议风险，并通过整体偏重的履约后果抬高投标门槛。",
+            legal_or_policy_basis="中华人民共和国民法典；政府采购需求管理办法（财政部）；履约验收规范要点（中国政府采购网）",
+            rewrite_suggestion="建议按交付、验收、复检、售后和责任承担分别设置条款，删除开放式义务和单方后果，确保回款条件、到场要求和责任边界可预见、可执行。",
+            needs_human_review=True,
+            human_review_reason="需结合财政支付节点、验收流程和售后服务模式判断全链路责任配置是否超过项目实际履约需要。",
             finding_origin="analyzer",
         )
     )
@@ -2275,6 +2430,31 @@ def _apply_theme_splitter_and_summarizer(findings: list[Finding]) -> list[Findin
             finding.rewrite_suggestion = (
                 "建议将药品供货、自动化设备配套和信息化接口义务分开表述；与当前采购标的不直接相关的系统运维、清洁和扩展服务内容应删除或单列采购。"
             )
+        if finding.problem_title == "评分项名称、内容和评分证据之间不一致":
+            finding.why_it_is_risky = (
+                "评分项名称、评分内容和评分证据之间没有保持一致，导致方案项、商务项或认证项中混入无关案例、证明形式和企业属性。"
+                "这会让评审重心从履约能力偏向材料包装和取证形式。"
+            )
+            finding.rewrite_suggestion = (
+                "建议按评分项的评审目的逐项校核计分内容和取证材料，删除与该评分主题不一致的案例、证书、经营指标和证明形式。"
+            )
+        if finding.problem_title == "人员与团队评分混入错位证书并过度堆叠条件":
+            finding.rewrite_suggestion = (
+                "建议围绕岗位职责、实施分工和交付成果压缩人员评分项，删除与岗位履约无直接关系的学历、奖项和错位证书堆叠，仅保留少量关键岗位能力证明。"
+            )
+        if finding.problem_title == "现场演示分值过高且签到要求形成额外门槛":
+            finding.why_it_is_risky = (
+                "演示章节同时放大系统成熟度、展示形式和短时到场条件的影响，容易把现场组织能力和既有产品形态转化为决定性竞争优势。"
+                "这类设计通常弱于对功能理解、实施方案和可验证演示要点的客观评审。"
+            )
+            finding.rewrite_suggestion = (
+                "建议将演示改为围绕关键业务流程和功能点的限定性验证，显著压降分值并删除短时签到、到场迟到即零分等附加门槛。"
+            )
+        if finding.problem_title == "履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担":
+            finding.rewrite_suggestion = (
+                "建议将付款、验收、复检、售后到场和责任承担拆分为独立条款，分别明确触发条件、责任来源和费用边界，不宜通过开放式义务和叠加式后果整体压重供应商责任。"
+            )
+        finding.source_text = _select_representative_evidence(finding)
     return findings
 
 
@@ -2286,6 +2466,77 @@ def _build_theme_excerpt(source_text: str | None) -> str:
     if len(unique_parts) <= 2:
         return "；".join(unique_parts)
     return "；".join(unique_parts[:2]) + f" 等{len(unique_parts)}项"
+
+
+def _select_representative_evidence(finding: Finding) -> str:
+    source_text = finding.source_text or ""
+    if not source_text:
+        return ""
+    parts = [part.strip() for part in source_text.split("；") if part.strip()]
+    if len(parts) <= 1:
+        return _clip_excerpt(source_text, limit=78)
+
+    title = finding.problem_title
+    keywords = _evidence_keywords_for_title(title)
+    ranked = sorted(
+        OrderedDict.fromkeys(parts),
+        key=lambda part: (
+            -sum(1 for keyword in keywords if keyword in part),
+            len(part),
+        ),
+    )
+    selected = [_clip_excerpt(part, limit=72) for part in ranked[:2]]
+    excerpt = "；".join(selected)
+    if len(ranked) > 2:
+        excerpt = f"{excerpt} 等{len(ranked)}项"
+    return excerpt
+
+
+def _evidence_keywords_for_title(title: str) -> tuple[str, ...]:
+    mapping = {
+        "评分项名称、内容和评分证据之间不一致": (
+            "工程案例",
+            "检测报告",
+            "CMA",
+            "资产总额",
+            "营业收入",
+            "净利润",
+            "标准委员会",
+            "科技型中小企业",
+            "ISO20000",
+        ),
+        "人员与团队评分混入错位证书并过度堆叠条件": (
+            "学位",
+            "博士",
+            "硕士",
+            "职称证书",
+            "高级工程师",
+            "奖项",
+            "项目经验",
+            "特种设备",
+        ),
+        "现场演示分值过高且签到要求形成额外门槛": (
+            "可运行展示系统",
+            "系统原型",
+            "PPT",
+            "视频",
+            "60分钟",
+            "签到",
+            "得 0 分",
+        ),
+        "履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担": (
+            "付款",
+            "验收",
+            "送检",
+            "检测",
+            "专家评审",
+            "24小时",
+            "到场",
+            "解除合同",
+            "售后服务保证金",
+        ),
+    }
+    return mapping.get(title, ())
 
 
 def _is_scoring_weight_candidate(finding: Finding) -> bool:

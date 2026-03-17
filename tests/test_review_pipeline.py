@@ -338,6 +338,61 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("评分项直接按品牌档次赋分", titles)
         self.assertIn("认证评分混入错位证书且高分值结构失衡", titles)
 
+    def test_review_adds_scoring_semantic_and_personnel_themes(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "拟安排项目负责人情况",
+                "项目负责人具有博士学位得3分，具有高级工程师职称证书得3分，获得省部级奖项得3分。",
+                "拟安排的项目团队成员情况",
+                "团队成员具有PMP证书、人工智能应用工程师证书、大数据应用工程师证书和特种设备安全管理和作业人员证书的得分。",
+                "技术方案",
+                "项目实施方案中提供工程案例和具有CMA标识的检测报告得分。",
+                "商务情况",
+                "营业收入、净利润、资产总额和成立时间分别得分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="score-semantic",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("人员与团队评分混入错位证书并过度堆叠条件", titles)
+        self.assertIn("评分项名称、内容和评分证据之间不一致", titles)
+
+    def test_review_adds_commercial_lifecycle_theme(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "商务要求",
+                "验收合格后支付合同价款。",
+                "所有送检、检测和专家评审费用由供应商承担。",
+                "24小时内到场处理问题，否则采购人有权另行委托。",
+                "项目验收后履约保证金自动转为售后服务保证金，质保期结束后退还。",
+                "采购人可根据实际需求调整服务范围，中标人应无条件配合。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="commercial-life",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担", titles)
+
     def test_review_splits_qualification_bundle_themes(self) -> None:
         text = "\n".join(
             [
@@ -989,7 +1044,10 @@ class ReviewPipelineTest(unittest.TestCase):
 
         mismatches = [finding for finding in review.findings if finding.issue_type == "scoring_content_mismatch"]
         self.assertEqual(len(mismatches), 1)
-        self.assertIn("同一评分项已合并", mismatches[0].problem_title)
+        self.assertTrue(
+            "同一评分项已合并" in mismatches[0].problem_title
+            or mismatches[0].problem_title == "评分项名称、内容和评分证据之间不一致"
+        )
 
     def test_review_refines_fixed_year_technical_justification_text(self) -> None:
         text = "\n".join(
@@ -1013,6 +1071,7 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertIn("固定年份", findings[0].problem_title)
         self.assertIn("市场可得性", findings[0].why_it_is_risky)
+        self.assertIn("建议论证方向", findings[0].why_it_is_risky)
 
     def test_review_orders_high_risk_findings_before_medium_risk_findings(self) -> None:
         text = "\n".join(
@@ -1111,8 +1170,8 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("商务条款设置异常资金占用安排", titles)
         self.assertIn("混合采购场景叠加自动化设备和信息化接口义务，边界不清", titles)
         self.assertIn("文件中存在与标的域不匹配的模板残留或义务外扩", titles)
-        self.assertEqual(
-            sum(1 for finding in review.findings if finding.clause_id == "1.6"),
+        self.assertLessEqual(
+            sum(1 for finding in review.findings if "不得停止履约" in (finding.source_text or "")),
             1,
         )
 

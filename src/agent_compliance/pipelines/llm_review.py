@@ -25,20 +25,26 @@ class LLMReviewArtifacts:
     added_findings: list[Finding]
     rule_candidates: list[dict[str, object]]
     benchmark_gate: dict[str, object]
+    difference_learning: dict[str, object] | None = None
     candidate_json_path: str | None = None
     candidate_md_path: str | None = None
     benchmark_json_path: str | None = None
     benchmark_md_path: str | None = None
+    difference_json_path: str | None = None
+    difference_md_path: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
             "added_findings": [finding.to_dict() for finding in self.added_findings],
             "rule_candidates": self.rule_candidates,
             "benchmark_gate": self.benchmark_gate,
+            "difference_learning": self.difference_learning,
             "candidate_json_path": self.candidate_json_path,
             "candidate_md_path": self.candidate_md_path,
             "benchmark_json_path": self.benchmark_json_path,
             "benchmark_md_path": self.benchmark_md_path,
+            "difference_json_path": self.difference_json_path,
+            "difference_md_path": self.difference_md_path,
         }
 
 
@@ -49,7 +55,12 @@ def apply_llm_review_tasks(
     *,
     output_stem: str,
 ) -> tuple[ReviewResult, LLMReviewArtifacts]:
-    empty = LLMReviewArtifacts(added_findings=[], rule_candidates=[], benchmark_gate={"status": "llm_disabled"})
+    empty = LLMReviewArtifacts(
+        added_findings=[],
+        rule_candidates=[],
+        benchmark_gate={"status": "llm_disabled"},
+        difference_learning={"status": "llm_disabled"},
+    )
     if not llm_config.enabled:
         return review, empty
 
@@ -63,10 +74,12 @@ def apply_llm_review_tasks(
     merged_review = _merge_added_findings(review, added_findings)
     rule_candidates = generate_rule_candidates(document, merged_review, added_findings)
     benchmark_gate = run_benchmark_gate(rule_candidates)
-    artifacts = write_improvement_outputs(output_stem, rule_candidates, benchmark_gate)
+    difference_learning = build_difference_learning_loop(document, merged_review, added_findings, rule_candidates, benchmark_gate)
+    artifacts = write_improvement_outputs(output_stem, rule_candidates, benchmark_gate, difference_learning)
     artifacts.added_findings = added_findings
     artifacts.rule_candidates = rule_candidates
     artifacts.benchmark_gate = benchmark_gate
+    artifacts.difference_learning = difference_learning
     return merged_review, artifacts
 
 
@@ -137,6 +150,7 @@ def write_improvement_outputs(
     output_stem: str,
     rule_candidates: list[dict[str, object]],
     benchmark_gate: dict[str, object],
+    difference_learning: dict[str, object],
 ) -> LLMReviewArtifacts:
     paths = detect_paths()
     paths.improvement_root.mkdir(parents=True, exist_ok=True)
@@ -144,21 +158,135 @@ def write_improvement_outputs(
     candidate_md_path = paths.improvement_root / f"{output_stem}-rule-candidates.md"
     benchmark_json_path = paths.improvement_root / f"{output_stem}-benchmark-gate.json"
     benchmark_md_path = paths.improvement_root / f"{output_stem}-benchmark-gate.md"
+    difference_json_path = paths.improvement_root / f"{output_stem}-difference-learning.json"
+    difference_md_path = paths.improvement_root / f"{output_stem}-difference-learning.md"
 
     candidate_json_path.write_text(json.dumps(rule_candidates, ensure_ascii=False, indent=2), encoding="utf-8")
     candidate_md_path.write_text(_render_rule_candidates(rule_candidates), encoding="utf-8")
     benchmark_json_path.write_text(json.dumps(benchmark_gate, ensure_ascii=False, indent=2), encoding="utf-8")
     benchmark_md_path.write_text(_render_benchmark_gate(benchmark_gate), encoding="utf-8")
+    difference_json_path.write_text(json.dumps(difference_learning, ensure_ascii=False, indent=2), encoding="utf-8")
+    difference_md_path.write_text(_render_difference_learning(difference_learning), encoding="utf-8")
 
     return LLMReviewArtifacts(
         added_findings=[],
         rule_candidates=[],
         benchmark_gate={},
+        difference_learning={},
         candidate_json_path=str(candidate_json_path),
         candidate_md_path=str(candidate_md_path),
         benchmark_json_path=str(benchmark_json_path),
         benchmark_md_path=str(benchmark_md_path),
+        difference_json_path=str(difference_json_path),
+        difference_md_path=str(difference_md_path),
     )
+
+
+def build_difference_learning_loop(
+    document: NormalizedDocument,
+    review: ReviewResult,
+    added_findings: list[Finding],
+    rule_candidates: list[dict[str, object]],
+    benchmark_gate: dict[str, object],
+) -> dict[str, object]:
+    issue_types = sorted({finding.issue_type for finding in added_findings})
+    rule_suggestions: list[dict[str, object]] = []
+    analyzer_suggestions: list[dict[str, object]] = []
+    prompt_suggestions: list[dict[str, object]] = []
+    benchmark_suggestions: list[dict[str, object]] = []
+
+    if "scoring_content_mismatch" in issue_types:
+        rule_suggestions.append(
+            {
+                "target": "rules/scoring_rules.py",
+                "suggestion": "补充评分项名称、评分内容、评分证据不一致的触发模式，优先识别方案项混入案例、商务项混入财务指标、认证项混入跨领域证书。",
+            }
+        )
+        analyzer_suggestions.append(
+            {
+                "target": "scoring_semantic_consistency_engine",
+                "suggestion": "继续把评分主题不一致的问题收束成更少的章节级主问题，并保留最具代表性的错位证据。",
+            }
+        )
+        prompt_suggestions.append(
+            {
+                "target": "llm_review.scoring_structure",
+                "suggestion": "要求模型优先判断评分项名称、评分证据和计分目的是否一致，而不是只描述单个错位材料。",
+            }
+        )
+    if "template_mismatch" in issue_types or any("混合采购场景" in finding.problem_title for finding in added_findings):
+        analyzer_suggestions.append(
+            {
+                "target": "mixed_scope_boundary_engine/domain_match_engine",
+                "suggestion": "增强药品、设备、信息化接口等混合采购边界判断，区分合理配套设备要求与超出药品采购边界的附加义务。",
+            }
+        )
+        prompt_suggestions.append(
+            {
+                "target": "llm_review.document_audit",
+                "suggestion": "要求模型先识别主标的，再判断自动化设备、系统接口和扩展服务是否超出当前采购边界。",
+            }
+        )
+    if any(
+        finding.issue_type in {"one_sided_commercial_term", "payment_acceptance_linkage", "unclear_acceptance_standard"}
+        for finding in added_findings
+    ):
+        rule_suggestions.append(
+            {
+                "target": "rules/contract_rules.py",
+                "suggestion": "补充履约保证金转售后保证金、长期资金占用、验收费转嫁和开放式需求边界等商务链路规则。",
+            }
+        )
+        analyzer_suggestions.append(
+            {
+                "target": "commercial_lifecycle_analyzer",
+                "suggestion": "从付款、验收、复检、售后和责任承担全链路识别整体偏重供应商承担的后果链。",
+            }
+        )
+    uncovered = [item for item in benchmark_gate.get("results", []) if item.get("status") != "covered"]
+    for item in uncovered[:5]:
+        benchmark_suggestions.append(
+            {
+                "target": item.get("issue_type"),
+                "suggestion": f"补充 {item.get('issue_type')} 类型 benchmark，用于验证新规则和主题分析器是否真的提升召回。",
+            }
+        )
+    if not benchmark_suggestions and issue_types:
+        for issue_type in issue_types[:4]:
+            benchmark_suggestions.append(
+                {
+                    "target": issue_type,
+                    "suggestion": f"为 {issue_type} 类型补充更贴近真实采购文件的差异样本和期望主问题。",
+                }
+            )
+
+    evidence = [
+        {
+            "problem_title": finding.problem_title,
+            "issue_type": finding.issue_type,
+            "source_text": finding.source_text,
+            "section_path": finding.section_path,
+            "finding_origin": finding.finding_origin,
+        }
+        for finding in added_findings[:8]
+    ]
+
+    return {
+        "status": "ok",
+        "document_name": document.document_name,
+        "file_hash": document.file_hash,
+        "added_issue_types": issue_types,
+        "added_finding_count": len(added_findings),
+        "rule_candidate_count": len(rule_candidates),
+        "review_theme_count": len([finding for finding in review.findings if finding.finding_origin == "analyzer"]),
+        "suggestions": {
+            "rules": rule_suggestions,
+            "theme_analyzers": analyzer_suggestions,
+            "llm_prompts": prompt_suggestions,
+            "benchmark": benchmark_suggestions,
+        },
+        "evidence": evidence,
+    }
 
 
 def _run_template_mismatch_task(
@@ -674,6 +802,41 @@ def _render_benchmark_gate(benchmark_gate: dict[str, object]) -> str:
         lines.append(
             f"- {item['candidate_rule_id']} | `{item['issue_type']}` | `{item['status']}` | {item['reason']}"
         )
+    return "\n".join(lines)
+
+
+def _render_difference_learning(difference_learning: dict[str, object]) -> str:
+    lines = ["# Difference Learning Loop", ""]
+    lines.append(f"- status: `{difference_learning.get('status')}`")
+    lines.append(f"- document_name: `{difference_learning.get('document_name')}`")
+    lines.append(f"- added_finding_count: `{difference_learning.get('added_finding_count', 0)}`")
+    lines.append(f"- rule_candidate_count: `{difference_learning.get('rule_candidate_count', 0)}`")
+    lines.append("")
+    lines.append("## Suggestions")
+    lines.append("")
+    suggestions = difference_learning.get("suggestions", {})
+    for section_label, items in (
+        ("rules", suggestions.get("rules", [])),
+        ("theme_analyzers", suggestions.get("theme_analyzers", [])),
+        ("llm_prompts", suggestions.get("llm_prompts", [])),
+        ("benchmark", suggestions.get("benchmark", [])),
+    ):
+        lines.append(f"### {section_label}")
+        if not items:
+            lines.append("- 当前无新增建议。")
+        else:
+            for item in items:
+                lines.append(f"- `{item.get('target')}`: {item.get('suggestion')}")
+        lines.append("")
+    lines.append("## Evidence")
+    evidence = difference_learning.get("evidence", [])
+    if not evidence:
+        lines.append("- 当前无新增证据。")
+    else:
+        for item in evidence:
+            lines.append(
+                f"- `{item.get('issue_type')}` | {item.get('problem_title')} | {item.get('source_text')}"
+            )
     return "\n".join(lines)
 
 

@@ -253,6 +253,12 @@
 - 全文辅助扫描兜底已开始从“补零散句子”升级为“补资格章节主问题、评分章节主问题、商务章节主问题”，即使本地模型未返回，也能优先补出更接近人工式审查的章节级风险概括
 - 当前已开始落地 `document_level_judgment_engine`，可根据高风险和中风险 findings 的章节分布与主题问题，先形成整份文件的主风险画像，并把主导章节与突出主问题写入 `overall_risk_summary`
 - 当前已开始落地 `mixed_scope_boundary_engine`，可在“药品 + 自动化设备 + 信息化接口”等混合采购场景下，把系统对接、自动化配套和附加服务义务收束为单独主问题，而不再只作为普通模板残留碎点出现
+- 当前已开始落地 `scoring_semantic_consistency_engine`，可判断评分项名称、评分内容、评分证据和评分目的是否一致，并把方案项混入工程案例、商务项混入一般经营指标、认证项混入跨领域证书等问题收束为单独主问题。
+- 当前已开始落地 `personnel_certificate_mismatch_engine`，可进一步识别团队评分中学历、职称、奖项、项目经验和错位证书的堆叠设计。
+- 当前已继续增强 `demo_mechanism_engine`，除演示高分值外，还可把可运行系统、原型/PPT 差异、签到时限和现场组织门槛收束为演示机制主问题。
+- 当前已开始落地 `commercial_lifecycle_analyzer`，可从付款、验收、复检、售后到场和责任承担全链路识别整体偏重供应商承担的履约后果链。
+- 当前已开始落地 `evidence_selector`，可按主问题语义优先挑选更像人工会引用的代表性摘录，而不再仅按前两段原文截取。
+- 当前已开始落地 `difference_learning_loop`，启用本地模型后会额外生成结构化学习建议，分别反哺规则、主题分析器、LLM prompt 和 benchmark。
 - 本地模型新增的边界问题会自动沉淀成 `rule_candidate`，而不是只停留在一次性 finding 中
 - 每个 `rule_candidate` 至少携带：`candidate_rule_id`、`issue_type`、`source_text`、`trigger_keywords`、`suggested_merge_key`、`false_positive_risk`
 - `eval` 入口已可直接显示最新 benchmark gate 结果，帮助判断候选问题类型是否已被 benchmark 覆盖
@@ -290,6 +296,7 @@
   - 验收程序、复检与最终确认边界不清
   - 评分和技术要求中存在行业适配性不足的错位内容
 - 当前已继续增强 `finding_arbiter`，可进一步压掉正文与投标文件格式附件中的语义重复问题，并优先保留更适合改稿的正文主问题和代表性证据。
+- 当前已继续增强 `technical_necessity_explainer`，在“需论证”类技术问题中开始明确补充必要性、市场可得性、适用标准和建议论证方向，而不只停留在笼统提醒。
 
 相关设计：
 - [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)

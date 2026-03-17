@@ -209,6 +209,9 @@ class LLMIntegrationTest(unittest.TestCase):
         self.assertGreaterEqual(len(artifacts.rule_candidates), 4)
         self.assertTrue(Path(artifacts.candidate_json_path).exists())
         self.assertTrue(Path(artifacts.benchmark_json_path).exists())
+        self.assertTrue(Path(artifacts.difference_json_path).exists())
+        self.assertTrue(Path(artifacts.difference_md_path).exists())
+        self.assertEqual(artifacts.difference_learning["status"], "ok")
         self.assertIn("当前结果已接入本地规则映射、引用资料检索和本地大模型边界判断", result.overall_risk_summary)
 
         for path in [
@@ -216,6 +219,8 @@ class LLMIntegrationTest(unittest.TestCase):
             artifacts.candidate_md_path,
             artifacts.benchmark_json_path,
             artifacts.benchmark_md_path,
+            artifacts.difference_json_path,
+            artifacts.difference_md_path,
         ]:
             Path(path).unlink(missing_ok=True)
 
@@ -319,6 +324,8 @@ class LLMIntegrationTest(unittest.TestCase):
             artifacts.candidate_md_path,
             artifacts.benchmark_json_path,
             artifacts.benchmark_md_path,
+            artifacts.difference_json_path,
+            artifacts.difference_md_path,
         ]:
             Path(path).unlink(missing_ok=True)
 
@@ -375,6 +382,8 @@ class LLMIntegrationTest(unittest.TestCase):
             artifacts.candidate_md_path,
             artifacts.benchmark_json_path,
             artifacts.benchmark_md_path,
+            artifacts.difference_json_path,
+            artifacts.difference_md_path,
         ]:
             Path(path).unlink(missing_ok=True)
 
@@ -436,6 +445,8 @@ class LLMIntegrationTest(unittest.TestCase):
             artifacts.candidate_md_path,
             artifacts.benchmark_json_path,
             artifacts.benchmark_md_path,
+            artifacts.difference_json_path,
+            artifacts.difference_md_path,
         ]:
             Path(path).unlink(missing_ok=True)
 
