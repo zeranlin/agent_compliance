@@ -1530,6 +1530,7 @@ def _review_next_html() -> str:
       top: 0;
       z-index: 1;
       backdrop-filter: blur(8px);
+      cursor: pointer;
     }
     .issue-group-title {
       display: grid;
@@ -1556,6 +1557,40 @@ def _review_next_html() -> str:
       font-size: 12px;
       font-weight: 800;
       flex-shrink: 0;
+    }
+    .issue-group-metrics {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .issue-group-high {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: rgba(163, 61, 34, 0.12);
+      color: var(--high);
+      font-size: 12px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .issue-group-chevron {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      min-width: 16px;
+      text-align: center;
+    }
+    .issue-group-body {
+      display: grid;
+      gap: 10px;
+    }
+    .issue-group.is-collapsed .issue-group-body {
+      display: none;
     }
     .issue-card {
       border-radius: 16px;
@@ -2106,6 +2141,7 @@ def _review_next_html() -> str:
       viewMode: 'main',
       riskMode: 'all',
       sectionMode: 'all',
+      collapsedIssueSections: {},
       documentMode: 'context',
       activeChapterKey: 'all',
       contextExpanded: false,
@@ -2188,6 +2224,7 @@ def _review_next_html() -> str:
         state.findings = payload.review.findings || [];
         state.selectedFindingId = null;
         state.activeChapterKey = 'all';
+        state.collapsedIssueSections = {};
         state.documentMode = 'context';
         state.contextExpanded = false;
         openSourceBtn.disabled = !payload.document || !payload.document.source_path;
@@ -2320,10 +2357,20 @@ def _review_next_html() -> str:
           state.selectedFindingId = node.dataset.findingId;
           const finding = state.findings.find((item) => item.finding_id === state.selectedFindingId);
           state.activeChapterKey = finding ? chapterKeyForFinding(finding) : state.activeChapterKey;
+          if (finding) {
+            state.collapsedIssueSections[chapterKeyForFinding(finding)] = false;
+          }
           state.contextExpanded = false;
           renderIssues();
           renderDetail();
           renderDocument();
+        });
+      });
+      issueListNode.querySelectorAll('[data-group-key]').forEach((node) => {
+        node.addEventListener('click', () => {
+          const key = node.dataset.groupKey;
+          state.collapsedIssueSections[key] = !isIssueGroupCollapsed(key);
+          renderIssues();
         });
       });
     }
@@ -2338,19 +2385,37 @@ def _review_next_html() -> str:
       });
       return Array.from(grouped.entries())
         .filter(([, items]) => items.length)
-        .map(([section, items]) => `
-          <section class="issue-group">
-            <div class="issue-group-head">
+        .map(([section, items]) => {
+          const highCount = items.filter((item) => item.risk_level === 'high').length;
+          const collapsed = isIssueGroupCollapsed(section);
+          return `
+          <section class="issue-group ${collapsed ? 'is-collapsed' : ''}">
+            <div class="issue-group-head" data-group-key="${escapeHtml(section)}">
               <div class="issue-group-title">
                 <strong>${escapeHtml(sectionLabelFromKey(section))}</strong>
                 <span>${escapeHtml(sectionDescription(section))}</span>
               </div>
-              <span class="issue-group-count">${escapeHtml(String(items.length))}</span>
+              <div class="issue-group-metrics">
+                <span class="issue-group-high">高 ${escapeHtml(String(highCount))}</span>
+                <span class="issue-group-count">${escapeHtml(String(items.length))}</span>
+                <span class="issue-group-chevron">${collapsed ? '展开' : '收起'}</span>
+              </div>
             </div>
-            ${items.map(renderIssueCard).join('')}
+            <div class="issue-group-body">
+              ${items.map(renderIssueCard).join('')}
+            </div>
           </section>
-        `)
+        `;})
         .join('');
+    }
+
+    function isIssueGroupCollapsed(sectionKey) {
+      if (Object.prototype.hasOwnProperty.call(state.collapsedIssueSections, sectionKey)) {
+        return Boolean(state.collapsedIssueSections[sectionKey]);
+      }
+      const selected = state.findings.find((item) => item.finding_id === state.selectedFindingId);
+      if (!selected) return sectionKey !== 'qualification';
+      return chapterKeyForFinding(selected) !== sectionKey;
     }
 
     function renderIssueCard(finding) {
