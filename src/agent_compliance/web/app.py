@@ -1513,6 +1513,50 @@ def _review_next_html() -> str:
       overflow: auto;
       padding-right: 4px;
     }
+    .issue-group {
+      display: grid;
+      gap: 10px;
+    }
+    .issue-group-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid rgba(199, 214, 236, 0.92);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      backdrop-filter: blur(8px);
+    }
+    .issue-group-title {
+      display: grid;
+      gap: 2px;
+    }
+    .issue-group-title strong {
+      font-size: 13px;
+    }
+    .issue-group-title span {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .issue-group-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: #e9f2ff;
+      color: #2f5f96;
+      font-size: 12px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
     .issue-card {
       border-radius: 16px;
       border: 1px solid var(--line);
@@ -2014,7 +2058,7 @@ def _review_next_html() -> str:
         issueListNode.innerHTML = '<div class="empty">当前筛选条件下没有问题。</div>';
         return;
       }
-      issueListNode.innerHTML = filtered.map(renderIssueCard).join('');
+      issueListNode.innerHTML = renderIssueGroups(filtered);
       issueListNode.querySelectorAll('.issue-card').forEach((node) => {
         node.addEventListener('click', () => {
           state.selectedFindingId = node.dataset.findingId;
@@ -2023,6 +2067,31 @@ def _review_next_html() -> str:
           renderDocument();
         });
       });
+    }
+
+    function renderIssueGroups(findings) {
+      const sectionOrder = ['qualification', 'scoring', 'technical', 'commercial'];
+      const grouped = new Map(sectionOrder.map((section) => [section, []]));
+      findings.forEach((finding) => {
+        const section = classifySection(finding);
+        if (!grouped.has(section)) grouped.set(section, []);
+        grouped.get(section).push(finding);
+      });
+      return Array.from(grouped.entries())
+        .filter(([, items]) => items.length)
+        .map(([section, items]) => `
+          <section class="issue-group">
+            <div class="issue-group-head">
+              <div class="issue-group-title">
+                <strong>${escapeHtml(sectionLabelFromKey(section))}</strong>
+                <span>${escapeHtml(sectionDescription(section))}</span>
+              </div>
+              <span class="issue-group-count">${escapeHtml(String(items.length))}</span>
+            </div>
+            ${items.map(renderIssueCard).join('')}
+          </section>
+        `)
+        .join('');
     }
 
     function renderIssueCard(finding) {
@@ -2156,13 +2225,27 @@ def _review_next_html() -> str:
     }
 
     function sectionLabel(finding) {
+      return sectionLabelFromKey(classifySection(finding));
+    }
+
+    function sectionLabelFromKey(sectionKey) {
       const mapping = {
         qualification: '资格',
         scoring: '评分',
         technical: '技术',
         commercial: '商务/验收',
       };
-      return mapping[classifySection(finding)] || '其它';
+      return mapping[sectionKey] || '其它';
+    }
+
+    function sectionDescription(sectionKey) {
+      const mapping = {
+        qualification: '一般门槛、属地场所、经营年限和错位资质会优先归并在这里。',
+        scoring: '品牌、认证、演示和主观评分等结构性问题会集中展示。',
+        technical: '标准错位、证明形式和技术必要性边界问题会集中展示。',
+        commercial: '资金占用、验收费转嫁、责任失衡和验收边界问题会集中展示。',
+      };
+      return mapping[sectionKey] || '当前筛选条件下的问题会按章节归在这里。';
     }
 
     function subthemeLabel(finding) {
