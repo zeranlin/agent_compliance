@@ -1651,6 +1651,12 @@ def _review_next_html() -> str:
     .document-toolbar-row .toolbar {
       gap: 8px;
     }
+    .document-toolbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
     .document-mode-note {
       color: var(--muted);
       font-size: 12px;
@@ -1782,6 +1788,62 @@ def _review_next_html() -> str:
       scroll-behavior: smooth;
       padding: 18px 22px 24px;
     }
+    .doc-layout {
+      display: grid;
+      grid-template-columns: 180px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .doc-outline {
+      position: sticky;
+      top: 10px;
+      align-self: start;
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 14px;
+      background: rgba(236, 245, 255, 0.92);
+      border: 1px solid rgba(168, 193, 224, 0.52);
+      box-shadow: 0 8px 18px rgba(53, 91, 136, 0.08);
+    }
+    .doc-outline-title {
+      color: #35587d;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .doc-outline button {
+      width: 100%;
+      text-align: left;
+      border-radius: 12px;
+      border: 1px solid rgba(140, 169, 203, 0.3);
+      background: rgba(255, 255, 255, 0.88);
+      color: #35587d;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.45;
+      cursor: pointer;
+    }
+    .doc-outline button.is-active {
+      background: #dfeeff;
+      border-color: rgba(73, 120, 175, 0.42);
+      color: #254a72;
+    }
+    .doc-outline button .count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      margin-left: 6px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: rgba(73, 120, 175, 0.12);
+      font-size: 11px;
+      font-weight: 800;
+    }
     .doc-block {
       border: 0;
       background: transparent;
@@ -1883,6 +1945,9 @@ def _review_next_html() -> str:
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.55);
       padding: 10px 16px 18px;
     }
+    .context-toggle.is-hidden {
+      display: none;
+    }
     #detail-title {
       font-size: 14px;
       line-height: 1.4;
@@ -1920,6 +1985,12 @@ def _review_next_html() -> str:
       }
       .issue-list { max-height: none; }
       .document-pane { min-height: 360px; }
+      .doc-layout {
+        grid-template-columns: 1fr;
+      }
+      .doc-outline {
+        position: static;
+      }
     }
   </style>
 </head>
@@ -1989,9 +2060,12 @@ def _review_next_html() -> str:
       <section class="panel detail-pane">
         <div class="document-tools">
           <div class="document-toolbar-row">
-            <div class="toolbar" id="document-mode-toolbar">
-              <button type="button" data-document-mode="context" class="is-active">附近上下文</button>
-              <button type="button" data-document-mode="chapter">查看整章</button>
+            <div class="document-toolbar-actions">
+              <div class="toolbar" id="document-mode-toolbar">
+                <button type="button" data-document-mode="context" class="is-active">附近上下文</button>
+                <button type="button" data-document-mode="chapter">查看整章</button>
+              </div>
+              <button type="button" id="context-toggle" class="secondary context-toggle is-hidden">展开更多上下文</button>
             </div>
             <div id="document-mode-note" class="document-mode-note">默认只看当前问题附近上下文，方便快速定位和比对。</div>
           </div>
@@ -2034,6 +2108,7 @@ def _review_next_html() -> str:
       sectionMode: 'all',
       documentMode: 'context',
       activeChapterKey: 'all',
+      contextExpanded: false,
     };
 
     const form = document.getElementById('review-form');
@@ -2049,6 +2124,7 @@ def _review_next_html() -> str:
     const learningCardNode = document.getElementById('learning-card');
     const chapterNavNode = document.getElementById('chapter-nav');
     const documentModeNoteNode = document.getElementById('document-mode-note');
+    const contextToggleNode = document.getElementById('context-toggle');
 
     form.addEventListener('submit', submitReview);
     openSourceBtn.addEventListener('click', openSourceFile);
@@ -2067,9 +2143,17 @@ def _review_next_html() -> str:
     document.getElementById('document-mode-toolbar').querySelectorAll('[data-document-mode]').forEach((node) => {
       node.addEventListener('click', () => {
         state.documentMode = node.dataset.documentMode;
+        if (state.documentMode !== 'context') {
+          state.contextExpanded = false;
+        }
         renderDocumentModeState();
         renderDocument();
       });
+    });
+    contextToggleNode.addEventListener('click', () => {
+      state.contextExpanded = !state.contextExpanded;
+      renderDocumentModeState();
+      renderDocument();
     });
     const sectionToolbarNode = document.createElement('div');
     sectionToolbarNode.className = 'toolbar';
@@ -2105,6 +2189,7 @@ def _review_next_html() -> str:
         state.selectedFindingId = null;
         state.activeChapterKey = 'all';
         state.documentMode = 'context';
+        state.contextExpanded = false;
         openSourceBtn.disabled = !payload.document || !payload.document.source_path;
         runMetaNode.textContent = `已完成审查：${payload.review.document_name}；缓存 ${payload.cache.used ? '命中' : '未命中'}；本地模型 ${payload.llm.enabled ? '已启用' : '未启用'}。`;
         render();
@@ -2151,7 +2236,11 @@ def _review_next_html() -> str:
       });
       documentModeNoteNode.textContent = state.documentMode === 'chapter'
         ? '当前显示选中问题所在章节的连续正文，适合整体判断本章条款结构。'
-        : '当前仅显示选中问题附近上下文，适合快速定位和核对风险点。';
+        : (state.contextExpanded
+          ? '当前显示扩展后的上下文，适合在定位后继续比对前后条款。'
+          : '当前仅显示选中问题附近少量上下文，适合快速定位和核对风险点。');
+      contextToggleNode.classList.toggle('is-hidden', state.documentMode !== 'context');
+      contextToggleNode.textContent = state.contextExpanded ? '收起上下文' : '展开更多上下文';
     }
 
     function renderSummary() {
@@ -2231,6 +2320,7 @@ def _review_next_html() -> str:
           state.selectedFindingId = node.dataset.findingId;
           const finding = state.findings.find((item) => item.finding_id === state.selectedFindingId);
           state.activeChapterKey = finding ? chapterKeyForFinding(finding) : state.activeChapterKey;
+          state.contextExpanded = false;
           renderIssues();
           renderDetail();
           renderDocument();
@@ -2344,9 +2434,23 @@ def _review_next_html() -> str:
         });
       });
       const blocks = buildVisibleBlocks(documentPayload, finding, effectiveChapterKey(chapterKey));
+      const outlineItems = chapterNav.map((item) => `
+        <button type="button" class="${item.key === effectiveChapterKey(chapterKey) ? 'is-active' : ''}" data-outline-key="${escapeHtml(item.key)}">
+          <span>${escapeHtml(item.label)}</span><span class="count">${escapeHtml(String(item.count))}</span>
+        </button>
+      `).join('');
       documentPaneNode.innerHTML = blocks.length
-        ? `<div class="doc-reading-surface">${blocks.map((block, index) => renderBlock(block, index, start, end)).join('')}</div>`
+        ? `<div class="doc-layout"><aside class="doc-outline"><div class="doc-outline-title">章节目录</div>${outlineItems}</aside><div class="doc-reading-surface">${blocks.map((block, index) => renderBlock(block, index, start, end)).join('')}</div></div>`
         : '<div class="empty">当前章节暂无可展示正文。</div>';
+      documentPaneNode.querySelectorAll('[data-outline-key]').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.activeChapterKey = node.dataset.outlineKey;
+          state.documentMode = 'chapter';
+          state.contextExpanded = false;
+          renderDocumentModeState();
+          renderDocument();
+        });
+      });
       if (finding) {
         const node = documentPaneNode.querySelector('[data-target-block="true"]') || documentPaneNode.querySelector('.doc-line.target');
         if (node) scrollDocumentPaneToNode(node);
@@ -2371,7 +2475,8 @@ def _review_next_html() -> str:
       const targetIndex = normalizedBlocks.findIndex((block) => block.kind !== 'chapter-anchor' && blockIntersectsFinding(block, finding));
       if (targetIndex === -1) return normalizedBlocks.filter((block) => block.chapter_key === chapterKey);
       const keep = new Set();
-      for (let index = Math.max(0, targetIndex - 3); index <= Math.min(normalizedBlocks.length - 1, targetIndex + 3); index += 1) {
+      const radius = state.contextExpanded ? 3 : 1;
+      for (let index = Math.max(0, targetIndex - radius); index <= Math.min(normalizedBlocks.length - 1, targetIndex + radius); index += 1) {
         keep.add(index);
       }
       for (let index = targetIndex; index >= 0; index -= 1) {
