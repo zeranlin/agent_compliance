@@ -45,7 +45,7 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
         findings.append(finding)
 
     findings = _drop_false_positive_findings(findings)
-    findings = _refine_findings(findings)
+    findings = _refine_findings(document, findings)
     findings = _sort_findings(findings)
     findings = _renumber_findings(findings)
 
@@ -353,7 +353,7 @@ def _human_review_items(findings: list[Finding]) -> list[str]:
     return items
 
 
-def _refine_findings(findings: list[Finding]) -> list[Finding]:
+def _refine_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
     refined: list[Finding] = []
     primary_signatures: list[tuple[str, str]] = []
     appendix_findings: list[Finding] = []
@@ -375,7 +375,7 @@ def _refine_findings(findings: list[Finding]) -> list[Finding]:
 
     refined = _merge_sample_scoring_findings(refined)
     refined = _merge_scoring_content_findings(refined)
-    refined = _add_scoring_structure_finding(refined)
+    refined = _add_scoring_structure_findings(document, refined)
     refined = _merge_technical_justification_findings(refined)
     refined = _filter_technical_justification_noise(refined)
     refined = _merge_similar_technical_findings(refined)
@@ -622,7 +622,16 @@ def _technical_justification_human_review_reason(family: str) -> str:
     )
 
 
-def _add_scoring_structure_finding(findings: list[Finding]) -> list[Finding]:
+def _add_scoring_structure_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+    findings = _add_scoring_structure_imbalance_finding(findings)
+    findings = _add_subjective_scoring_theme_finding(document, findings)
+    findings = _add_demo_mechanism_theme_finding(document, findings)
+    findings = _add_personnel_scoring_theme_finding(document, findings)
+    findings = _add_business_strength_theme_finding(document, findings)
+    return findings
+
+
+def _add_scoring_structure_imbalance_finding(findings: list[Finding]) -> list[Finding]:
     weighted = [finding for finding in findings if _is_scoring_weight_candidate(finding)]
     categories = OrderedDict()
     for finding in weighted:
@@ -666,6 +675,222 @@ def _add_scoring_structure_finding(findings: list[Finding]) -> list[Finding]:
         human_review_reason=None,
     )
     return [*findings, aggregate]
+
+
+def _add_subjective_scoring_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("多个方案评分项大量使用主观分档" in finding.problem_title for finding in findings):
+        return findings
+    candidates = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(marker in clause.text for marker in ("评审为优", "评审为良", "评审为中", "评审为差"))
+    ]
+    if len(candidates) < 3:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=candidates,
+            issue_type="scoring_structure_imbalance",
+            problem_title="多个方案评分项大量使用主观分档且缺少量化锚点",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "多个技术方案评分项重复使用“优/良/中/差”式分档，且缺少可核验的量化锚点。"
+                "当同类主观分档在整张评分表中反复出现时，评委自由裁量空间会被系统性放大，评分结构也更容易失衡。"
+            ),
+            impact_on_competition_or_performance="可能使技术方案评分整体偏主观，增加评审尺度不一致和复核困难。",
+            legal_or_policy_basis="主观评审客观化分析（中国政府采购网）；综合评分法边界分析（中国政府采购网）",
+            rewrite_suggestion="建议按需求理解、架构设计、功能覆盖、实施组织和验收衔接等分项设置量化标准，避免在多个评分项中重复使用大幅跳档的主观分档。",
+            needs_human_review=False,
+            human_review_reason=None,
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_demo_mechanism_theme_finding(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+    if any("现场演示分值过高且签到要求形成额外门槛" in finding.problem_title for finding in findings):
+        return findings
+    demo_scoring_clauses = [
+        clause
+        for clause in document.clauses
+        if any(marker in clause.text for marker in ("可运行展示系统", "系统原型", "PPT", "Flash", "视频"))
+    ]
+    sign_in_clauses = [
+        clause
+        for clause in document.clauses
+        if any(marker in clause.text for marker in ("60 分钟内", "60分钟内", "迟到或缺席", "演示及答辩相关评分项得 0 分", "现场演示签到表"))
+    ]
+    clauses = [*demo_scoring_clauses, *sign_in_clauses]
+    if not demo_scoring_clauses or not sign_in_clauses:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="scoring_structure_imbalance",
+            problem_title="现场演示分值过高且签到要求形成额外门槛",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "演示项对“可运行系统”“原型/PPT/视频”设置显著分差，同时要求开标后短时间内完成现场签到，未签到即相关项得0分。"
+                "这会把展示形式、既有系统成熟度和现场组织条件叠加转化为高分优势。"
+            ),
+            impact_on_competition_or_performance="可能对具备既有成型系统、本地组织条件或现场到场能力的供应商形成明显倾斜。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；综合评分法边界分析（中国政府采购网）",
+            rewrite_suggestion="建议降低演示项权重，弱化展示形式差异，不宜将短时签到和现场到场条件直接与高分值绑定。",
+            needs_human_review=False,
+            human_review_reason=None,
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_personnel_scoring_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("项目负责人和团队评分过度堆叠证书奖项和项目经验" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(marker in (clause.section_path or "") for marker in ("拟安排项目负责人情况", "拟安排的项目团队成员情况"))
+        and any(
+            marker in clause.text
+            for marker in ("学位", "职称证书", "CISE", "人工智能应用工程师", "大数据应用工程师", "奖项", "荣誉", "项目经验", "特种设备")
+        )
+    ]
+    if len(clauses) < 4:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="scoring_content_mismatch",
+            problem_title="项目负责人和团队评分过度堆叠证书奖项和项目经验",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "项目负责人和团队评分同时叠加学历、职称、注册证书、奖项、项目经验等多类因素，且包含与平台建设服务不完全匹配的证书内容。"
+                "这类设计容易把人员包装能力放大为决定性竞争优势。"
+            ),
+            impact_on_competition_or_performance="可能显著抬高投标门槛，并使评分重心从团队履约能力转向证书与荣誉堆叠。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；奖项荣誉信用等级评分问题（中国政府采购网）",
+            rewrite_suggestion="建议将人员评分压缩为少量与平台建设、信息安全和项目实施直接相关的核心能力项，删除明显错位证书和高分值奖项设计。",
+            needs_human_review=True,
+            human_review_reason="需结合项目实际岗位需求判断各类证书、奖项和项目经验是否与平台建设履约目标直接相关。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_business_strength_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("商务评分将企业背景和一般财务能力直接转化为高分优势" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(marker in clause.text for marker in ("注册资本", "营业收入", "净利润", "国家相关标准委员会", "国家标准", "行业标准"))
+    ]
+    if len(clauses) < 3:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="excessive_supplier_qualification",
+            problem_title="商务评分将企业背景和一般财务能力直接转化为高分优势",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "商务评分同时将标准研究参与、注册资本、营业收入和净利润折算为高分值。"
+                "这类企业背景和一般经营状况通常不能直接替代本项目的实际履约能力判断。"
+            ),
+            impact_on_competition_or_performance="可能把企业规模和一般财务能力转化为高分门槛，缩小竞争范围。",
+            legal_or_policy_basis="中华人民共和国政府采购法实施条例；政府采购需求管理办法（财政部）",
+            rewrite_suggestion="建议删除一般财务能力、企业规模和标准研究参与类评分，仅保留与项目履约直接相关的实施保障因素。",
+            needs_human_review=False,
+            human_review_reason=None,
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _is_scoring_clause(clause) -> bool:
+    section_path = clause.section_path or ""
+    source_section = clause.source_section or ""
+    table_label = clause.table_or_item_label or ""
+    return "评标信息" in section_path or "评分" in source_section or "评分" in table_label
+
+
+def _build_theme_finding(
+    *,
+    document: NormalizedDocument,
+    clauses,
+    issue_type: str,
+    problem_title: str,
+    risk_level: str,
+    severity_score: int,
+    confidence: str,
+    compliance_judgment: str,
+    why_it_is_risky: str,
+    impact_on_competition_or_performance: str,
+    legal_or_policy_basis: str | None,
+    rewrite_suggestion: str,
+    needs_human_review: bool,
+    human_review_reason: str | None,
+    finding_origin: str,
+) -> Finding:
+    ordered = sorted(clauses, key=lambda clause: (clause.line_start, clause.line_end))
+    first = ordered[0]
+    source_text = "；".join(
+        list(OrderedDict.fromkeys(clause.text for clause in ordered if clause.text))[:3]
+    )
+    return Finding(
+        finding_id="F-000",
+        document_name=document.document_name,
+        problem_title=problem_title,
+        page_hint=_merge_optional_text((clause.page_hint for clause in ordered), separator=" / "),
+        clause_id=first.clause_id,
+        source_section=first.source_section or "",
+        section_path=_merge_optional_text((clause.section_path for clause in ordered if clause.section_path), separator=" / "),
+        table_or_item_label=first.table_or_item_label,
+        text_line_start=min(clause.line_start for clause in ordered),
+        text_line_end=max(clause.line_end for clause in ordered),
+        source_text=source_text,
+        issue_type=issue_type,
+        risk_level=risk_level,
+        severity_score=severity_score,
+        confidence=confidence,
+        compliance_judgment=compliance_judgment,
+        why_it_is_risky=why_it_is_risky,
+        impact_on_competition_or_performance=impact_on_competition_or_performance,
+        legal_or_policy_basis=legal_or_policy_basis,
+        rewrite_suggestion=rewrite_suggestion,
+        needs_human_review=needs_human_review,
+        human_review_reason=human_review_reason,
+        finding_origin=finding_origin,
+    )
 
 
 def _is_scoring_weight_candidate(finding: Finding) -> bool:

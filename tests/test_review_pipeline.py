@@ -410,6 +410,62 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("样品、认证和业绩", structure_findings[0].why_it_is_risky)
         self.assertEqual(structure_findings[0].risk_level, "high")
 
+    def test_review_adds_subjective_scoring_theme_finding(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "实施方案",
+                "①评审为优，得40分；②评审为良，得20分；③评审为中，得10分；④评审为差，得0分。",
+                "项目管理方案",
+                "①评审为优，得40分；②评审为良，得20分；③评审为中，得10分；④评审为差，得0分。",
+                "接口理解",
+                "①评审为优，得40分；②评审为良，得20分；③评审为中，得10分；④评审为差，得0分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="subjective123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = build_review_result(document, run_rule_scan(document))
+
+        findings = [finding for finding in review.findings if "多个方案评分项大量使用主观分档" in finding.problem_title]
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].risk_level, "high")
+
+    def test_review_adds_demo_and_business_strength_theme_findings(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "演示",
+                "如投标人通过可运行展示系统进行现场演示，每一分项内容全部完整演示并符合要求的得25分，最高得100分。",
+                "如投标人使用系统原型、PPT或视频等方式进行现场演示，每一分项内容全部完整演示并符合要求的得15分，最高得50分。",
+                "投标（谈判）供应商授权委托人请于本项目开标时间起60分钟内到达指定地点签到，迟到或缺席将会导致演示及答辩相关评分项得0分。",
+                "商务部分",
+                "投标人参与过国家相关标准委员会城市运行管理服务相关平台技术研究的得20分。",
+                "投标人的注册资本200万以上加20分。",
+                "投标人证明其近两年均为盈利状态，且年均营业收入不低于100万元，得20分。",
+                "投标人证明其近两年均为盈利状态，且年均净利润不低于50万元，得20分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="demo123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = build_review_result(document, run_rule_scan(document))
+
+        self.assertTrue(any("现场演示分值过高且签到要求形成额外门槛" in finding.problem_title for finding in review.findings))
+        self.assertTrue(any("商务评分将企业背景和一般财务能力直接转化为高分优势" in finding.problem_title for finding in review.findings))
+
     def test_review_flags_geographic_and_personnel_restrictions(self) -> None:
         text = "\n".join(
             [

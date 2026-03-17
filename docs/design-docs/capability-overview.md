@@ -249,6 +249,10 @@
 - `eval` 入口已可直接显示最新 benchmark gate 结果，帮助判断候选问题类型是否已被 benchmark 覆盖
 - 当前已补入 `template_mismatch` 问题类型的 benchmark 样本，用于承接模板错贴和标的域错位问题
 - 后续主线已明确升级为“条款分类 + 结构分析 + 章节级 LLM 审查辅助 + finding 仲裁 + 规则候选与 benchmark gate”的自动持续优化架构，而不再只是零散补规则
+- 当前已开始落地 `scoring_structure_analyzer`，可在 review 后处理阶段把分散的评分类命中进一步收束为章节级主问题，例如：
+  - 多个方案评分项大量使用主观分档且缺少量化锚点
+  - 现场演示分值过高且签到要求形成额外门槛
+  - 商务评分将企业背景和一般财务能力直接转化为高分优势
 
 相关设计：
 - [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)
