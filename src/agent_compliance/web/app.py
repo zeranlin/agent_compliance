@@ -1780,19 +1780,20 @@ def _review_next_html() -> str:
       overflow: auto;
       background: linear-gradient(180deg, var(--doc-bg-top) 0%, var(--doc-bg-bottom) 100%);
       scroll-behavior: smooth;
-      padding-top: 12px;
+      padding: 18px 22px 24px;
     }
     .doc-block {
-      border: 1px solid rgba(186, 205, 228, 0.24);
-      background: rgba(255,255,255,0.9);
-      border-radius: 10px;
-      padding: 8px 10px;
-      margin-bottom: 6px;
+      border: 0;
+      background: transparent;
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
     }
     .doc-block.chapter-anchor {
-      margin-top: 8px;
-      border-color: rgba(124, 168, 223, 0.3);
-      background: rgba(232, 243, 255, 0.92);
+      margin: 18px 0 8px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(124, 168, 223, 0.28);
+      background: transparent;
     }
     .chapter-anchor-title {
       display: inline-flex;
@@ -1806,7 +1807,7 @@ def _review_next_html() -> str:
     }
     .doc-block p {
       margin: 0;
-      line-height: 1.95;
+      line-height: 2.02;
       white-space: pre-wrap;
       word-break: break-word;
       font-size: 15px;
@@ -1815,36 +1816,35 @@ def _review_next_html() -> str:
       width: 100%;
       border-collapse: collapse;
       table-layout: fixed;
-      background: #fff;
+      background: rgba(255,255,255,0.78);
+      margin: 6px 0 14px;
     }
     .doc-block td {
-      border: 1px solid var(--doc-border);
-      padding: 10px 12px;
+      border: 1px solid rgba(178, 199, 225, 0.42);
+      padding: 9px 10px;
       vertical-align: top;
       white-space: pre-wrap;
       word-break: break-word;
-      line-height: 1.8;
+      line-height: 1.78;
       font-size: 14px;
     }
     .doc-block.is-target {
-      border-color: #7ca8df;
-      box-shadow: 0 10px 28px rgba(66, 110, 172, 0.18);
-      background: #f4f9ff;
+      background: linear-gradient(90deg, rgba(124,168,223,0.08), rgba(124,168,223,0.02) 45%, rgba(124,168,223,0));
     }
     .doc-block.is-target .problem-fragment {
       color: var(--problem-ink);
-      background: linear-gradient(180deg, rgba(253,232,228,0.95), rgba(253,232,228,0.72));
-      border-radius: 10px;
-      padding: 8px 10px;
-      border: 1px solid rgba(165,48,38,0.18);
+      background: linear-gradient(180deg, rgba(253,232,228,0.92), rgba(253,232,228,0.7));
+      border-radius: 8px;
+      padding: 6px 8px;
+      border-left: 4px solid rgba(165,48,38,0.4);
     }
     .doc-block.is-target .problem-fragment table {
       background: transparent;
     }
     .doc-block.is-target .problem-fragment td {
       color: var(--problem-ink);
-      background: rgba(253,232,228,0.58);
-      border-color: rgba(165,48,38,0.18);
+      background: rgba(253,232,228,0.52);
+      border-color: rgba(165,48,38,0.22);
     }
     .doc-line {
       display: grid;
@@ -1875,6 +1875,13 @@ def _review_next_html() -> str:
       color: var(--muted);
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 12px;
+    }
+    .doc-reading-surface {
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid rgba(176, 198, 224, 0.38);
+      border-radius: 18px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.55);
+      padding: 10px 16px 18px;
     }
     #detail-title {
       font-size: 14px;
@@ -2338,7 +2345,7 @@ def _review_next_html() -> str:
       });
       const blocks = buildVisibleBlocks(documentPayload, finding, effectiveChapterKey(chapterKey));
       documentPaneNode.innerHTML = blocks.length
-        ? blocks.map((block, index) => renderBlock(block, index, start, end)).join('')
+        ? `<div class="doc-reading-surface">${blocks.map((block, index) => renderBlock(block, index, start, end)).join('')}</div>`
         : '<div class="empty">当前章节暂无可展示正文。</div>';
       if (finding) {
         const node = documentPaneNode.querySelector('[data-target-block="true"]') || documentPaneNode.querySelector('.doc-line.target');
