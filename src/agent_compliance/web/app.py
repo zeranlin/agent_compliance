@@ -1657,6 +1657,48 @@ def _review_next_html() -> str:
       grid-template-columns: 1fr;
       gap: 6px;
     }
+    .learning-card {
+      border: 1px solid rgba(125, 156, 196, 0.25);
+      background: rgba(242, 248, 255, 0.92);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .learning-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .learning-head strong {
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .learning-meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+    .learning-section {
+      display: grid;
+      gap: 4px;
+    }
+    .learning-section h3 {
+      margin: 0;
+      font-size: 11px;
+      color: var(--accent);
+    }
+    .learning-list {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 12px;
+      line-height: 1.65;
+    }
+    .learning-list li + li {
+      margin-top: 3px;
+    }
     .detail-item {
       padding: 8px 10px;
       border-radius: 10px;
@@ -1875,6 +1917,13 @@ def _review_next_html() -> str:
             <div class="detail-item"><strong>风险说明</strong><div>待运行</div></div>
             <div class="detail-item"><strong>建议改写</strong><div>待运行</div></div>
           </div>
+          <div id="learning-card" class="learning-card">
+            <div class="learning-head">
+              <strong>Difference Learning</strong>
+              <span class="badge compact">待运行</span>
+            </div>
+            <div class="learning-meta">启用本地模型后，这里会显示本轮自动沉淀的规则、主题分析器、LLM prompt 和 benchmark 优化建议。</div>
+          </div>
         </div>
       </section>
     </section>
@@ -1901,6 +1950,7 @@ def _review_next_html() -> str:
     const detailExcerptNode = document.getElementById('detail-excerpt');
     const detailGridNode = document.getElementById('detail-grid');
     const documentPaneNode = document.getElementById('document-pane');
+    const learningCardNode = document.getElementById('learning-card');
 
     form.addEventListener('submit', submitReview);
     openSourceBtn.addEventListener('click', openSourceFile);
@@ -2125,6 +2175,7 @@ def _review_next_html() -> str:
         detailBadgesNode.innerHTML = '';
         detailExcerptNode.textContent = '这里只保留当前问题的风险描述和建议改写，避免和左侧清单重复。';
         detailGridNode.innerHTML = '<div class="detail-item"><strong>状态</strong><div>暂无内容</div></div>';
+        renderDifferenceLearning();
         return;
       }
       detailTitleNode.textContent = finding.problem_title;
@@ -2141,6 +2192,7 @@ def _review_next_html() -> str:
         <div class="detail-item"><strong>风险说明</strong><div>${escapeHtml(finding.why_it_is_risky || '暂无')}</div></div>
         <div class="detail-item"><strong>建议改写</strong><div>${escapeHtml(finding.rewrite_suggestion || '暂无')}</div></div>
       `;
+      renderDifferenceLearning(finding);
     }
 
     function renderDocument() {
@@ -2278,6 +2330,50 @@ def _review_next_html() -> str:
     function compactLocation(finding) {
       const section = finding.section_path || finding.source_section || '未定位章节';
       return `${section} / L${finding.text_line_start}`;
+    }
+
+    function renderDifferenceLearning(finding = null) {
+      const learning = state.payload && state.payload.llm_review ? state.payload.llm_review.difference_learning : null;
+      if (!learning || learning.status === 'llm_disabled') {
+        learningCardNode.innerHTML = `
+          <div class="learning-head">
+            <strong>Difference Learning</strong>
+            <span class="badge compact">未启用</span>
+          </div>
+          <div class="learning-meta">启用本地模型后，这里会显示本轮自动沉淀的规则、主题分析器、LLM prompt 和 benchmark 优化建议。</div>
+        `;
+        return;
+      }
+      const suggestions = learning.suggestions || {};
+      const relatedIssueType = finding ? finding.issue_type : '';
+      const badgeText = learning.added_finding_count ? `新增问题 ${learning.added_finding_count}` : '无新增问题';
+      learningCardNode.innerHTML = `
+        <div class="learning-head">
+          <strong>Difference Learning</strong>
+          <span class="badge compact">${escapeHtml(badgeText)}</span>
+        </div>
+        <div class="learning-meta">本轮自动把模型新增问题沉淀为后续增强建议。${relatedIssueType ? ` 当前选中问题类型：${escapeHtml(relatedIssueType)}` : ''}</div>
+        ${renderLearningSection('规则建议', suggestions.rules || [], relatedIssueType)}
+        ${renderLearningSection('分析器建议', suggestions.theme_analyzers || [], relatedIssueType)}
+        ${renderLearningSection('LLM Prompt 建议', suggestions.llm_prompts || [], relatedIssueType)}
+        ${renderLearningSection('Benchmark 建议', suggestions.benchmark || [], relatedIssueType)}
+      `;
+    }
+
+    function renderLearningSection(label, items, relatedIssueType) {
+      const filtered = relatedIssueType
+        ? items.filter((item) => String(item.target || '').includes(relatedIssueType) || String(item.suggestion || '').includes(relatedIssueType))
+        : items;
+      const chosen = filtered.length ? filtered : items;
+      if (!chosen.length) return '';
+      return `
+        <section class="learning-section">
+          <h3>${escapeHtml(label)}</h3>
+          <ul class="learning-list">
+            ${chosen.slice(0, 3).map((item) => `<li><strong>${escapeHtml(String(item.target || 'system'))}</strong>：${escapeHtml(String(item.suggestion || ''))}</li>`).join('')}
+          </ul>
+        </section>
+      `;
     }
 
     function fullLocation(finding) {
