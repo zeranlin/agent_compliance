@@ -283,6 +283,114 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("qualification_domain_mismatch", issue_types)
         self.assertIn("excessive_supplier_qualification", issue_types)
 
+    def test_review_adds_qualification_bundle_theme_finding(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "供应商2024年度的纳税总额不得低于人民币500万元。",
+                "营业执照的成立日期不得晚于2020年1月1日。",
+                "供应商必须在高新区内拥有固定的售后服务场所。",
+                "供应商在册员工总数不得少于100人。",
+                "供应商最近三个会计年度的年末平均资产总额不低于4000万元人民币。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="qual-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("资格条件叠加设置一般财务、规模和属地门槛", titles)
+
+    def test_review_adds_brand_and_certification_scoring_themes(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "商务部分",
+                "选用格力、美的、海尔等国内一线品牌或大金、日立等国际知名品牌，得3分；选用其他国产品牌得1分。",
+                "供应商认证情况",
+                "投标人作为全国科技型中小企业。",
+                "投标人具有高空清洗悬吊作业企业安全生产证书。",
+                "投标人具有CCRC信息安全服务资质认证证书。",
+                "投标人具备ISO20000体系认证。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="brand-cert-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("评分项直接按品牌档次赋分", titles)
+        self.assertIn("认证评分混入与标的不匹配的企业称号和跨领域证书", titles)
+
+    def test_review_adds_technical_reference_consistency_theme(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "四、技术要求",
+                "1.2 实时采样率≥2GSa/S；并提供2022年起至投标截止之日期间，本市具有检验检测机构出具的带有CMA认证标志的检测报告。",
+                "1.4 垂直档位500uV/div -10V/div，需符合QB/T 8101-2024《家用和类似用途电器空气质量检测装置》标准要求。",
+                "1.18 提供省级或以上权威质检部门出具的带有CMA标识的检测报告原件扫描件。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="tech-ref-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("技术要求中混入与标的不匹配的标准引用和检测报告形式限制", titles)
+
+    def test_review_adds_commercial_burden_theme(self) -> None:
+        text = "\n".join(
+            [
+                "第二章 对通用条款的补充内容及其他关键信息",
+                "履约担保",
+                "缴纳预算金额的5%作为履约担保。",
+                "缴纳2%作为诚信履约备用金。",
+                "第三章 用户需求书",
+                "交货期限",
+                "★合同签订后1000个日历日内交货。",
+                "安装、调试、验收及相关技术文件、资料",
+                "所有与验收环节相关的报验、送检、检测报告出具及专家评审等费用，均应计入投标单价，由供应商自行消化。",
+                "违约责任",
+                "中标人应赔偿采购人因此遭受的一切损失；采购人可主张中标人向采购人支付不超过合同总价百分之三十的违约金。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="commercial-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("商务条款叠加设置异常资金占用、交货期限和责任负担", titles)
+
     def test_finding_arbiter_prefers_theme_findings_over_scoring_fragments(self) -> None:
         text = "\n".join(
             [

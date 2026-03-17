@@ -191,6 +191,7 @@ def _expand_rationale(group: HitGroup) -> str:
     suffix = {
         "geographic_restriction": "这类要求会直接压缩非本地供应商的可参与范围。",
         "personnel_restriction": "这类画像限制通常不能直接替代岗位能力和履约经验要求。",
+        "brand_or_model_designation": "在评分或商务条款中直接按品牌档次赋分，容易把品牌偏好直接转化为竞争优势。",
         "excessive_supplier_qualification": "这类条件通常会把与履约无直接关系的企业属性、规模或年限要求变成准入门槛。",
         "qualification_domain_mismatch": "当资格条件与采购标的所属领域明显不匹配时，往往意味着模板错贴或不当扩大准入门槛。",
         "irrelevant_certification_or_award": "这类企业称号、荣誉或认证通常不能直接替代项目履约能力判断。",
@@ -231,6 +232,7 @@ def _problem_title(group: HitGroup, clause) -> str:
     titles = {
         "geographic_restriction": "资格或评分要求存在属地限制",
         "personnel_restriction": "人员条件存在不当画像限制",
+        "brand_or_model_designation": "评分或条款中存在品牌倾向",
         "excessive_supplier_qualification": "资格条件设置与履约关联不足",
         "qualification_domain_mismatch": "资格条件中出现与采购标的不匹配的资质要求",
         "irrelevant_certification_or_award": "评分中设置与履约弱相关的荣誉资质加分",
@@ -260,6 +262,7 @@ def _impact_text(issue_type: str) -> str:
     mapping = {
         "geographic_restriction": "可能直接排除非本地供应商，削弱公平竞争。",
         "personnel_restriction": "可能把与履约无直接关系的人员画像条件转化为准入或评分优势。",
+        "brand_or_model_designation": "可能把品牌偏好直接转化为竞争优势，并对其他满足需求的产品形成不合理排斥。",
         "excessive_supplier_qualification": "可能直接缩小合格供应商范围，降低竞争充分性。",
         "qualification_domain_mismatch": "可能把与采购标的不匹配的行业资质、登记或许可错误地变成准入条件。",
         "irrelevant_certification_or_award": "可能把综合声誉或企业形象替代为履约能力评价，形成不合理倾斜。",
@@ -387,6 +390,10 @@ def _refine_findings(document: NormalizedDocument, findings: list[Finding]) -> l
     refined = _add_scoring_structure_findings(document, refined)
     refined = _add_commercial_chain_findings(document, refined)
     refined = _add_domain_match_findings(document, refined)
+    refined = _add_qualification_bundle_findings(document, refined)
+    refined = _add_brand_and_certification_scoring_findings(document, refined)
+    refined = _add_technical_reference_consistency_findings(document, refined)
+    refined = _add_commercial_burden_findings(document, refined)
     refined = _apply_finding_arbiter(refined)
     refined = _merge_technical_justification_findings(refined)
     refined = _filter_technical_justification_noise(refined)
@@ -491,11 +498,54 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
     if "资格条件中存在与标的域不匹配的资质或登记要求" in title:
         return finding.issue_type == "qualification_domain_mismatch"
 
+    if "资格条件叠加设置一般财务、规模和属地门槛" in title:
+        return finding.issue_type in {
+            "qualification_domain_mismatch",
+            "excessive_supplier_qualification",
+            "geographic_restriction",
+        } and _text_contains_any(
+            finding,
+            ("纳税", "成立日期", "成立时间", "高新区", "固定的售后服务场所", "员工总数", "资产总额", "单项合同金额"),
+        )
+
+    if "评分项直接按品牌档次赋分" in title:
+        return finding.issue_type in {"brand_or_model_designation", "scoring_content_mismatch"} and _text_contains_any(
+            finding,
+            ("一线品牌", "国际知名品牌", "格力", "美的", "海尔", "大金", "日立"),
+        )
+
+    if "认证评分混入与标的不匹配的企业称号和跨领域证书" in title:
+        return finding.issue_type in {
+            "scoring_content_mismatch",
+            "irrelevant_certification_or_award",
+            "scoring_structure_imbalance",
+        } and _text_contains_any(
+            finding,
+            ("科技型中小企业", "高空清洗", "CCRC", "ISO20000", "认证证书", "体系认证"),
+        )
+
     if "评分项中存在与标的域不匹配的证书认证或模板内容" in title:
         return finding.issue_type == "scoring_content_mismatch" and _is_scoring_finding(finding)
 
+    if "技术要求中混入与标的不匹配的标准引用和检测报告形式限制" in title:
+        return finding.issue_type in {"technical_justification_needed", "template_mismatch", "scoring_content_mismatch"} and _text_contains_any(
+            finding,
+            ("QB/T", "CMA", "本市具有检验检测机构", "权威质检部门", "检测报告原件扫描件", "2022 年起"),
+        )
+
     if "文件中存在与标的域不匹配的模板残留或义务外扩" in title:
         return finding.issue_type in {"template_mismatch", "other"}
+
+    if "商务条款叠加设置异常资金占用、交货期限和责任负担" in title:
+        return finding.issue_type in {
+            "one_sided_commercial_term",
+            "payment_acceptance_linkage",
+            "unclear_acceptance_standard",
+            "other",
+        } and _text_contains_any(
+            finding,
+            ("履约担保", "备用金", "1000", "报验", "送检", "专家评审", "百分之三十", "一切损失"),
+        )
 
     if "评分结构中多类高分因素集中出现" in title:
         return finding.issue_type == "excessive_scoring_weight"
@@ -621,6 +671,9 @@ def _merge_technical_justification_findings(findings: list[Finding]) -> list[Fin
 
     for finding in sorted(findings, key=lambda item: (item.text_line_start, item.issue_type, item.section_path or "")):
         if finding.issue_type != "technical_justification_needed":
+            merged.append(finding)
+            continue
+        if finding.finding_origin == "analyzer":
             merged.append(finding)
             continue
         family = _technical_justification_family_key(finding)
@@ -764,6 +817,158 @@ def _add_domain_match_findings(document: NormalizedDocument, findings: list[Find
     findings = _add_qualification_domain_theme_finding(document, findings)
     findings = _add_scoring_domain_theme_finding(document, findings)
     findings = _add_template_domain_theme_finding(document, findings)
+    return findings
+
+
+def _add_qualification_bundle_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+    if any("资格条件叠加设置一般财务、规模和属地门槛" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_qualification_clause(clause)
+        and any(
+            marker in clause.text
+            for marker in (
+                "纳税总额不得低于",
+                "营业执照的成立日期不得晚于",
+                "固定的售后服务场所",
+                "员工总数不得少于",
+                "平均资产总额不低于",
+                "单项合同金额不低于",
+            )
+        )
+    ]
+    if len(clauses) < 3:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="excessive_supplier_qualification",
+            problem_title="资格条件叠加设置一般财务、规模和属地门槛",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "资格章节同时叠加一般纳税额、成立年限、员工人数、资产规模和固定售后场所等条件。"
+                "这类一般经营状况和属地条件通常不能直接替代货物采购项目的实际履约能力判断。"
+            ),
+            impact_on_competition_or_performance="可能把一般经营规模和属地条件直接转化为准入门槛，显著缩小竞争范围。",
+            legal_or_policy_basis="中华人民共和国政府采购法实施条例；政府采购需求管理办法（财政部）",
+            rewrite_suggestion="建议删除与本项目履约无直接对应关系的一般财务、规模和属地门槛，仅保留法定资格及必要履约能力条件。",
+            needs_human_review=False,
+            human_review_reason=None,
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_brand_and_certification_scoring_findings(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    findings = _add_brand_scoring_theme_finding(document, findings)
+    findings = _add_certification_scoring_theme_finding(document, findings)
+    return findings
+
+
+def _add_technical_reference_consistency_findings(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("技术要求中混入与标的不匹配的标准引用和检测报告形式限制" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_technical_clause(clause)
+        and any(
+            marker in clause.text
+            for marker in (
+                "QB/T 8101",
+                "QB/T 8075",
+                "QB/T 4263",
+                "GB 6249",
+                "本市具有检验检测机构",
+                "带有 CMA",
+                "带有CMA",
+                "权威质检部门",
+                "检测报告原件扫描件",
+                "2022 年起至投标截止之日期间",
+            )
+        )
+    ]
+    if len(clauses) < 2:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="technical_justification_needed",
+            problem_title="技术要求中混入与标的不匹配的标准引用和检测报告形式限制",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "技术章节同时出现与采购标的不匹配的标准引用，以及对检测机构地域、报告时段和 CMA 证明形式的叠加限制。"
+                "这类组合要求容易把模板错贴和过严证明形式一并转化为竞争门槛。"
+            ),
+            impact_on_competition_or_performance="可能缩窄满足条件的产品和证明材料范围，并显著提高供应商证明成本。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）",
+            rewrite_suggestion="建议删除与采购标的不匹配的标准引用，并将检测证明要求调整为能够证明对应技术指标满足需求的有效资料，不限定本地机构和特定报告形式。",
+            needs_human_review=True,
+            human_review_reason="需结合采购标的技术特征、适用标准和市场可得性判断相关标准引用及检测证明形式是否确有必要。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_commercial_burden_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+    if any("商务条款叠加设置异常资金占用、交货期限和责任负担" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if any(
+            marker in clause.text
+            for marker in (
+                "预算金额的5%作为履约担保",
+                "诚信履约备用金",
+                "1000      个日历日内交货",
+                "1000 个日历日内交货",
+                "报验、送检、检测报告出具及专家评审等费用",
+                "一切损失",
+                "百分之三十的违约金",
+            )
+        )
+    ]
+    if len(clauses) < 2:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="one_sided_commercial_term",
+            problem_title="商务条款叠加设置异常资金占用、交货期限和责任负担",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "商务条款同时叠加履约担保、诚信履约备用金、明显异常的交货期限、验收送检费用整体转嫁和高额违约责任。"
+                "这类组合会显著抬高供应商资金占用和履约风险，并扩大合同争议空间。"
+            ),
+            impact_on_competition_or_performance="可能显著抬高报价、压缩潜在供应商范围，并放大履约和回款争议。",
+            legal_or_policy_basis="中华人民共和国民法典；政府采购需求管理办法（财政部）；履约验收规范要点（中国政府采购网）",
+            rewrite_suggestion="建议分别校准履约担保、备用金、交货期限、验收费承担和违约责任边界，避免通过叠加式商务条件整体提高资金占用和责任负担。",
+            needs_human_review=True,
+            human_review_reason="需结合财政支付、履约担保和项目供货周期判断相关商务安排是否合理并符合采购内控要求。",
+            finding_origin="analyzer",
+        )
+    )
     return findings
 
 
@@ -1097,6 +1302,86 @@ def _add_scoring_domain_theme_finding(document: NormalizedDocument, findings: li
     return findings
 
 
+def _add_brand_scoring_theme_finding(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+    if any("评分项直接按品牌档次赋分" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(
+            marker in clause.text
+            for marker in ("一线品牌", "国际知名品牌", "格力", "美的", "海尔", "大金", "日立", "其他国产品牌")
+        )
+    ]
+    if not clauses:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="brand_or_model_designation",
+            problem_title="评分项直接按品牌档次赋分",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "评分项直接列举国内一线品牌、国际知名品牌并按品牌档次赋分。"
+                "这会把品牌偏好直接转化为竞争优势，而不是围绕产品性能和售后能力做客观比较。"
+            ),
+            impact_on_competition_or_performance="可能对其他满足采购需求的品牌形成不合理排斥，削弱公平竞争。",
+            legal_or_policy_basis="中华人民共和国政府采购法实施条例；政府采购需求管理办法（财政部）",
+            rewrite_suggestion="建议删除按品牌档次直接赋分的设计，改为围绕产品性能、质保和售后能力设置客观可核验的评分因素。",
+            needs_human_review=False,
+            human_review_reason=None,
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_certification_scoring_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("认证评分混入与标的不匹配的企业称号和跨领域证书" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(
+            marker in clause.text
+            for marker in ("科技型中小企业", "高空清洗", "CCRC", "ISO20000", "认证证书")
+        )
+    ]
+    if len(clauses) < 2:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="scoring_content_mismatch",
+            problem_title="认证评分混入与标的不匹配的企业称号和跨领域证书",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "认证评分中同时混入科技型中小企业、跨领域安全生产证书和 IT 服务类认证。"
+                "这类企业称号和跨领域证书与本项目电子仪器仪表供货履约关联较弱，却被直接折算为高分值。"
+            ),
+            impact_on_competition_or_performance="可能使评分重心偏离产品供货和售后能力，并对具备无关证书的供应商形成倾斜。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；奖项荣誉信用等级评分问题（中国政府采购网）",
+            rewrite_suggestion="建议删除与采购标的不匹配的企业称号和跨领域证书，仅保留与质量管理和履约保障直接相关的少量辅助性证明，并降低分值。",
+            needs_human_review=True,
+            human_review_reason="需结合采购标的、评分主题和各类认证的实际用途判断其是否与项目履约目标直接相关。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
 def _add_template_domain_theme_finding(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
     if any("文件中存在与标的域不匹配的模板残留或义务外扩" in finding.problem_title for finding in findings):
         return findings
@@ -1144,6 +1429,21 @@ def _document_domain(document: NormalizedDocument) -> str:
     if any(marker in text for marker in ("发电机", "机电", "安装", "设备")):
         return "equipment_installation"
     return "general"
+
+
+def _is_qualification_clause(clause) -> bool:
+    text = " ".join(part for part in (clause.section_path or "", clause.source_section or "") if part)
+    return "资格" in text or "申请人的资格要求" in text or "招标公告" in text
+
+
+def _is_technical_clause(clause) -> bool:
+    text = " ".join(part for part in (clause.section_path or "", clause.source_section or "") if part)
+    return "技术要求" in text or "用户需求书" in text
+
+
+def _is_commercial_clause(clause) -> bool:
+    text = " ".join(part for part in (clause.section_path or "", clause.source_section or "") if part)
+    return any(marker in text for marker in ("商务要求", "合同条款", "履约担保", "交货期限", "违约责任", "付款方式"))
 
 
 def _domain_mismatch_markers(domain: str) -> tuple[str, ...]:

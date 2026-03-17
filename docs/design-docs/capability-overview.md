@@ -257,6 +257,15 @@
   - 商务评分将企业背景和一般财务能力直接转化为高分优势
 - 当前已开始落地 `commercial_chain_analyzer`，可把分散的付款、履约评价、整改和解除合同条款进一步收束为商务链路主问题，例如：
   - 付款条件与履约评价结果深度绑定且评价标准开放
+- 当前已新增 `qualification_bundle_analyzer`，可把资格章节中的一般财务、规模和属地门槛收束为更接近人工式审查的章节主问题，例如：
+  - 资格条件叠加设置一般财务、规模和属地门槛
+- 当前已新增 `brand_and_certification_scoring_analyzer`，可把品牌打分和认证错位从评分碎点上浮为章节级主问题，例如：
+  - 评分项直接按品牌档次赋分
+  - 认证评分混入与标的不匹配的企业称号和跨领域证书
+- 当前已新增 `technical_reference_consistency_engine`，可把技术章节中的错位标准和过严证明形式收束为主题问题，例如：
+  - 技术要求中混入与标的不匹配的标准引用和检测报告形式限制
+- 当前已新增 `commercial_burden_analyzer`，可把担保、备用金、异常交期、验收费转嫁和高额违约责任收束为商务主问题，例如：
+  - 商务条款叠加设置异常资金占用、交货期限和责任负担
 
 相关设计：
 - [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)
