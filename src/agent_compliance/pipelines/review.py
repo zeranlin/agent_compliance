@@ -378,6 +378,7 @@ def _refine_findings(document: NormalizedDocument, findings: list[Finding]) -> l
     refined = _add_scoring_structure_findings(document, refined)
     refined = _add_commercial_chain_findings(document, refined)
     refined = _add_domain_match_findings(document, refined)
+    refined = _apply_finding_arbiter(refined)
     refined = _merge_technical_justification_findings(refined)
     refined = _filter_technical_justification_noise(refined)
     refined = _merge_similar_technical_findings(refined)
@@ -405,6 +406,118 @@ def _sort_findings(findings: list[Finding]) -> list[Finding]:
             item.problem_title,
         ),
     )
+
+
+def _apply_finding_arbiter(findings: list[Finding]) -> list[Finding]:
+    theme_findings = [finding for finding in findings if finding.finding_origin == "analyzer"]
+    if not theme_findings:
+        return findings
+
+    filtered: list[Finding] = []
+    for finding in findings:
+        if finding.finding_origin == "analyzer":
+            filtered.append(finding)
+            continue
+        if _is_finding_covered_by_theme(finding, theme_findings):
+            continue
+        filtered.append(finding)
+    return filtered
+
+
+def _is_finding_covered_by_theme(finding: Finding, themes: list[Finding]) -> bool:
+    for theme in themes:
+        if _theme_covers_finding(theme, finding):
+            return True
+    return False
+
+
+def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
+    if not _line_ranges_overlap(theme, finding, tolerance=4):
+        return False
+
+    title = theme.problem_title
+    if "多个方案评分项大量使用主观分档且缺少量化锚点" in title:
+        return finding.issue_type == "ambiguous_requirement" and _is_scoring_finding(finding)
+
+    if "现场演示分值过高且签到要求形成额外门槛" in title:
+        return finding.issue_type in {
+            "ambiguous_requirement",
+            "excessive_scoring_weight",
+            "geographic_restriction",
+        } and _text_contains_any(
+            finding,
+            ("演示", "原型", "PPT", "视频", "签到", "60分钟", "60 分钟", "得 0 分"),
+        )
+
+    if "项目负责人和团队评分过度堆叠证书奖项和项目经验" in title:
+        return finding.issue_type in {
+            "scoring_content_mismatch",
+            "irrelevant_certification_or_award",
+            "excessive_scoring_weight",
+        } and _text_contains_any(
+            finding,
+            ("项目负责人", "项目团队", "职称", "证书", "奖项", "荣誉", "项目经验", "特种设备"),
+        )
+
+    if "商务评分将企业背景和一般财务能力直接转化为高分优势" in title:
+        return finding.issue_type in {
+            "excessive_supplier_qualification",
+            "excessive_scoring_weight",
+            "scoring_content_mismatch",
+        } and _text_contains_any(
+            finding,
+            ("注册资本", "营业收入", "净利润", "标准", "标准委员会"),
+        )
+
+    if "付款条件与履约评价结果深度绑定且评价标准开放" in title:
+        return finding.issue_type in {
+            "one_sided_commercial_term",
+            "payment_acceptance_linkage",
+            "other",
+        } and _text_contains_any(
+            finding,
+            ("履约评价", "阶段款", "支付", "评价标准", "评价指标", "解除合同", "扣款"),
+        )
+
+    if "资格条件中存在与标的域不匹配的资质或登记要求" in title:
+        return finding.issue_type == "qualification_domain_mismatch"
+
+    if "评分项中存在与标的域不匹配的证书认证或模板内容" in title:
+        return finding.issue_type == "scoring_content_mismatch" and _is_scoring_finding(finding)
+
+    if "文件中存在与标的域不匹配的模板残留或义务外扩" in title:
+        return finding.issue_type in {"template_mismatch", "other"}
+
+    if "评分结构中多类高分因素集中出现" in title:
+        return finding.issue_type == "excessive_scoring_weight"
+
+    return False
+
+
+def _line_ranges_overlap(left: Finding, right: Finding, *, tolerance: int = 0) -> bool:
+    return not (
+        left.text_line_end + tolerance < right.text_line_start
+        or right.text_line_end + tolerance < left.text_line_start
+    )
+
+
+def _text_contains_any(finding: Finding, markers: tuple[str, ...]) -> bool:
+    haystack = " ".join(
+        part
+        for part in (
+            finding.problem_title,
+            finding.source_text,
+            finding.section_path or "",
+            finding.source_section or "",
+        )
+        if part
+    )
+    return any(marker in haystack for marker in markers)
+
+
+def _is_scoring_finding(finding: Finding) -> bool:
+    haystack = " ".join(part for part in (finding.section_path or "", finding.source_section or "") if part)
+    return "评标信息" in haystack or "评分" in haystack
 
 
 def _shorten_section_path(section_path: str | None) -> str | None:

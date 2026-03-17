@@ -282,8 +282,38 @@ class ReviewPipelineTest(unittest.TestCase):
         issue_types = {finding.issue_type for finding in review.findings}
         self.assertIn("qualification_domain_mismatch", issue_types)
         self.assertIn("excessive_supplier_qualification", issue_types)
-        self.assertTrue(any("有害生物防制" in finding.source_text or "SPCA" in finding.source_text for finding in review.findings))
-        self.assertTrue(any("年均纳税额" in finding.source_text or "单项合同金额" in finding.source_text for finding in review.findings))
+
+    def test_finding_arbiter_prefers_theme_findings_over_scoring_fragments(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "技术服务方案",
+                "方案评审为优得 10 分，评审为良得 6 分，评审为中得 2 分。",
+                "实施方案评审为优得 10 分，评审为良得 6 分，评审为中得 2 分。",
+                "培训方案评审为优得 10 分，评审为良得 6 分，评审为中得 2 分。",
+                "演示要求",
+                "可运行展示系统完整演示得 25 分，原型或PPT演示得 10 分。",
+                "开标后 60 分钟内签到，迟到或缺席的演示评分项得 0 分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="abc123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("多个方案评分项大量使用主观分档且缺少量化锚点", titles)
+        self.assertIn("现场演示分值过高且签到要求形成额外门槛", titles)
+        self.assertFalse(any("评分中设置与履约弱相关的荣誉资质加分" in title for title in titles))
+        self.assertFalse(any("评分分档缺少明确量化锚点" in title for title in titles))
+        self.assertFalse(any("单一评分因素权重设置过高" in title for title in titles))
 
     def test_review_flags_scoring_content_mismatch_and_filters_non_scoring_noise(self) -> None:
         text = "\n".join(
