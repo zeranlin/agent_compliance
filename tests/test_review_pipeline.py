@@ -337,7 +337,7 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("评分项直接按品牌档次赋分", titles)
         self.assertIn("认证评分混入与标的不匹配的企业称号和跨领域证书", titles)
 
-    def test_review_adds_technical_reference_consistency_theme(self) -> None:
+    def test_review_splits_technical_reference_consistency_themes(self) -> None:
         text = "\n".join(
             [
                 "第三章 用户需求书",
@@ -359,9 +359,10 @@ class ReviewPipelineTest(unittest.TestCase):
 
         review = build_review_result(document, run_rule_scan(document))
         titles = {finding.problem_title for finding in review.findings}
-        self.assertIn("技术要求中混入与标的不匹配的标准引用和检测报告形式限制", titles)
+        self.assertIn("技术要求引用了与标的不匹配的标准或规范", titles)
+        self.assertIn("技术证明材料形式要求过严且带有地方化限制", titles)
 
-    def test_review_adds_commercial_burden_theme(self) -> None:
+    def test_review_splits_commercial_burden_themes(self) -> None:
         text = "\n".join(
             [
                 "第二章 对通用条款的补充内容及其他关键信息",
@@ -389,7 +390,89 @@ class ReviewPipelineTest(unittest.TestCase):
 
         review = build_review_result(document, run_rule_scan(document))
         titles = {finding.problem_title for finding in review.findings}
-        self.assertIn("商务条款叠加设置异常资金占用、交货期限和责任负担", titles)
+        self.assertIn("商务条款设置异常资金占用和交货期限", titles)
+        self.assertIn("验收送检、检测和专家评审费用整体转嫁给供应商", titles)
+        self.assertIn("商务责任和违约后果设置明显偏重", titles)
+
+    def test_review_adds_geographic_tendency_theme(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "售后服务要求",
+                "供应商须在高新区内设有固定的售后服务场所。",
+                "接到故障通知后1小时内到达现场并提供驻场服务。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="geo-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("驻场、短时响应或服务场地要求形成事实上的属地倾斜", titles)
+
+    def test_review_adds_acceptance_and_industry_theme_findings(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "技术要求",
+                "需符合QB/T 8101-2024《家用和类似用途电器空气质量检测装置》标准。",
+                "验收要求",
+                "所有与验收环节相关的报验、送检、检测报告出具及专家评审等费用，均由供应商自行消化。",
+                "技术验收、商务验收、复检及最终验收结果均以采购人验收报告为准。",
+                "评分项",
+                "投标人具有CCRC信息安全服务资质认证证书。",
+                "投标人具有ISO20000体系认证。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="accept-industry-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("验收程序、复检与最终确认边界不清", titles)
+        self.assertIn("评分和技术要求中存在行业适配性不足的错位内容", titles)
+
+    def test_theme_splitter_summarizes_theme_excerpt(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "供应商认证情况",
+                "投标人作为全国科技型中小企业。",
+                "投标人具有高空清洗悬吊作业企业安全生产证书。",
+                "投标人具有CCRC信息安全服务资质认证证书。",
+                "投标人具备ISO20000体系认证。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="theme-excerpt",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        target = next(
+            finding for finding in review.findings if finding.problem_title == "认证评分混入与标的不匹配的企业称号和跨领域证书"
+        )
+        self.assertIn("等", target.source_text)
+        self.assertIn("高权重", target.why_it_is_risky)
 
     def test_finding_arbiter_prefers_theme_findings_over_scoring_fragments(self) -> None:
         text = "\n".join(
@@ -515,7 +598,16 @@ class ReviewPipelineTest(unittest.TestCase):
         issue_types = {finding.issue_type for finding in review.findings}
         self.assertIn("excessive_scoring_weight", issue_types)
         self.assertIn("one_sided_commercial_term", issue_types)
-        self.assertIn("payment_acceptance_linkage", issue_types)
+        self.assertTrue(
+            any(
+                finding.problem_title in {
+                    "付款条件与履约评价结果深度绑定且评价标准开放",
+                    "验收送检、检测和专家评审费用整体转嫁给供应商",
+                    "商务责任和违约后果设置明显偏重",
+                }
+                for finding in review.findings
+            )
+        )
         self.assertEqual(sum(1 for finding in review.findings if "样品评分主观性强且分值过高" in finding.problem_title), 1)
         self.assertEqual(sum(1 for finding in review.findings if finding.issue_type == "one_sided_commercial_term"), 1)
 

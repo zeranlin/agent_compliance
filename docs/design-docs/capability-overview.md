@@ -259,13 +259,22 @@
   - 付款条件与履约评价结果深度绑定且评价标准开放
 - 当前已新增 `qualification_bundle_analyzer`，可把资格章节中的一般财务、规模和属地门槛收束为更接近人工式审查的章节主问题，例如：
   - 资格条件叠加设置一般财务、规模和属地门槛
+- 当前已进一步细化 `qualification_bundle_analyzer`，可把一般门槛和行业错位资质拆成更精准的资格子主题，例如：
+  - 资格条件中存在与标的域不匹配的行业资质或专门许可
 - 当前已新增 `brand_and_certification_scoring_analyzer`，可把品牌打分和认证错位从评分碎点上浮为章节级主问题，例如：
   - 评分项直接按品牌档次赋分
   - 认证评分混入与标的不匹配的企业称号和跨领域证书
-- 当前已新增 `technical_reference_consistency_engine`，可把技术章节中的错位标准和过严证明形式收束为主题问题，例如：
-  - 技术要求中混入与标的不匹配的标准引用和检测报告形式限制
-- 当前已新增 `commercial_burden_analyzer`，可把担保、备用金、异常交期、验收费转嫁和高额违约责任收束为商务主问题，例如：
-  - 商务条款叠加设置异常资金占用、交货期限和责任负担
+- 当前已进一步细化 `technical_reference_consistency_engine`，可按改稿需要拆分技术章节中的标准错位和证明形式过严问题，例如：
+  - 技术要求引用了与标的不匹配的标准或规范
+  - 技术证明材料形式要求过严且带有地方化限制
+- 当前已进一步细化 `commercial_burden_analyzer`，可把资金占用、验收费转嫁和责任失衡分层输出为更利于改稿的商务主问题，例如：
+  - 商务条款设置异常资金占用和交货期限
+  - 验收送检、检测和专家评审费用整体转嫁给供应商
+  - 商务责任和违约后果设置明显偏重
+- 当前已补入 `geographic_tendency_analyzer`、`acceptance_boundary_analyzer`、`industry_appropriateness_analyzer` 和 `theme_splitter_and_summarizer`，可进一步识别：
+  - 驻场、短时响应或服务场地要求形成事实上的属地倾斜
+  - 验收程序、复检与最终确认边界不清
+  - 评分和技术要求中存在行业适配性不足的错位内容
 
 相关设计：
 - [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)
