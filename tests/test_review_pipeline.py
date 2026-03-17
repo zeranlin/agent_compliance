@@ -393,6 +393,33 @@ class ReviewPipelineTest(unittest.TestCase):
         titles = {finding.problem_title for finding in review.findings}
         self.assertIn("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担", titles)
 
+    def test_review_overall_summary_includes_document_strategy_route(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：北京大学深圳医院中药配方颗粒项目",
+                "申请人的资格要求",
+                "供应商成立日期必须早于2022年1月1日。",
+                "供应商最近三个会计年度的年均纳税总额不低于300万元人民币。",
+                "用户需求书",
+                "投标人承诺提供与采购人业务规模相适应的信息化管理系统，并开发系统端口与医院综合业务协同平台无缝对接。",
+                "履约担保",
+                "以现金形式缴纳采购预算的5%作为履约保证金。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="strategy-route",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        self.assertIn("医疗药品或医用配套采购项目", review.overall_risk_summary)
+        self.assertIn("文件级风险画像", review.overall_risk_summary)
+
     def test_review_splits_qualification_bundle_themes(self) -> None:
         text = "\n".join(
             [

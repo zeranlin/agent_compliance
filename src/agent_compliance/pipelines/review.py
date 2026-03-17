@@ -136,6 +136,14 @@ class DocumentRiskProfile:
     medium_risk_count: int
 
 
+@dataclass
+class DocumentStrategyProfile:
+    procurement_mode: str
+    domain_hint: str
+    primary_focus: tuple[str, ...]
+    review_route: tuple[str, ...]
+
+
 def _group_hits(document: NormalizedDocument, hits: list[RuleHit]) -> list[HitGroup]:
     groups: list[HitGroup] = []
     sorted_hits = sorted(hits, key=lambda item: (item.line_start, item.line_end, item.rule_id))
@@ -359,16 +367,21 @@ def _human_review_reason(issue_type: str) -> str | None:
 
 def _overall_summary(findings: list[Finding]) -> str:
     profile = _build_document_risk_profile(findings)
+    strategy = _build_document_strategy_profile(findings)
     high = sum(1 for finding in findings if finding.risk_level == "high")
     medium = sum(1 for finding in findings if finding.risk_level == "medium")
     summary = (
         f"本地离线审查共形成 {len(findings)} 条去重 findings，其中高风险 {high} 条、中风险 {medium} 条。"
         " 当前结果已接入本地规则映射和引用资料检索，可作为正式审查前的离线初筛与复审输入。"
     )
+    if strategy.procurement_mode:
+        summary += f" 当前文件识别为{strategy.procurement_mode}，主标的提示为{strategy.domain_hint}。"
     if profile.dominant_sections:
         summary += f" 该文件的主风险重心集中在{_join_labels(profile.dominant_sections)}。"
     if profile.dominant_theme_titles:
         summary += f" 当前最突出的主问题包括：{_join_labels(profile.dominant_theme_titles)}。"
+    if strategy.review_route:
+        summary += f" 建议优先按“{' -> '.join(strategy.review_route)}”的顺序理解和复核本文件。"
     return summary
 
 
@@ -404,6 +417,58 @@ def _build_document_risk_profile(findings: list[Finding]) -> DocumentRiskProfile
         dominant_theme_titles=dominant_theme_titles,
         high_risk_count=sum(1 for finding in findings if finding.risk_level == "high"),
         medium_risk_count=sum(1 for finding in findings if finding.risk_level == "medium"),
+    )
+
+
+def _build_document_strategy_profile(findings: list[Finding]) -> DocumentStrategyProfile:
+    if not findings:
+        return DocumentStrategyProfile("综合型政府采购项目", "需结合全部章节综合判断", ("综合条款",), ("综合条款", "文件级风险画像"))
+
+    section_scores: dict[str, int] = {}
+    for finding in findings:
+        section = _section_key_from_finding(finding)
+        weight = 2 if finding.risk_level == "high" else 1
+        section_scores[section] = section_scores.get(section, 0) + weight
+    ordered_sections = [section for section, _ in sorted(section_scores.items(), key=lambda item: (-item[1], item[0]))]
+
+    combined = " ".join(
+        filter(
+            None,
+            [
+                *[finding.problem_title for finding in findings],
+                *[finding.source_text for finding in findings if finding.source_text],
+            ],
+        )
+    )
+
+    if any(token in combined for token in ("中药", "药品", "颗粒", "医院")):
+        procurement_mode = "医疗药品或医用配套采购项目"
+        domain_hint = "药品供货、设备配套与院内接口并存"
+    elif any(token in combined for token in ("系统", "平台", "接口", "演示", "驻场运维")):
+        procurement_mode = "信息化或数字化服务项目"
+        domain_hint = "平台建设、系统对接或持续运维类"
+    elif any(token in combined for token in ("发电机", "机电设备", "安装调试")):
+        procurement_mode = "货物采购并含安装调试项目"
+        domain_hint = "设备供货与安装验收并行"
+    else:
+        procurement_mode = "综合型政府采购项目"
+        domain_hint = "需结合资格、评分、技术和商务主问题综合判断"
+
+    focus_mapping = {
+        "qualification": "资格条件",
+        "scoring": "评分标准",
+        "technical": "技术要求",
+        "commercial": "商务与验收",
+        "other": "综合条款",
+    }
+    primary_focus = tuple(focus_mapping.get(section, "综合条款") for section in ordered_sections[:3]) or ("综合条款",)
+    review_route = tuple(dict.fromkeys([*primary_focus, "文件级风险画像"]))
+
+    return DocumentStrategyProfile(
+        procurement_mode=procurement_mode,
+        domain_hint=domain_hint,
+        primary_focus=primary_focus,
+        review_route=review_route,
     )
 
 
