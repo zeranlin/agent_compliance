@@ -659,6 +659,16 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             ("成立日期", "成立时间", "高新区", "固定的售后服务场所", "单项合同金额", "经营地址", "主城四区", "福州市"),
         )
 
+    if "资格条件整体超出法定准入和履约必需范围" in title:
+        return finding.issue_type in {
+            "excessive_supplier_qualification",
+            "qualification_domain_mismatch",
+            "geographic_restriction",
+        } and _text_contains_any(
+            finding,
+            ("纳税", "参保人数", "员工总数", "资产总额", "成立日期", "固定的售后服务场所", "经营地址", "单项合同金额", "有害生物防制", "SPCA", "棉花加工资格", "水运工程监理"),
+        )
+
     if "评分项直接按品牌档次赋分" in title:
         return finding.issue_type in {"brand_or_model_designation", "scoring_content_mismatch"} and _text_contains_any(
             finding,
@@ -1097,6 +1107,7 @@ def _add_domain_match_findings(document: NormalizedDocument, findings: list[Find
 def _add_qualification_bundle_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
     findings = _add_qualification_financial_scale_theme_finding(document, findings)
     findings = _add_qualification_operating_scope_theme_finding(document, findings)
+    findings = _add_qualification_reasoning_theme_finding(document, findings)
     return findings
 
 
@@ -1234,6 +1245,62 @@ def _add_qualification_industry_appropriateness_finding(
             rewrite_suggestion="建议删除与本项目标的不匹配的行业资质、专门许可和岗位证书，仅保留法定资格及与履约直接相关的必要条件。",
             needs_human_review=True,
             human_review_reason="需结合项目主标的、法定许可边界和实际履约场景判断该类行业资质或专门许可是否确有必要。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_qualification_reasoning_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("资格条件整体超出法定准入和履约必需范围" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_qualification_clause(clause)
+        and any(
+            marker in clause.text
+            for marker in (
+                "纳税总额",
+                "年均纳税",
+                "参保人数",
+                "员工总数",
+                "资产总额",
+                "成立日期",
+                "固定的售后服务场所",
+                "主要经营地址",
+                "单项合同金额",
+                "水运工程监理甲级",
+                "有害生物防制",
+                "SPCA",
+                "棉花加工资格",
+                "特种设备安全管理和作业人员证书",
+            )
+        )
+    ]
+    if len(clauses) < 3:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="excessive_supplier_qualification",
+            problem_title="资格条件整体超出法定准入和履约必需范围",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "资格章节同时叠加一般财务和规模门槛、经营年限或属地场所门槛，以及与标的不匹配的行业资质或专门许可。"
+                "这类要求已经超出通常法定准入和履约必需能力判断范围，容易把一般经营状况、地域条件和错位资质整体前置为准入门槛。"
+            ),
+            impact_on_competition_or_performance="可能系统性压缩竞争范围，使具备实际履约能力但不满足一般经营偏好的供应商被排除在外。",
+            legal_or_policy_basis="中华人民共和国政府采购法实施条例；政府采购需求管理办法（财政部）",
+            rewrite_suggestion="建议先按法定主体资格、法定许可和与履约直接相关的必要能力重新梳理资格条件，删除一般财务规模、属地场所、经营年限和错位行业资质等非必需门槛。",
+            needs_human_review=True,
+            human_review_reason="需结合项目主标的、法定准入要求和实际履约模式判断资格条件中哪些属于法定许可，哪些应从准入门槛回退为更中性的履约要求。",
             finding_origin="analyzer",
         )
     )
@@ -2409,6 +2476,10 @@ def _apply_theme_splitter_and_summarizer(findings: list[Finding]) -> list[Findin
         if finding.problem_title == "资格条件中存在与标的域不匹配的行业资质或专门许可":
             finding.rewrite_suggestion = (
                 "建议删除与项目标的不匹配的行业资质、专门许可和资格认定，仅保留法定生产许可和与中药配方颗粒供货直接相关的必要条件。"
+            )
+        if finding.problem_title == "资格条件整体超出法定准入和履约必需范围":
+            finding.rewrite_suggestion = (
+                "建议先按法定主体资格、法定许可和直接履约能力三层重新梳理准入条件；一般财务规模、属地场所、经营年限和错位行业资质不宜继续作为统一准入门槛。"
             )
         if finding.problem_title == "商务条款设置异常资金占用安排":
             finding.rewrite_suggestion = (

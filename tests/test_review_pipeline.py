@@ -418,6 +418,7 @@ class ReviewPipelineTest(unittest.TestCase):
 
         review = build_review_result(document, run_rule_scan(document))
         titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("资格条件整体超出法定准入和履约必需范围", titles)
         self.assertIn("资格条件设置一般财务和规模门槛", titles)
         self.assertIn("资格条件设置经营年限、属地场所或单项业绩门槛", titles)
 
