@@ -127,6 +127,15 @@ class HitGroup:
     reference_ids: tuple[str, ...]
 
 
+@dataclass
+class DocumentRiskProfile:
+    dominant_sections: tuple[str, ...]
+    dominant_issue_types: tuple[str, ...]
+    dominant_theme_titles: tuple[str, ...]
+    high_risk_count: int
+    medium_risk_count: int
+
+
 def _group_hits(document: NormalizedDocument, hits: list[RuleHit]) -> list[HitGroup]:
     groups: list[HitGroup] = []
     sorted_hits = sorted(hits, key=lambda item: (item.line_start, item.line_end, item.rule_id))
@@ -349,12 +358,112 @@ def _human_review_reason(issue_type: str) -> str | None:
 
 
 def _overall_summary(findings: list[Finding]) -> str:
+    profile = _build_document_risk_profile(findings)
     high = sum(1 for finding in findings if finding.risk_level == "high")
     medium = sum(1 for finding in findings if finding.risk_level == "medium")
-    return (
+    summary = (
         f"本地离线审查共形成 {len(findings)} 条去重 findings，其中高风险 {high} 条、中风险 {medium} 条。"
         " 当前结果已接入本地规则映射和引用资料检索，可作为正式审查前的离线初筛与复审输入。"
     )
+    if profile.dominant_sections:
+        summary += f" 该文件的主风险重心集中在{_join_labels(profile.dominant_sections)}。"
+    if profile.dominant_theme_titles:
+        summary += f" 当前最突出的主问题包括：{_join_labels(profile.dominant_theme_titles)}。"
+    return summary
+
+
+def _build_document_risk_profile(findings: list[Finding]) -> DocumentRiskProfile:
+    if not findings:
+        return DocumentRiskProfile((), (), (), 0, 0)
+
+    weighted_findings = [finding for finding in findings if finding.risk_level in {"high", "medium"}]
+    candidates = weighted_findings or findings
+
+    section_scores: "OrderedDict[str, int]" = OrderedDict()
+    issue_scores: "OrderedDict[str, int]" = OrderedDict()
+    theme_titles: list[str] = []
+    for finding in candidates:
+        weight = 2 if finding.risk_level == "high" else 1
+        section = _section_key_from_finding(finding)
+        section_scores[section] = section_scores.get(section, 0) + weight
+        issue_scores[finding.issue_type] = issue_scores.get(finding.issue_type, 0) + weight
+        if finding.finding_origin == "analyzer" and finding.problem_title not in theme_titles:
+            theme_titles.append(finding.problem_title)
+
+    dominant_sections = tuple(
+        _section_label_from_key(section)
+        for section, _score in sorted(section_scores.items(), key=lambda item: (-item[1], item[0]))[:3]
+    )
+    dominant_issue_types = tuple(
+        issue_type for issue_type, _score in sorted(issue_scores.items(), key=lambda item: (-item[1], item[0]))[:4]
+    )
+    dominant_theme_titles = tuple(theme_titles[:3])
+    return DocumentRiskProfile(
+        dominant_sections=dominant_sections,
+        dominant_issue_types=dominant_issue_types,
+        dominant_theme_titles=dominant_theme_titles,
+        high_risk_count=sum(1 for finding in findings if finding.risk_level == "high"),
+        medium_risk_count=sum(1 for finding in findings if finding.risk_level == "medium"),
+    )
+
+
+def _join_labels(values: tuple[str, ...]) -> str:
+    if not values:
+        return ""
+    if len(values) == 1:
+        return values[0]
+    if len(values) == 2:
+        return f"{values[0]}和{values[1]}"
+    return f"{'、'.join(values[:-1])}和{values[-1]}"
+
+
+def _section_key_from_finding(finding: Finding) -> str:
+    semantic_text = " ".join(
+        part
+        for part in (
+            finding.problem_title,
+            finding.issue_type,
+        )
+        if part
+    )
+    location_text = " ".join(
+        part
+        for part in (
+            finding.section_path or "",
+            finding.source_section or "",
+        )
+        if part
+    )
+    if any(token in semantic_text for token in ("评分", "演示", "品牌档次", "认证评分", "商务评分", "样品", "scoring_")):
+        return "scoring"
+    if any(token in semantic_text for token in ("技术", "标准", "检测报告", "证明材料", "参数", "technical_")):
+        return "technical"
+    if any(
+        token in semantic_text
+        for token in ("验收", "付款", "责任", "违约", "交货", "模板残留", "义务外扩", "commercial", "acceptance", "payment")
+    ):
+        return "commercial"
+    if any(token in semantic_text for token in ("资格", "准入门槛", "qualification_", "supplier_qualification")):
+        return "qualification"
+    if any(token in location_text for token in ("评分", "评标信息", "演示", "品牌档次", "认证评分", "商务评分", "样品")):
+        return "scoring"
+    if any(token in location_text for token in ("技术", "标准", "检测报告", "证明材料", "参数")):
+        return "technical"
+    if any(token in location_text for token in ("验收", "付款", "责任", "违约", "交货", "商务")):
+        return "commercial"
+    if any(token in location_text for token in ("资格", "申请人的资格要求", "准入门槛")):
+        return "qualification"
+    return "commercial"
+
+
+def _section_label_from_key(section_key: str) -> str:
+    mapping = {
+        "qualification": "资格条件",
+        "scoring": "评分标准",
+        "technical": "技术要求",
+        "commercial": "商务与验收",
+    }
+    return mapping.get(section_key, "综合问题")
 
 
 def _human_review_items(findings: list[Finding]) -> list[str]:

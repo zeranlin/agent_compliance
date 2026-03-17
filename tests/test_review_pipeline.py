@@ -726,6 +726,39 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertTrue(any("现场演示分值过高且签到要求形成额外门槛" in finding.problem_title for finding in review.findings))
         self.assertTrue(any("商务评分将企业背景和一般财务能力直接转化为高分优势" in finding.problem_title for finding in review.findings))
 
+    def test_review_overall_summary_includes_document_level_risk_profile(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "供应商2024年度的纳税总额不得低于人民币500万元。",
+                "营业执照的成立日期不得晚于2020年1月1日。",
+                "评标信息",
+                "演示",
+                "如投标人通过可运行展示系统进行现场演示，每一分项内容全部完整演示并符合要求的得25分，最高得100分。",
+                "投标（谈判）供应商授权委托人请于本项目开标时间起60分钟内到达指定地点签到，迟到或缺席将会导致演示及答辩相关评分项得0分。",
+                "第三章 用户需求书",
+                "付款方式",
+                "其余阶段款项均将结合履约评价结果支付相应的款项。",
+                "评价标准、评价指标以及分值项目负责人可根据项目要求自行设定。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="doc-level-profile",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        self.assertIn("主风险重心集中在", review.overall_risk_summary)
+        self.assertIn("评分标准", review.overall_risk_summary)
+        self.assertIn("商务与验收", review.overall_risk_summary)
+        self.assertIn("主问题包括", review.overall_risk_summary)
+
     def test_review_adds_commercial_chain_theme_finding(self) -> None:
         text = "\n".join(
             [
