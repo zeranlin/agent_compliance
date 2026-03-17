@@ -1027,6 +1027,61 @@ class ReviewPipelineTest(unittest.TestCase):
 
         self.assertTrue(any(finding.issue_type == "geographic_restriction" for finding in review.findings))
 
+    def test_review_recognizes_tcm_procurement_bundle_issues(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：北京大学深圳医院中药配方颗粒项目",
+                "申请人的资格要求",
+                "供应商成立日期必须早于2022年1月1日。",
+                "供应商最近三个会计年度的年均纳税总额不低于300万元人民币。",
+                "投标人必须提供最近连续三个月的月均参保人数不少于50人的证明。",
+                "供应商2024年末经审计的资产总额不得低于人民币5000万元。",
+                "供应商的主要经营地址必须位于福州市主城四区范围内。",
+                "企业必须具备棉花加工资格认定并提供相关证书。",
+                "投标人认证情况",
+                "投标人具有IT服务管理体系认证。",
+                "投标人具有生活垃圾分类服务认证证书。",
+                "投标人具有SPCA三级以上证书。",
+                "投标人具有有害生物防制（治）B级服务企业资质证书。",
+                "用户需求书",
+                "投标人承诺提供与采购人业务规模相适应的信息化管理系统，并开发系统端口与医院综合业务协同平台无缝对接。",
+                "安排专人对信息管理系统进行管理维护，进行药瓶清洁。",
+                "中药配方颗粒设备需求参数",
+                "投标产品需提供国家级检测中心出具的检验报告，产品需符合GB 15605-2024检测标准。",
+                "产品符合QB/T 1649-2024《聚苯乙烯泡沫包装材料》检测标准，并出具对应的检测报告。",
+                "履约担保",
+                "以现金形式缴纳采购预算的5%作为履约保证金。",
+                "履约保证金在项目验收合格后不予退还，自动转为售后服务保证金，直至产品质保期结束（36个月）后方可申请退还。",
+                "第四章 投标文件组成要求及格式",
+                "1.6 对于已确认的中标药品，中标人在合同期内不得停止履约。否则，采购人有权单方解除合同。",
+                "第三章 用户需求书",
+                "1.6 对于已确认的中标药品，中标人在合同期内不得停止履约。否则，采购人有权单方解除合同。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/北京大学深圳医院中药配方颗粒项目.docx",
+            document_name="北京大学深圳医院中药配方颗粒项目.docx",
+            file_hash="tcm-bundle",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("资格条件设置一般财务和规模门槛", titles)
+        self.assertIn("资格条件设置经营年限、属地场所或单项业绩门槛", titles)
+        self.assertIn("资格条件中存在与标的域不匹配的行业资质或专门许可", titles)
+        self.assertIn("技术要求引用了与标的不匹配的标准或规范", titles)
+        self.assertIn("技术证明材料形式要求过严且带有地方化限制", titles)
+        self.assertIn("商务条款设置异常资金占用安排", titles)
+        self.assertIn("文件中存在与标的域不匹配的模板残留或义务外扩", titles)
+        self.assertEqual(
+            sum(1 for finding in review.findings if finding.clause_id == "1.6"),
+            1,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

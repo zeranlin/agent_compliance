@@ -404,6 +404,7 @@ def _refine_findings(document: NormalizedDocument, findings: list[Finding]) -> l
     refined = _merge_similar_technical_findings(refined)
     refined = _merge_nearby_liability_findings(refined)
     refined = _apply_theme_splitter_and_summarizer(refined)
+    refined = _drop_appendix_semantic_duplicates(refined)
     for finding in refined:
         finding.source_text = _representative_excerpt(finding.source_text)
     return refined
@@ -514,7 +515,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "excessive_supplier_qualification",
         } and _text_contains_any(
             finding,
-            ("纳税", "员工总数", "资产总额"),
+            ("纳税", "员工总数", "资产总额", "参保人数", "月均参保", "社保"),
         )
 
     if "资格条件设置经营年限、属地场所或单项业绩门槛" in title:
@@ -524,7 +525,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "geographic_restriction",
         } and _text_contains_any(
             finding,
-            ("成立日期", "成立时间", "高新区", "固定的售后服务场所", "单项合同金额"),
+            ("成立日期", "成立时间", "高新区", "固定的售后服务场所", "单项合同金额", "经营地址", "主城四区", "福州市"),
         )
 
     if "评分项直接按品牌档次赋分" in title:
@@ -555,13 +556,13 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
     if "技术要求引用了与标的不匹配的标准或规范" in title:
         return finding.issue_type in {"technical_justification_needed", "template_mismatch", "scoring_content_mismatch"} and _text_contains_any(
             finding,
-            ("QB/T", "GB 6249", "空气质量检测装置", "菜肴罐头"),
+            ("QB/T", "GB 6249", "GB 15605", "QB/T 1649", "QB/T 4089", "空气质量检测装置", "菜肴罐头", "聚苯乙烯泡沫包装材料"),
         )
 
     if "技术证明材料形式要求过严且带有地方化限制" in title:
         return finding.issue_type in {"technical_justification_needed", "template_mismatch", "scoring_content_mismatch"} and _text_contains_any(
             finding,
-            ("本市具有检验检测机构", "带有 CMA", "带有CMA", "权威质检部门", "检测报告原件扫描件", "2022 年起"),
+            ("本市具有检验检测机构", "带有 CMA", "带有CMA", "权威质检部门", "检测报告原件扫描件", "2022 年起", "国家级检测中心", "检验报告", "相关检测报告"),
         )
 
     if "文件中存在与标的域不匹配的模板残留或义务外扩" in title:
@@ -585,7 +586,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "other",
         } and _text_contains_any(
             finding,
-            ("履约担保", "备用金"),
+            ("履约担保", "备用金", "售后服务保证金", "质保期结束", "现金形式", "5%", "36个月"),
         )
 
     if "交货期限设置异常或明显失真" in title:
@@ -693,7 +694,10 @@ def _normalized_source_signature(source_text: str) -> str:
 
 
 def _is_appendix_duplicate_candidate(finding: Finding) -> bool:
-    return bool(finding.section_path and "第四章 投标文件组成要求及格式" in finding.section_path)
+    if not finding.section_path:
+        return False
+    normalized = "".join(finding.section_path.split())
+    return "第四章" in normalized and "投标文件组成要求及格式" in normalized
 
 
 def _matches_existing_signature(
@@ -708,6 +712,38 @@ def _matches_existing_signature(
         if candidate_text and primary_text and (candidate_text in primary_text or primary_text in candidate_text):
             return True
     return False
+
+
+def _drop_appendix_semantic_duplicates(findings: list[Finding]) -> list[Finding]:
+    primary = [finding for finding in findings if not _is_appendix_duplicate_candidate(finding)]
+    appendix = [finding for finding in findings if _is_appendix_duplicate_candidate(finding)]
+    filtered = list(primary)
+    for finding in appendix:
+        if any(_is_semantic_duplicate_of_primary(finding, existing) for existing in primary):
+            continue
+        filtered.append(finding)
+    filtered.sort(key=lambda item: (item.text_line_start, item.issue_type, item.section_path or ""))
+    return filtered
+
+
+def _is_semantic_duplicate_of_primary(candidate: Finding, primary: Finding) -> bool:
+    if candidate.issue_type != primary.issue_type:
+        return False
+    if candidate.clause_id and primary.clause_id and candidate.clause_id == primary.clause_id:
+        return True
+    if candidate.problem_title == primary.problem_title and _signatures_overlap(candidate.source_text, primary.source_text):
+        return True
+    if _signatures_overlap(candidate.source_text, primary.source_text) and _line_ranges_overlap(candidate, primary, tolerance=3):
+        return True
+    return False
+
+
+def _signatures_overlap(left: str, right: str) -> bool:
+    left_sig = _normalized_source_signature(left)
+    right_sig = _normalized_source_signature(right)
+    if not left_sig or not right_sig:
+        return False
+    return left_sig == right_sig or left_sig in right_sig or right_sig in left_sig
 
 
 def _merge_similar_technical_findings(findings: list[Finding]) -> list[Finding]:
@@ -932,7 +968,15 @@ def _add_qualification_financial_scale_theme_finding(
         if _is_qualification_clause(clause)
         and any(
             marker in clause.text
-            for marker in ("纳税总额不得低于", "员工总数不得少于", "平均资产总额不低于")
+            for marker in (
+                "纳税总额不得低于",
+                "年均纳税总额不低于",
+                "员工总数不得少于",
+                "月均参保人数不少于",
+                "参保人数不少于",
+                "平均资产总额不低于",
+                "资产总额不得低于",
+            )
         )
     ]
     if len(clauses) < 2:
@@ -948,8 +992,8 @@ def _add_qualification_financial_scale_theme_finding(
             confidence="high",
             compliance_judgment="likely_non_compliant",
             why_it_is_risky=(
-                "资格章节以纳税总额、员工人数、资产规模等一般经营指标设置准入门槛。"
-                "这类一般财务和规模指标通常不能直接替代电子仪器仪表采购项目的供货和售后履约能力。"
+                "资格章节以纳税总额、参保人数、员工人数和资产规模等一般经营指标设置准入门槛。"
+                "这类一般财务和规模指标通常不能直接替代项目的实际供货和履约能力。"
             ),
             impact_on_competition_or_performance="可能把企业一般经营规模错误转化为参与门槛，明显压缩可竞争供应商范围。",
             legal_or_policy_basis="中华人民共和国政府采购法实施条例；政府采购需求管理办法（财政部）",
@@ -973,7 +1017,16 @@ def _add_qualification_operating_scope_theme_finding(
         if _is_qualification_clause(clause)
         and any(
             marker in clause.text
-            for marker in ("营业执照的成立日期不得晚于", "固定的售后服务场所", "单项合同金额不低于")
+            for marker in (
+                "营业执照的成立日期不得晚于",
+                "成立日期必须早于",
+                "固定的售后服务场所",
+                "主要经营地址",
+                "经营地址（非注册地址）",
+                "主城四区范围内",
+                "福州市",
+                "单项合同金额不低于",
+            )
         )
     ]
     if len(clauses) < 2:
@@ -989,7 +1042,7 @@ def _add_qualification_operating_scope_theme_finding(
             confidence="high",
             compliance_judgment="likely_non_compliant",
             why_it_is_risky=(
-                "资格章节将经营年限、固定售后场所和单项合同金额等条件前置为参与门槛。"
+                "资格章节将经营年限、异地经营场所或固定场地要求、以及单项业绩规模等条件前置为参与门槛。"
                 "这类要求容易把一般经营历史、属地条件和项目规模偏好错误地转化为准入条件。"
             ),
             impact_on_competition_or_performance="可能对新进入供应商、非本地供应商或规模较小但具备履约能力的供应商形成明显排斥。",
@@ -1014,7 +1067,7 @@ def _add_qualification_industry_appropriateness_finding(
         if _is_qualification_clause(clause)
         and any(
             marker in clause.text
-            for marker in ("水运工程监理甲级", "有害生物防制", "SPCA", "特种设备安全管理和作业人员证书")
+            for marker in ("水运工程监理甲级", "有害生物防制", "SPCA", "特种设备安全管理和作业人员证书", "棉花加工资格")
         )
     ]
     if not clauses:
@@ -1078,7 +1131,18 @@ def _add_technical_standard_mismatch_theme_finding(
         if _is_technical_clause(clause)
         and any(
             marker in clause.text
-            for marker in ("QB/T 8101", "QB/T 8075", "QB/T 4263", "GB 6249", "空气质量检测装置", "菜肴罐头")
+            for marker in (
+                "QB/T 8101",
+                "QB/T 8075",
+                "QB/T 4263",
+                "QB/T 1649",
+                "QB/T 4089",
+                "GB 6249",
+                "GB 15605",
+                "空气质量检测装置",
+                "菜肴罐头",
+                "聚苯乙烯泡沫包装材料",
+            )
         )
     ]
     if not clauses:
@@ -1124,6 +1188,9 @@ def _add_proof_formality_findings(document: NormalizedDocument, findings: list[F
                 "权威质检部门",
                 "检测报告原件扫描件",
                 "2022 年起至投标截止之日期间",
+                "国家级检测中心出具的检验报告",
+                "提供相关检测报告",
+                "提供国家级检测中心出具的检验报告",
             )
         )
     ]
@@ -1164,10 +1231,18 @@ def _add_commercial_financing_burden_theme_finding(
         for clause in document.clauses
         if any(
             marker in clause.text
-            for marker in ("预算金额的5%作为履约担保", "诚信履约备用金")
+            for marker in (
+                "预算金额的5%作为履约担保",
+                "以现金形式缴纳采购预算的5%作为履约保证金",
+                "诚信履约备用金",
+                "自动转为",
+                "售后服务保证金",
+                "质保期结束（36个月）",
+                "36个月",
+            )
         )
     ]
-    if len(clauses) < 2:
+    if len(clauses) < 1:
         return findings
     findings.append(
         _build_theme_finding(
@@ -1180,8 +1255,8 @@ def _add_commercial_financing_burden_theme_finding(
             confidence="high",
             compliance_judgment="likely_non_compliant",
             why_it_is_risky=(
-                "商务条款同时设置较高履约担保和诚信履约备用金。"
-                "这类资金占用安排会明显增加供应商的前期履约成本和现金流压力。"
+                "商务条款通过现金形式履约保证金、验收后自动转售后保证金以及较长质保占压等方式叠加设置资金占用安排。"
+                "这类资金占用设计会明显增加供应商的前期履约成本和现金流压力。"
             ),
             impact_on_competition_or_performance="可能显著抬高报价和资金占用成本，并压缩可参与竞争的供应商范围。",
             legal_or_policy_basis="中华人民共和国民法典；政府采购需求管理办法（财政部）",
@@ -1875,12 +1950,17 @@ def _add_industry_appropriateness_findings(document: NormalizedDocument, finding
 
 
 def _document_domain(document: NormalizedDocument) -> str:
-    text = f"{document.document_name} {document.source_path}"
-    if any(marker in text for marker in ("平台", "信息", "软件", "系统", "数据")):
+    base_text = f"{document.document_name} {document.source_path}"
+    clause_text = " ".join(clause.text for clause in document.clauses[:200])
+    if any(marker in base_text for marker in ("中药", "配方颗粒", "医院", "药品", "饮片")):
+        if any(marker in clause_text for marker in ("自动化调剂", "发药机", "信息化管理系统", "无缝对接", "设备需求参数")):
+            return "medical_tcm_mixed"
+        return "medical_tcm"
+    if any(marker in base_text for marker in ("平台", "信息", "软件", "系统", "数据")):
         return "information_system"
-    if any(marker in text for marker in ("窗帘", "隔帘", "床品", "服装", "被服")):
+    if any(marker in base_text for marker in ("窗帘", "隔帘", "床品", "服装", "被服")):
         return "textile_goods"
-    if any(marker in text for marker in ("发电机", "机电", "安装", "设备")):
+    if any(marker in base_text for marker in ("发电机", "机电", "安装", "设备")):
         return "equipment_installation"
     return "general"
 
@@ -1903,9 +1983,24 @@ def _is_commercial_clause(clause) -> bool:
 def _domain_mismatch_markers(domain: str) -> tuple[str, ...]:
     mapping = {
         "information_system": ("园区保洁", "设施维修", "安防管理", "保洁", "垃圾", "特种设备", "高空清洗", "CCRC", "ISO20000"),
+        "medical_tcm": ("IT服务管理", "生活垃圾分类", "SPCA", "有害生物防制", "棉花加工", "高空清洗", "CCRC", "ISO20000"),
+        "medical_tcm_mixed": (
+            "IT服务管理",
+            "生活垃圾分类",
+            "SPCA",
+            "有害生物防制",
+            "棉花加工",
+            "高空清洗",
+            "CCRC",
+            "ISO20000",
+            "园区保洁",
+            "药瓶清洁",
+            "无缝对接",
+            "信息化管理系统",
+        ),
         "textile_goods": ("芯片", "系统", "无缝对接", "平台", "软件"),
         "equipment_installation": ("有害生物防制", "SPCA", "有机产品认证", "水运机电工程专项监理", "水运工程监理甲级"),
-        "general": ("园区保洁", "设施维修", "安防管理", "保洁", "芯片", "系统", "特种设备", "有害生物防制", "SPCA", "高空清洗", "CCRC", "ISO20000", "水运工程监理甲级"),
+        "general": ("园区保洁", "设施维修", "安防管理", "保洁", "芯片", "系统", "特种设备", "有害生物防制", "SPCA", "高空清洗", "CCRC", "ISO20000", "水运工程监理甲级", "棉花加工"),
     }
     return mapping.get(domain, mapping["general"])
 
@@ -1982,14 +2077,21 @@ def _apply_theme_splitter_and_summarizer(findings: list[Finding]) -> list[Findin
             )
         if finding.problem_title == "资格条件设置一般财务和规模门槛":
             finding.why_it_is_risky = (
-                "资格章节以纳税总额、员工人数和资产规模等一般经营指标设置门槛。"
-                "这类指标通常不能直接替代电子仪器仪表采购项目的实际供货和售后履约能力。"
+                "资格章节以纳税总额、参保人数、员工人数和资产规模等一般经营指标设置门槛。"
+                "这类指标通常不能直接替代项目的实际供货和履约能力。"
             )
         if finding.problem_title == "资格条件设置经营年限、属地场所或单项业绩门槛":
             finding.source_text = _build_theme_excerpt(finding.source_text)
+            finding.rewrite_suggestion = (
+                "建议删除经营年限、异地经营场所和单项业绩规模门槛，改为围绕供货保障、配送响应和必要经验设置更中性的资格要求。"
+            )
+        if finding.problem_title == "资格条件中存在与标的域不匹配的行业资质或专门许可":
+            finding.rewrite_suggestion = (
+                "建议删除与项目标的不匹配的行业资质、专门许可和资格认定，仅保留法定生产许可和与中药配方颗粒供货直接相关的必要条件。"
+            )
         if finding.problem_title == "商务条款设置异常资金占用安排":
             finding.rewrite_suggestion = (
-                "建议分别校准履约担保和备用金安排，不宜通过叠加式资金占用条件整体提高供应商履约门槛。"
+                "建议取消验收后自动转售后保证金等长期占压安排，分别校准履约担保比例、形式和退还节点，不宜通过叠加式资金占用条件整体提高供应商履约门槛。"
             )
         if finding.problem_title == "交货期限设置异常或明显失真":
             finding.rewrite_suggestion = (
@@ -2002,6 +2104,10 @@ def _apply_theme_splitter_and_summarizer(findings: list[Finding]) -> list[Findin
         if finding.problem_title == "技术证明材料形式要求过严且带有地方化限制":
             finding.rewrite_suggestion = (
                 "建议将证明要求改为能证明对应性能指标满足需求的有效资料，不限定本地机构、特定起算年份和原件扫描件形式。"
+            )
+        if finding.problem_title == "文件中存在与标的域不匹配的模板残留或义务外扩":
+            finding.rewrite_suggestion = (
+                "建议将药品供货、自动化设备配套和信息化接口义务分开表述；与当前采购标的不直接相关的系统运维、清洁和扩展服务内容应删除或单列采购。"
             )
     return findings
 
