@@ -244,6 +244,7 @@
 当前还新增了“本地模型参与 -> 规则候选生成 -> benchmark gate”的自动演化链路：
 - 启用本地模型后，会额外执行模板错贴与标的域不匹配、评分结构判断、商务链路联合判断三类局部任务
 - 当前已开始接入“全文辅助扫描”任务，用于在规则候选不足时补充资格异常、评分内容错位、技术固定年份和商务边界类候选问题
+- 全文辅助扫描新增的问题已开始先进入仲裁层，再决定是否上浮为主问题，避免本地模型候选重新把已收束的主问题结构打碎
 - 本地模型新增的边界问题会自动沉淀成 `rule_candidate`，而不是只停留在一次性 finding 中
 - 每个 `rule_candidate` 至少携带：`candidate_rule_id`、`issue_type`、`source_text`、`trigger_keywords`、`suggested_merge_key`、`false_positive_risk`
 - `eval` 入口已可直接显示最新 benchmark gate 结果，帮助判断候选问题类型是否已被 benchmark 覆盖

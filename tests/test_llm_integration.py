@@ -237,6 +237,91 @@ class LLMIntegrationTest(unittest.TestCase):
         self.assertEqual(gate["needs_benchmark_count"], 1)
         self.assertEqual(gate["status"], "needs_attention")
 
+    def test_llm_added_fragment_is_arbitrated_under_existing_theme_finding(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "技术服务方案",
+                "方案评审为优得 10 分，评审为良得 6 分，评审为中得 2 分。",
+                "实施方案评审为优得 10 分，评审为良得 6 分，评审为中得 2 分。",
+                "培训方案评审为优得 10 分，评审为良得 6 分，评审为中得 2 分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="arbiter123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        base_review = ReviewResult(
+            document_name="sample.txt",
+            review_scope="资格条件、评分规则、技术要求、商务及验收条款",
+            jurisdiction="中国",
+            review_timestamp="2026-03-16T00:00:00+00:00",
+            overall_risk_summary="summary",
+            findings=[
+                Finding(
+                    finding_id="F-001",
+                    document_name="sample.txt",
+                    problem_title="多个方案评分项大量使用主观分档且缺少量化锚点",
+                    page_hint=None,
+                    clause_id=clauses[1].clause_id,
+                    source_section=clauses[1].source_section or "",
+                    section_path=clauses[1].section_path,
+                    table_or_item_label=clauses[1].table_or_item_label,
+                    text_line_start=clauses[1].line_start,
+                    text_line_end=clauses[-1].line_end,
+                    source_text="方案评审为优得 10 分 等3项",
+                    issue_type="scoring_structure_imbalance",
+                    risk_level="high",
+                    severity_score=3,
+                    confidence="high",
+                    compliance_judgment="likely_non_compliant",
+                    why_it_is_risky="主题问题",
+                    impact_on_competition_or_performance="impact",
+                    legal_or_policy_basis=None,
+                    rewrite_suggestion="rewrite",
+                    needs_human_review=False,
+                    human_review_reason=None,
+                    finding_origin="analyzer",
+                )
+            ],
+            items_for_human_review=[],
+            review_limitations=[],
+        )
+        llm_config = LLMConfig(
+            enabled=True,
+            base_url="http://112.111.54.86:10011/v1",
+            model="local-model",
+            api_key=None,
+            timeout_seconds=60,
+        )
+        responses = [
+            '{"findings":[]}',
+            '{"findings":[]}',
+            '{"findings":[{"should_flag":true,"clause_ref":"3:方案评审为优得 10 分，评审为良得 6 分，评审为中得 2 分。","clause_id":"方案评审为优得 10 分，评审为良得 6 分，评审为中得 2 分。","issue_type":"ambiguous_requirement","problem_title":"评分分档缺少明确量化锚点","why_it_is_risky":"主观分档问题。","rewrite_suggestion":"量化。"}]}',
+            '{"findings":[]}',
+        ]
+
+        with patch("agent_compliance.pipelines.llm_review.OpenAICompatibleLLMClient.chat", side_effect=responses):
+            result, artifacts = apply_llm_review_tasks(document, base_review, llm_config, output_stem="arbiterllm")
+
+        titles = [finding.problem_title for finding in result.findings]
+        self.assertIn("多个方案评分项大量使用主观分档且缺少量化锚点", titles)
+        self.assertNotIn("评分分档缺少明确量化锚点", titles)
+        self.assertGreaterEqual(len(artifacts.added_findings), 1)
+
+        for path in [
+            artifacts.candidate_json_path,
+            artifacts.candidate_md_path,
+            artifacts.benchmark_json_path,
+            artifacts.benchmark_md_path,
+        ]:
+            Path(path).unlink(missing_ok=True)
+
     def test_llm_review_tasks_fallback_adds_scoring_and_commercial_findings(self) -> None:
         text = "\n".join(
             [

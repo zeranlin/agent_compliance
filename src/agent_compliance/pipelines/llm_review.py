@@ -9,6 +9,7 @@ from agent_compliance.config import LLMConfig, detect_paths
 from agent_compliance.evals.runner import benchmark_summary
 from agent_compliance.models.llm_client import ChatMessage, OpenAICompatibleLLMClient
 from agent_compliance.schemas import Clause, Finding, NormalizedDocument, ReviewResult
+from agent_compliance.pipelines.review import reconcile_review_result
 
 
 SYSTEM_PROMPT = (
@@ -510,20 +511,11 @@ def _merge_added_findings(review: ReviewResult, added_findings: list[Finding]) -
         if key not in existing_keys:
             result.findings.append(finding)
             existing_keys.add(key)
-    result.findings = _sort_findings(result.findings)
-    for index, finding in enumerate(result.findings, start=1):
-        finding.finding_id = f"F-{index:03d}"
-    risk_counts = {"high": 0, "medium": 0}
-    for finding in result.findings:
-        if finding.risk_level in risk_counts:
-            risk_counts[finding.risk_level] += 1
-    result.overall_risk_summary = (
-        f"本地离线审查共形成 {len(result.findings)} 条去重 findings，其中高风险 {risk_counts['high']} 条、"
-        f"中风险 {risk_counts['medium']} 条。当前结果已接入本地规则映射、引用资料检索和本地大模型边界判断，可作为正式审查前的离线初筛与复审输入。"
+    result = reconcile_review_result(result)
+    result.overall_risk_summary = result.overall_risk_summary.replace(
+        "当前结果已接入本地规则映射和引用资料检索，可作为正式审查前的离线初筛与复审输入。",
+        "当前结果已接入本地规则映射、引用资料检索和本地大模型边界判断，可作为正式审查前的离线初筛与复审输入。",
     )
-    for finding in added_findings:
-        if finding.problem_title not in result.items_for_human_review:
-            result.items_for_human_review.append(finding.problem_title)
     return result
 
 
@@ -829,17 +821,3 @@ def _dedupe_added_findings(findings: list[Finding]) -> list[Finding]:
 
 def _normalized_summary_signature(text: str) -> str:
     return "".join(ch for ch in text if ch.isalnum())[:96]
-
-
-def _sort_findings(findings: list[Finding]) -> list[Finding]:
-    priority = {"high": 0, "medium": 1, "low": 2, "none": 3}
-    return sorted(
-        findings,
-        key=lambda item: (
-            priority.get(item.risk_level, 9),
-            item.text_line_start,
-            item.text_line_end,
-            item.issue_type,
-            item.problem_title,
-        ),
-    )

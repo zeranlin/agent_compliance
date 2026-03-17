@@ -46,23 +46,32 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
 
     findings = _drop_false_positive_findings(findings)
     findings = _refine_findings(document, findings)
-    findings = _sort_findings(findings)
-    findings = _renumber_findings(findings)
 
-    return ReviewResult(
-        document_name=document.document_name,
-        review_scope="资格条件、评分规则、技术要求、商务及验收条款",
-        jurisdiction="中国",
-        review_timestamp=utc_now_iso(),
-        overall_risk_summary=_overall_summary(findings),
-        findings=findings,
-        items_for_human_review=_human_review_items(findings),
-        review_limitations=[
-            "当前离线执行引擎已接入本地引用资料检索；如未显式启用本地模型，则模板错贴、评分结构和商务链路仍以规则与启发式为主。",
-            "当前 section_path 与 table_or_item_label 仍基于启发式识别，对复杂表格和跨页结构的定位仍需继续增强。",
-            "当前 page_hint 在缺少显式分页标记时会回退为估算页号，正式审查前仍建议结合原文件复核。",
-        ],
+    return reconcile_review_result(
+        ReviewResult(
+            document_name=document.document_name,
+            review_scope="资格条件、评分规则、技术要求、商务及验收条款",
+            jurisdiction="中国",
+            review_timestamp=utc_now_iso(),
+            overall_risk_summary="",
+            findings=findings,
+            items_for_human_review=[],
+            review_limitations=[
+                "当前离线执行引擎已接入本地引用资料检索；如未显式启用本地模型，则模板错贴、评分结构和商务链路仍以规则与启发式为主。",
+                "当前 section_path 与 table_or_item_label 仍基于启发式识别，对复杂表格和跨页结构的定位仍需继续增强。",
+                "当前 page_hint 在缺少显式分页标记时会回退为估算页号，正式审查前仍建议结合原文件复核。",
+            ],
+        )
     )
+
+
+def reconcile_review_result(review: ReviewResult) -> ReviewResult:
+    review.findings = _apply_finding_arbiter(review.findings)
+    review.findings = _sort_findings(review.findings)
+    review.findings = _renumber_findings(review.findings)
+    review.overall_risk_summary = _overall_summary(review.findings)
+    review.items_for_human_review = _human_review_items(review.findings)
+    return review
 
 
 def _risk_level(severity_score: int) -> str:
