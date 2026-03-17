@@ -378,6 +378,67 @@ class LLMIntegrationTest(unittest.TestCase):
         ]:
             Path(path).unlink(missing_ok=True)
 
+    def test_document_audit_fallback_adds_chapter_level_theme_findings(self) -> None:
+        text = "\n".join(
+            [
+                "柴油发电机组采购及安装项目",
+                "申请人的资格要求",
+                "投标人须提供有害生物防制服务机构资质证书。",
+                "投标人年均纳税额不低于50万元。",
+                "评标信息",
+                "施工组织方案及安全保障措施",
+                "发电机组安装的工程案例。",
+                "投标人须提供具有CMA标识的第三方检测报告。",
+                "商务条款",
+                "采购人不承担任何责任。",
+                "项目正常运行三个月后支付尾款。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="docaudit123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = ReviewResult(
+            document_name="sample.txt",
+            review_scope="资格条件、评分规则、技术要求、商务及验收条款",
+            jurisdiction="中国",
+            review_timestamp="2026-03-16T00:00:00+00:00",
+            overall_risk_summary="summary",
+            findings=[],
+            items_for_human_review=[],
+            review_limitations=[],
+        )
+        llm_config = LLMConfig(
+            enabled=True,
+            base_url="http://112.111.54.86:10011/v1",
+            model="local-model",
+            api_key=None,
+            timeout_seconds=60,
+        )
+
+        with patch("agent_compliance.pipelines.llm_review.OpenAICompatibleLLMClient.chat", return_value='{"findings":[]}'):
+            result, artifacts = apply_llm_review_tasks(document, review, llm_config, output_stem="docauditfallback")
+
+        titles = {finding.problem_title for finding in artifacts.added_findings}
+        self.assertIn("资格章节存在与标的不匹配的资质要求或一般经营门槛", titles)
+        self.assertIn("评分或资质条款中存在与标的域不匹配的证书、案例或模板内容", titles)
+        self.assertIn("商务章节存在付款绑定、责任失衡或验收边界不清问题", titles)
+        self.assertTrue(any(finding.risk_level == "high" for finding in artifacts.added_findings))
+        self.assertTrue(any("资格章节存在与标的不匹配的资质要求或一般经营门槛" == finding.problem_title for finding in result.findings))
+
+        for path in [
+            artifacts.candidate_json_path,
+            artifacts.candidate_md_path,
+            artifacts.benchmark_json_path,
+            artifacts.benchmark_md_path,
+        ]:
+            Path(path).unlink(missing_ok=True)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -201,34 +201,16 @@ def _run_document_audit_task(
     review: ReviewResult,
     client: OpenAICompatibleLLMClient,
 ) -> list[Finding]:
-    candidate_clauses = [
-        clause
-        for clause in document.clauses
-        if any(
-            token in clause.text
-            for token in (
-                "资质证书",
-                "登记证书",
-                "年均纳税额",
-                "经营业绩证明",
-                "单项合同金额不低于",
-                "生产日期必须是",
-                "专业工程师",
-                "采购人不承担任何责任",
-                "正常运行三个月后",
-                "复检费用",
-            )
-        )
-    ]
+    candidate_clauses = _document_audit_candidate_clauses(document)
     if not candidate_clauses:
         return []
     prompt = _build_task_prompt(
         task_name="document_audit",
         instruction=(
-            "你正在做全文辅助扫描。请只补充当前 review 里尚未稳定出现的显性风险，"
+            "你正在做全文辅助扫描。请优先输出章节级主问题，而不是零散碎点。"
             "重点关注资格条件中的行业错位资质和一般财务门槛、评分项中的内容错位、"
             "技术要求中过窄的固定年份限制，以及付款、免责、复检费用等商务边界问题。"
-            "不要重复已有 findings，不要输出泛化结论。"
+            "不要重复已有 findings；如果多个候选条款属于同一章节主题，请尽量合成一条主问题。"
         ),
         document=document,
         clauses=candidate_clauses[:24],
@@ -584,58 +566,50 @@ def _fallback_document_audit_findings(
     clauses: list[Clause],
 ) -> list[Finding]:
     findings: list[Finding] = []
-    checks = [
+    theme_groups = [
         (
-            ("有害生物防制", "SPCA"),
+            ("有害生物防制", "SPCA", "资质证书", "登记证书", "年均纳税额", "经营业绩证明", "单项合同金额不低于"),
             {"qualification_domain_mismatch", "excessive_supplier_qualification"},
-            "与采购标的领域不匹配的资格资质要求",
-            "资格条件中出现与柴油发电机组供货安装明显不匹配的资质或登记要求，疑似模板错贴或无关门槛。",
-            "建议删除与项目标的不相称的资质和登记要求，仅保留与供货安装履约直接相关的条件。",
+            "资格章节存在与标的不匹配的资质要求或一般经营门槛",
+            "资格章节同时出现与采购标的不匹配的资质登记要求，以及一般纳税额、经营业绩或合同金额门槛，容易把模板残留和一般经营状况直接前置为准入条件。",
+            "建议将资格条件收束为法定资格和与履约直接相关的必要能力，不宜混入错位资质和一般经营门槛。",
             "qualification_domain_mismatch",
         ),
         (
-            ("年均纳税额", "经营业绩证明", "单项合同金额不低于"),
-            {"excessive_supplier_qualification"},
-            "资格条件中设置一般财务或经营门槛",
-            "将一般纳税额、经营年限或单项合同金额直接设置为资格门槛，容易超出法定资格和必要履约能力范围。",
-            "建议删除一般财务与经营门槛，改为与项目规模和履约直接相关的必要能力要求。",
-            "excessive_supplier_qualification",
+            ("工程案例", "CMA", "有机产品认证", "水运机电工程专项监理", "特种设备", "认证范围", "园区保洁"),
+            {"scoring_content_mismatch", "qualification_domain_mismatch", "template_mismatch"},
+            "评分或资质条款中存在与标的域不匹配的证书、案例或模板内容",
+            "评分或资质条款中出现与当前采购标的领域不匹配的案例、证书、认证范围或模板内容，容易把无关材料错误地转化为得分点或准入条件。",
+            "建议删除与项目标的不匹配的案例、证书和认证范围，仅保留与评分主题和履约目标直接相关的内容。",
+            "scoring_content_mismatch",
         ),
         (
-            ("生产日期必须是",),
-            {"technical_justification_needed"},
-            "核心设备生产日期限定过窄",
-            "将核心设备生产日期限定为固定自然年度，会在形式上压缩可选范围，应补充必要性和市场可得性说明。",
-            "建议将固定年份改为全新、未使用且符合交付要求的表述，或说明限定年份的必要性。",
+            ("生产日期必须是", "专业工程师", "5 年以上"),
+            {"technical_justification_needed", "excessive_supplier_qualification"},
+            "技术与安装章节存在过窄时点或人员来源限定",
+            "技术与安装章节同时对生产日期、人员来源或经验年限作过窄限定，容易将合理履约要求进一步收紧成事实上的排他条件。",
+            "建议改为全新未使用且满足交付要求、具备相应专业背景和安装调试经验的中性表述，不宜固定年份或限定人员必须来自制造商厂。",
             "technical_justification_needed",
         ),
         (
-            ("专业工程师", "5 年以上"),
-            {"excessive_supplier_qualification"},
-            "安装人员来源和经验要求指定过细",
-            "要求现场人员必须来自制造商厂且具备多年同类经验，容易把供应链体系优势固化为准入条件。",
-            "建议改为具备相应专业背景和安装调试经验，不宜限定人员必须来自制造商厂。",
-            "excessive_supplier_qualification",
-        ),
-        (
-            ("采购人不承担任何责任", "正常运行三个月后", "复检费用"),
-            {"one_sided_commercial_term", "unclear_acceptance_standard"},
-            "付款和责任边界明显向中标人倾斜",
-            "尾款与试运行周期绑定、运输条款绝对免责、复检费用由中标人承担，容易造成责任和回款风险失衡。",
-            "建议明确试运行、验收和复检机制，并按过错来源合理划分责任与费用承担。",
+            ("采购人不承担任何责任", "正常运行三个月后", "复检费用", "最终验收结果", "实际需求为准"),
+            {"one_sided_commercial_term", "unclear_acceptance_standard", "payment_acceptance_linkage"},
+            "商务章节存在付款绑定、责任失衡或验收边界不清问题",
+            "商务章节将试运行、付款、责任免责和复检费用等问题叠加在一起，容易造成验收标准、责任划分和回款条件整体失衡。",
+            "建议预先固定验收、试运行、复检和付款节点，并按过错来源划分责任与费用承担，避免开放式义务扩张。",
             "one_sided_commercial_term",
         ),
     ]
-    for tokens, issue_types, title, rationale, rewrite, issue_type in checks:
-        clause = next((item for item in clauses if any(token in item.text for token in tokens)), None)
-        if clause is None:
+    for tokens, issue_types, title, rationale, rewrite, issue_type in theme_groups:
+        matched_clauses = [item for item in clauses if any(token in item.text for token in tokens)]
+        if not matched_clauses:
             continue
-        if _review_has_issue(review, issue_types, {clause.clause_id}):
+        if _review_has_issue(review, issue_types, {clause.clause_id for clause in matched_clauses}):
             continue
         findings.append(
-            _make_added_finding(
+            _make_theme_added_finding(
                 document,
-                clause,
+                matched_clauses,
                 issue_type=issue_type,
                 problem_title=title,
                 why_it_is_risky=rationale,
@@ -643,6 +617,29 @@ def _fallback_document_audit_findings(
             )
         )
     return findings
+
+
+def _document_audit_candidate_clauses(document: NormalizedDocument) -> list[Clause]:
+    markers = (
+        "资质证书",
+        "登记证书",
+        "年均纳税额",
+        "经营业绩证明",
+        "单项合同金额不低于",
+        "工程案例",
+        "CMA",
+        "有机产品认证",
+        "水运机电工程专项监理",
+        "特种设备",
+        "生产日期必须是",
+        "专业工程师",
+        "采购人不承担任何责任",
+        "正常运行三个月后",
+        "复检费用",
+        "最终验收结果",
+        "实际需求为准",
+    )
+    return [clause for clause in document.clauses if any(token in clause.text for token in markers)]
 
 
 def _render_rule_candidates(rule_candidates: list[dict[str, object]]) -> str:
@@ -799,6 +796,45 @@ def _make_added_finding(
         rewrite_suggestion=rewrite_suggestion,
         needs_human_review=True,
         human_review_reason="该问题由本地大模型或其兜底分析链路新增，建议复核后决定是否入正式规则库。",
+        finding_origin="llm_added",
+    )
+
+
+def _make_theme_added_finding(
+    document: NormalizedDocument,
+    clauses: list[Clause],
+    *,
+    issue_type: str,
+    problem_title: str,
+    why_it_is_risky: str,
+    rewrite_suggestion: str,
+) -> Finding:
+    ordered = sorted(clauses, key=lambda item: (item.line_start, item.line_end))
+    first = ordered[0]
+    source_text = "；".join(list(dict.fromkeys(_representative_excerpt(clause.text) for clause in ordered[:3])))
+    return Finding(
+        finding_id="LLM-000",
+        document_name=document.document_name,
+        problem_title=problem_title,
+        page_hint=" / ".join([clause.page_hint for clause in ordered if clause.page_hint][:3]) or first.page_hint,
+        clause_id=first.clause_id,
+        source_section=first.source_section or first.section_path or "",
+        section_path=" / ".join([clause.section_path for clause in ordered if clause.section_path][:3]) or first.section_path,
+        table_or_item_label=first.table_or_item_label,
+        text_line_start=min(clause.line_start for clause in ordered),
+        text_line_end=max(clause.line_end for clause in ordered),
+        source_text=source_text,
+        issue_type=issue_type,
+        risk_level="high" if issue_type in {"qualification_domain_mismatch", "scoring_content_mismatch", "one_sided_commercial_term"} else "medium",
+        severity_score=3 if issue_type in {"qualification_domain_mismatch", "scoring_content_mismatch", "one_sided_commercial_term"} else 2,
+        confidence="medium",
+        compliance_judgment="potentially_problematic",
+        why_it_is_risky=why_it_is_risky,
+        impact_on_competition_or_performance="可能影响公平竞争、履约边界或合同可执行性。",
+        legal_or_policy_basis=None,
+        rewrite_suggestion=rewrite_suggestion,
+        needs_human_review=True,
+        human_review_reason="该问题由本地大模型或其全文辅助扫描兜底链路新增，建议复核后决定是否入正式规则库。",
         finding_origin="llm_added",
     )
 
