@@ -376,6 +376,7 @@ def _refine_findings(document: NormalizedDocument, findings: list[Finding]) -> l
     refined = _merge_sample_scoring_findings(refined)
     refined = _merge_scoring_content_findings(refined)
     refined = _add_scoring_structure_findings(document, refined)
+    refined = _add_commercial_chain_findings(document, refined)
     refined = _merge_technical_justification_findings(refined)
     refined = _filter_technical_justification_noise(refined)
     refined = _merge_similar_technical_findings(refined)
@@ -631,6 +632,11 @@ def _add_scoring_structure_findings(document: NormalizedDocument, findings: list
     return findings
 
 
+def _add_commercial_chain_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+    findings = _add_payment_evaluation_chain_finding(document, findings)
+    return findings
+
+
 def _add_scoring_structure_imbalance_finding(findings: list[Finding]) -> list[Finding]:
     weighted = [finding for finding in findings if _is_scoring_weight_candidate(finding)]
     categories = OrderedDict()
@@ -830,6 +836,57 @@ def _add_business_strength_theme_finding(
             rewrite_suggestion="建议删除一般财务能力、企业规模和标准研究参与类评分，仅保留与项目履约直接相关的实施保障因素。",
             needs_human_review=False,
             human_review_reason=None,
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_payment_evaluation_chain_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("付款条件与履约评价结果深度绑定且评价标准开放" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if any(
+            marker in clause.text
+            for marker in (
+                "结合履约评价结果支付",
+                "支付对应阶段款",
+                "对应阶段款不予支付",
+                "评价标准",
+                "评价指标",
+                "分值",
+                "项目负责人可根据项目要求自行设定",
+                "连续两次被评级为“中”",
+                "累计扣款金额达到合同金额的 30%",
+                "甲方有权解除合同",
+            )
+        )
+    ]
+    if len(clauses) < 3:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="one_sided_commercial_term",
+            problem_title="付款条件与履约评价结果深度绑定且评价标准开放",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "条款将阶段付款与履约评价结果直接绑定，同时允许“评价标准、评价指标和分值”在履约过程中由项目负责人根据项目要求自行设定。"
+                "当付款比例、整改要求和解除合同条件都受单方评价结果控制时，供应商回款和履约边界会明显失稳。"
+            ),
+            impact_on_competition_or_performance="可能导致付款条件和履约责任边界过度依赖采购人单方评价，增加报价不确定性和合同争议风险。",
+            legal_or_policy_basis="中华人民共和国民法典；政府采购需求管理办法（财政部）；履约验收规范要点（中国政府采购网）",
+            rewrite_suggestion="建议预先固定履约评价标准、付款节点、整改条件和解除合同条件，不宜将付款比例和解除后果交由履约过程中单方开放式设定。",
+            needs_human_review=True,
+            human_review_reason="需结合合同文本、财政支付流程和履约考核制度判断付款与评价绑定的范围、比例和标准是否合理。",
             finding_origin="analyzer",
         )
     )

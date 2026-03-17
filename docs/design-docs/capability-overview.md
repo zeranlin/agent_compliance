@@ -253,6 +253,8 @@
   - 多个方案评分项大量使用主观分档且缺少量化锚点
   - 现场演示分值过高且签到要求形成额外门槛
   - 商务评分将企业背景和一般财务能力直接转化为高分优势
+- 当前已开始落地 `commercial_chain_analyzer`，可把分散的付款、履约评价、整改和解除合同条款进一步收束为商务链路主问题，例如：
+  - 付款条件与履约评价结果深度绑定且评价标准开放
 
 相关设计：
 - [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)

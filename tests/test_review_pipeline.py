@@ -466,6 +466,34 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertTrue(any("现场演示分值过高且签到要求形成额外门槛" in finding.problem_title for finding in review.findings))
         self.assertTrue(any("商务评分将企业背景和一般财务能力直接转化为高分优势" in finding.problem_title for finding in review.findings))
 
+    def test_review_adds_commercial_chain_theme_finding(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "付款方式",
+                "其余阶段款项均将结合履约评价结果支付相应的款项。",
+                "评分为90分（含）以上的，支付全部对应款项。",
+                "评分为60分以下的，对应阶段款不予支付，且采购人有权终止合同。",
+                "评价标准、评价指标以及分值项目负责人可根据项目要求自行设定。",
+                "服务期间如乙方连续两次被评级为“中”或累计扣款金额达到合同金额的30%，甲方有权解除合同。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="commercial123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = build_review_result(document, run_rule_scan(document))
+
+        findings = [finding for finding in review.findings if "付款条件与履约评价结果深度绑定且评价标准开放" in finding.problem_title]
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].risk_level, "high")
+        self.assertEqual(findings[0].issue_type, "one_sided_commercial_term")
+
     def test_review_flags_geographic_and_personnel_restrictions(self) -> None:
         text = "\n".join(
             [
