@@ -509,14 +509,22 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             ("水运工程监理", "有害生物防制", "SPCA", "特种设备"),
         )
 
-    if "资格条件叠加设置一般财务、规模和属地门槛" in title:
+    if "资格条件设置一般财务和规模门槛" in title:
+        return finding.issue_type in {
+            "excessive_supplier_qualification",
+        } and _text_contains_any(
+            finding,
+            ("纳税", "员工总数", "资产总额"),
+        )
+
+    if "资格条件设置经营年限、属地场所或单项业绩门槛" in title:
         return finding.issue_type in {
             "qualification_domain_mismatch",
             "excessive_supplier_qualification",
             "geographic_restriction",
         } and _text_contains_any(
             finding,
-            ("纳税", "成立日期", "成立时间", "高新区", "固定的售后服务场所", "员工总数", "资产总额", "单项合同金额"),
+            ("成立日期", "成立时间", "高新区", "固定的售后服务场所", "单项合同金额"),
         )
 
     if "评分项直接按品牌档次赋分" in title:
@@ -525,7 +533,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             ("一线品牌", "国际知名品牌", "格力", "美的", "海尔", "大金", "日立"),
         )
 
-    if "认证评分混入与标的不匹配的企业称号和跨领域证书" in title:
+    if "认证评分混入错位证书且高分值结构失衡" in title:
         return finding.issue_type in {
             "scoring_content_mismatch",
             "irrelevant_certification_or_award",
@@ -570,14 +578,20 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             ("履约担保", "备用金", "1000", "报验", "送检", "专家评审", "百分之三十", "一切损失"),
         )
 
-    if "商务条款设置异常资金占用和交货期限" in title:
+    if "商务条款设置异常资金占用安排" in title:
         return finding.issue_type in {
             "one_sided_commercial_term",
             "payment_acceptance_linkage",
             "other",
         } and _text_contains_any(
             finding,
-            ("履约担保", "备用金", "1000", "交货"),
+            ("履约担保", "备用金"),
+        )
+
+    if "交货期限设置异常或明显失真" in title:
+        return finding.issue_type in {"one_sided_commercial_term", "other"} and _text_contains_any(
+            finding,
+            ("1000", "交货"),
         )
 
     if "验收送检、检测和专家评审费用整体转嫁给供应商" in title:
@@ -902,7 +916,15 @@ def _add_domain_match_findings(document: NormalizedDocument, findings: list[Find
 
 
 def _add_qualification_bundle_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
-    if any("资格条件叠加设置一般财务、规模和属地门槛" in finding.problem_title for finding in findings):
+    findings = _add_qualification_financial_scale_theme_finding(document, findings)
+    findings = _add_qualification_operating_scope_theme_finding(document, findings)
+    return findings
+
+
+def _add_qualification_financial_scale_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("资格条件设置一般财务和规模门槛" in finding.problem_title for finding in findings):
         return findings
     clauses = [
         clause
@@ -910,37 +932,71 @@ def _add_qualification_bundle_findings(document: NormalizedDocument, findings: l
         if _is_qualification_clause(clause)
         and any(
             marker in clause.text
-            for marker in (
-                "纳税总额不得低于",
-                "营业执照的成立日期不得晚于",
-                "固定的售后服务场所",
-                "员工总数不得少于",
-                "平均资产总额不低于",
-                "单项合同金额不低于",
-            )
+            for marker in ("纳税总额不得低于", "员工总数不得少于", "平均资产总额不低于")
         )
     ]
-    if len(clauses) < 3:
+    if len(clauses) < 2:
         return findings
     findings.append(
         _build_theme_finding(
             document=document,
             clauses=clauses,
             issue_type="excessive_supplier_qualification",
-            problem_title="资格条件叠加设置一般财务、规模和属地门槛",
+            problem_title="资格条件设置一般财务和规模门槛",
             risk_level="high",
             severity_score=3,
             confidence="high",
             compliance_judgment="likely_non_compliant",
             why_it_is_risky=(
-                "资格章节同时叠加一般纳税额、成立年限、员工人数、资产规模和固定售后场所等条件。"
-                "这类一般经营状况和属地条件通常不能直接替代货物采购项目的实际履约能力判断。"
+                "资格章节以纳税总额、员工人数、资产规模等一般经营指标设置准入门槛。"
+                "这类一般财务和规模指标通常不能直接替代电子仪器仪表采购项目的供货和售后履约能力。"
             ),
-            impact_on_competition_or_performance="可能把一般经营规模和属地条件直接转化为准入门槛，显著缩小竞争范围。",
+            impact_on_competition_or_performance="可能把企业一般经营规模错误转化为参与门槛，明显压缩可竞争供应商范围。",
             legal_or_policy_basis="中华人民共和国政府采购法实施条例；政府采购需求管理办法（财政部）",
-            rewrite_suggestion="建议删除与本项目履约无直接对应关系的一般财务、规模和属地门槛，仅保留法定资格及必要履约能力条件。",
+            rewrite_suggestion="建议删除一般财务和规模门槛，仅保留与法定资格和履约能力直接相关的必要条件。",
             needs_human_review=False,
             human_review_reason=None,
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_qualification_operating_scope_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("资格条件设置经营年限、属地场所或单项业绩门槛" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_qualification_clause(clause)
+        and any(
+            marker in clause.text
+            for marker in ("营业执照的成立日期不得晚于", "固定的售后服务场所", "单项合同金额不低于")
+        )
+    ]
+    if len(clauses) < 2:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="excessive_supplier_qualification",
+            problem_title="资格条件设置经营年限、属地场所或单项业绩门槛",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "资格章节将经营年限、固定售后场所和单项合同金额等条件前置为参与门槛。"
+                "这类要求容易把一般经营历史、属地条件和项目规模偏好错误地转化为准入条件。"
+            ),
+            impact_on_competition_or_performance="可能对新进入供应商、非本地供应商或规模较小但具备履约能力的供应商形成明显排斥。",
+            legal_or_policy_basis="中华人民共和国政府采购法实施条例；政府采购需求管理办法（财政部）",
+            rewrite_suggestion="建议删除经营年限、固定场所和单项合同金额类门槛，改为围绕交付能力、售后机制和必要经验设置更中性的资格要求。",
+            needs_human_review=True,
+            human_review_reason="需结合项目供货周期、售后机制和是否确有必要的类似经验判断相关经营年限、场所和业绩门槛是否应保留。",
             finding_origin="analyzer",
         )
     )
@@ -1006,6 +1062,7 @@ def _add_technical_reference_consistency_findings(
 
 def _add_commercial_burden_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
     findings = _add_commercial_financing_burden_theme_finding(document, findings)
+    findings = _add_delivery_deadline_anomaly_theme_finding(document, findings)
     findings = _add_commercial_acceptance_fee_shift_theme_finding(document, findings)
     return findings
 
@@ -1100,19 +1157,14 @@ def _add_proof_formality_findings(document: NormalizedDocument, findings: list[F
 def _add_commercial_financing_burden_theme_finding(
     document: NormalizedDocument, findings: list[Finding]
 ) -> list[Finding]:
-    if any("商务条款设置异常资金占用和交货期限" in finding.problem_title for finding in findings):
+    if any("商务条款设置异常资金占用安排" in finding.problem_title for finding in findings):
         return findings
     clauses = [
         clause
         for clause in document.clauses
         if any(
             marker in clause.text
-            for marker in (
-                "预算金额的5%作为履约担保",
-                "诚信履约备用金",
-                "1000      个日历日内交货",
-                "1000 个日历日内交货",
-            )
+            for marker in ("预算金额的5%作为履约担保", "诚信履约备用金")
         )
     ]
     if len(clauses) < 2:
@@ -1122,20 +1174,60 @@ def _add_commercial_financing_burden_theme_finding(
             document=document,
             clauses=clauses,
             issue_type="one_sided_commercial_term",
-            problem_title="商务条款设置异常资金占用和交货期限",
+            problem_title="商务条款设置异常资金占用安排",
             risk_level="high",
             severity_score=3,
             confidence="high",
             compliance_judgment="likely_non_compliant",
             why_it_is_risky=(
-                "商务条款同时设置较高履约担保、诚信履约备用金和明显异常的交货期限。"
-                "这类安排会把资金占用和供货周期风险叠加转嫁给供应商。"
+                "商务条款同时设置较高履约担保和诚信履约备用金。"
+                "这类资金占用安排会明显增加供应商的前期履约成本和现金流压力。"
             ),
             impact_on_competition_or_performance="可能显著抬高报价和资金占用成本，并压缩可参与竞争的供应商范围。",
             legal_or_policy_basis="中华人民共和国民法典；政府采购需求管理办法（财政部）",
-            rewrite_suggestion="建议分别校准履约担保比例、备用金安排和交货期限，避免通过叠加式商务条件整体提高资金占用和履约成本。",
+            rewrite_suggestion="建议分别校准履约担保比例和备用金安排，不宜通过叠加式资金占用条件整体提高供应商履约门槛。",
             needs_human_review=True,
             human_review_reason="需结合财政支付、履约担保和项目供货周期判断相关商务安排是否合理并符合采购内控要求。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_delivery_deadline_anomaly_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("交货期限设置异常或明显失真" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if any(
+            marker in clause.text
+            for marker in ("1000      个日历日内交货", "1000 个日历日内交货", "1000个日历日内交货")
+        )
+    ]
+    if not clauses:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="one_sided_commercial_term",
+            problem_title="交货期限设置异常或明显失真",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="potentially_problematic",
+            why_it_is_risky=(
+                "商务条款设置了与通常电子仪器仪表供货节奏明显不匹配的超长交货期限。"
+                "这类失真的交货安排容易掩盖真实供货周期要求，也会增加合同履行和验收节点的不确定性。"
+            ),
+            impact_on_competition_or_performance="可能导致项目排期、履约责任和验收节点失真，并增加后续履约争议风险。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；中华人民共和国民法典",
+            rewrite_suggestion="建议结合采购清单、供货周期和安装调试安排重设合理交货期限，避免使用明显失真的超长交付时限。",
+            needs_human_review=True,
+            human_review_reason="需结合采购内容、安装调试周期和项目建设时序判断当前交货期限是否属于录入错误或异常设置。",
             finding_origin="analyzer",
         )
     )
@@ -1554,7 +1646,7 @@ def _add_brand_scoring_theme_finding(document: NormalizedDocument, findings: lis
 def _add_certification_scoring_theme_finding(
     document: NormalizedDocument, findings: list[Finding]
 ) -> list[Finding]:
-    if any("认证评分混入与标的不匹配的企业称号和跨领域证书" in finding.problem_title for finding in findings):
+    if any("认证评分混入错位证书且高分值结构失衡" in finding.problem_title for finding in findings):
         return findings
     clauses = [
         clause
@@ -1572,18 +1664,18 @@ def _add_certification_scoring_theme_finding(
             document=document,
             clauses=clauses,
             issue_type="scoring_content_mismatch",
-            problem_title="认证评分混入与标的不匹配的企业称号和跨领域证书",
+            problem_title="认证评分混入错位证书且高分值结构失衡",
             risk_level="high",
             severity_score=3,
             confidence="high",
             compliance_judgment="likely_non_compliant",
             why_it_is_risky=(
-                "认证评分中同时混入科技型中小企业、跨领域安全生产证书和 IT 服务类认证。"
-                "这类企业称号和跨领域证书与本项目电子仪器仪表供货履约关联较弱，却被直接折算为高分值。"
+                "认证评分中同时混入企业称号、跨领域证书和 IT 服务类认证，并通过较高分值结构集中放大。"
+                "这类内容与电子仪器仪表供货履约关联较弱，却被整体转化为高分竞争优势。"
             ),
             impact_on_competition_or_performance="可能使评分重心偏离产品供货和售后能力，并对具备无关证书的供应商形成倾斜。",
             legal_or_policy_basis="政府采购需求管理办法（财政部）；奖项荣誉信用等级评分问题（中国政府采购网）",
-            rewrite_suggestion="建议删除与采购标的不匹配的企业称号和跨领域证书，仅保留与质量管理和履约保障直接相关的少量辅助性证明，并降低分值。",
+            rewrite_suggestion="建议将企业称号、跨领域证书和体系认证拆开审视，仅保留与质量控制和售后履约直接相关的少量辅助性证明，并整体压降分值。",
             needs_human_review=True,
             human_review_reason="需结合采购标的、评分主题和各类认证的实际用途判断其是否与项目履约目标直接相关。",
             finding_origin="analyzer",
@@ -1880,7 +1972,7 @@ def _apply_theme_splitter_and_summarizer(findings: list[Finding]) -> list[Findin
         if finding.finding_origin != "analyzer":
             continue
         finding.source_text = _build_theme_excerpt(finding.source_text)
-        if finding.problem_title == "认证评分混入与标的不匹配的企业称号和跨领域证书":
+        if finding.problem_title == "认证评分混入错位证书且高分值结构失衡":
             finding.why_it_is_risky = (
                 "认证评分同时混入企业称号、跨领域证书和高权重认证项。"
                 "这类内容不仅与电子仪器仪表供货履约关联较弱，还会通过高分值结构放大无关材料的竞争优势。"
@@ -1888,14 +1980,28 @@ def _apply_theme_splitter_and_summarizer(findings: list[Finding]) -> list[Findin
             finding.rewrite_suggestion = (
                 "建议将企业称号、跨领域证书和体系认证拆开审视，仅保留与质量控制和售后履约直接相关的少量辅助性证明，并整体压降分值。"
             )
-        if finding.problem_title == "资格条件叠加设置一般财务、规模和属地门槛":
+        if finding.problem_title == "资格条件设置一般财务和规模门槛":
             finding.why_it_is_risky = (
-                "资格章节同时设置一般财务、规模和属地门槛。"
-                "这类条件通常不能直接替代电子仪器仪表采购项目的实际供货和售后履约能力，容易把一般经营状况错误转化为准入条件。"
+                "资格章节以纳税总额、员工人数和资产规模等一般经营指标设置门槛。"
+                "这类指标通常不能直接替代电子仪器仪表采购项目的实际供货和售后履约能力。"
             )
-        if finding.problem_title == "商务条款设置异常资金占用和交货期限":
+        if finding.problem_title == "资格条件设置经营年限、属地场所或单项业绩门槛":
+            finding.source_text = _build_theme_excerpt(finding.source_text)
+        if finding.problem_title == "商务条款设置异常资金占用安排":
             finding.rewrite_suggestion = (
-                "建议分别校准履约担保、备用金和交货期限，不宜通过异常长交货期和叠加式资金占用安排整体提高供应商履约门槛。"
+                "建议分别校准履约担保和备用金安排，不宜通过叠加式资金占用条件整体提高供应商履约门槛。"
+            )
+        if finding.problem_title == "交货期限设置异常或明显失真":
+            finding.rewrite_suggestion = (
+                "建议按采购清单、供货周期和安装调试安排重设合理交货期限，并在文件中明确交付节点和验收衔接要求。"
+            )
+        if finding.problem_title == "技术要求引用了与标的不匹配的标准或规范":
+            finding.rewrite_suggestion = (
+                "建议逐项校核技术指标所对应的标准来源，仅保留与电子仪器仪表性能、精度和安全要求直接相关的国家或行业标准。"
+            )
+        if finding.problem_title == "技术证明材料形式要求过严且带有地方化限制":
+            finding.rewrite_suggestion = (
+                "建议将证明要求改为能证明对应性能指标满足需求的有效资料，不限定本地机构、特定起算年份和原件扫描件形式。"
             )
     return findings
 
@@ -2090,9 +2196,17 @@ def _build_sample_scoring_finding(candidates: list[Finding]) -> Finding:
 
 
 def _merge_nearby_liability_findings(findings: list[Finding]) -> list[Finding]:
-    others = [finding for finding in findings if finding.issue_type != "one_sided_commercial_term"]
+    others = [
+        finding
+        for finding in findings
+        if finding.issue_type != "one_sided_commercial_term" or finding.finding_origin == "analyzer"
+    ]
     liabilities = sorted(
-        (finding for finding in findings if finding.issue_type == "one_sided_commercial_term"),
+        (
+            finding
+            for finding in findings
+            if finding.issue_type == "one_sided_commercial_term" and finding.finding_origin != "analyzer"
+        ),
         key=lambda item: (item.text_line_start, item.text_line_end, item.section_path or ""),
     )
     if not liabilities:

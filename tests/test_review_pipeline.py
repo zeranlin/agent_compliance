@@ -307,7 +307,8 @@ class ReviewPipelineTest(unittest.TestCase):
 
         review = build_review_result(document, run_rule_scan(document))
         titles = {finding.problem_title for finding in review.findings}
-        self.assertIn("资格条件叠加设置一般财务、规模和属地门槛", titles)
+        self.assertIn("资格条件设置一般财务和规模门槛", titles)
+        self.assertIn("资格条件设置经营年限、属地场所或单项业绩门槛", titles)
 
     def test_review_adds_brand_and_certification_scoring_themes(self) -> None:
         text = "\n".join(
@@ -335,7 +336,35 @@ class ReviewPipelineTest(unittest.TestCase):
         review = build_review_result(document, run_rule_scan(document))
         titles = {finding.problem_title for finding in review.findings}
         self.assertIn("评分项直接按品牌档次赋分", titles)
-        self.assertIn("认证评分混入与标的不匹配的企业称号和跨领域证书", titles)
+        self.assertIn("认证评分混入错位证书且高分值结构失衡", titles)
+
+    def test_review_splits_qualification_bundle_themes(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "供应商2024年度的纳税总额不得低于人民币500万元。",
+                "供应商在册员工总数不得少于100人。",
+                "供应商最近三个会计年度的年末平均资产总额不低于4000万元人民币。",
+                "营业执照的成立日期不得晚于2020年1月1日。",
+                "供应商必须在高新区内拥有固定的售后服务场所。",
+                "供应商须具备单项合同金额不低于100万元的同类业绩。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="qual-split-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("资格条件设置一般财务和规模门槛", titles)
+        self.assertIn("资格条件设置经营年限、属地场所或单项业绩门槛", titles)
 
     def test_review_splits_technical_reference_consistency_themes(self) -> None:
         text = "\n".join(
@@ -390,7 +419,8 @@ class ReviewPipelineTest(unittest.TestCase):
 
         review = build_review_result(document, run_rule_scan(document))
         titles = {finding.problem_title for finding in review.findings}
-        self.assertIn("商务条款设置异常资金占用和交货期限", titles)
+        self.assertIn("商务条款设置异常资金占用安排", titles)
+        self.assertIn("交货期限设置异常或明显失真", titles)
         self.assertIn("验收送检、检测和专家评审费用整体转嫁给供应商", titles)
         self.assertIn("商务责任和违约后果设置明显偏重", titles)
 
@@ -469,7 +499,7 @@ class ReviewPipelineTest(unittest.TestCase):
 
         review = build_review_result(document, run_rule_scan(document))
         target = next(
-            finding for finding in review.findings if finding.problem_title == "认证评分混入与标的不匹配的企业称号和跨领域证书"
+            finding for finding in review.findings if finding.problem_title == "认证评分混入错位证书且高分值结构失衡"
         )
         self.assertIn("等", target.source_text)
         self.assertIn("高权重", target.why_it_is_risky)
