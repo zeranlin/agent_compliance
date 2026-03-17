@@ -71,6 +71,7 @@
 
 对应设计文档：
 - [continuous-human-parity-architecture.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/continuous-human-parity-architecture.md)
+- [code-review-gap-closure-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-gap-closure-roadmap.md)
 
 ## 阶段一：差异驱动的规则增强
 
@@ -199,6 +200,18 @@
 - `finding_arbiter` 已继续增强，可进一步压掉正文与投标文件格式附件中的语义重复问题，并优先保留更适合改稿的正文主问题和代表性证据。
 - `document_audit_llm` 现已开始与 `finding_arbiter` 共用同一套结果收尾逻辑，模型补出的新增问题会先进入候选池，再由仲裁层决定是否保留，避免全文辅助扫描把已收束的结果重新打散
 - `document_audit_llm` 兜底输出已开始从碎点补充提升为章节级主问题补充，可优先补出资格章节、评分章节和商务章节的主风险概括，而不是只补单条句子
+
+下一阶段补差重点：
+- `document_level_judgment_engine`
+- `mixed_scope_boundary_engine`
+- `qualification_reasoning_engine`
+- `scoring_semantic_consistency_engine`
+- `personnel_certificate_mismatch_engine`
+- `demo_mechanism_engine`
+- `technical_necessity_explainer`
+- `commercial_lifecycle_analyzer`
+- `evidence_selector`
+- `difference_learning_loop`
 
 完成标志：
 - 评分、演示、付款、履约评价类问题开始以章节级主问题输出，而不是大量碎点输出
