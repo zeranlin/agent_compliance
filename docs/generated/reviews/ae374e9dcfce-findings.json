@@ -2,8 +2,8 @@
   "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
   "review_scope": "资格条件、评分规则、技术要求、商务及验收条款",
   "jurisdiction": "中国",
-  "review_timestamp": "2026-03-17T00:52:05+00:00",
-  "overall_risk_summary": "本地离线审查共形成 26 条去重 findings，其中高风险 5 条、中风险 21 条。 当前结果已接入本地规则映射和引用资料检索，可作为正式审查前的离线初筛与复审输入。",
+  "review_timestamp": "2026-03-17T00:55:01+00:00",
+  "overall_risk_summary": "本地离线审查共形成 29 条去重 findings，其中高风险 8 条、中风险 21 条。 当前结果已接入本地规则映射和引用资料检索，可作为正式审查前的离线初筛与复审输入。",
   "findings": [
     {
       "finding_id": "F-001",
@@ -58,6 +58,81 @@
     {
       "finding_id": "F-003",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
+      "problem_title": "资格条件中存在与标的域不匹配的资质或登记要求",
+      "page_hint": "第14页（估算）",
+      "clause_id": "6、具有特种设备安全管理和作业人员证书，得10分",
+      "source_section": "评分因素",
+      "section_path": "评标信息-评分项-技术部分-评分因素",
+      "table_or_item_label": "评分因素",
+      "text_line_start": 609,
+      "text_line_end": 609,
+      "source_text": "6、具有特种设备安全管理和作业人员证书，得10分",
+      "issue_type": "qualification_domain_mismatch",
+      "risk_level": "high",
+      "severity_score": 3,
+      "confidence": "high",
+      "compliance_judgment": "likely_non_compliant",
+      "why_it_is_risky": "资格条件中出现与当前采购标的领域不匹配的资质、登记或专门证书要求。这类内容往往意味着模板错贴，或者把与项目履约无直接关系的条件错误地前置为参与门槛。",
+      "impact_on_competition_or_performance": "可能将与标的不相称的行业资质错误转化为准入门槛，直接缩小竞争范围。",
+      "legal_or_policy_basis": "中华人民共和国政府采购法实施条例；政府采购需求管理办法（财政部）",
+      "rewrite_suggestion": "建议删除与当前采购标的不匹配的资质、登记和专门证书要求，仅保留与法定资格和项目履约直接相关的条件。",
+      "needs_human_review": true,
+      "human_review_reason": "需结合项目主标的、行业许可边界和实际履约场景判断该类资质是否确有必要。",
+      "finding_origin": "analyzer"
+    },
+    {
+      "finding_id": "F-004",
+      "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
+      "problem_title": "评分项中存在与标的域不匹配的证书认证或模板内容",
+      "page_hint": "第14页（估算） / 第15页（估算）",
+      "clause_id": "6、具有特种设备安全管理和作业人员证书，得10分",
+      "source_section": "评分因素",
+      "section_path": "评标信息-评分项-技术部分-评分因素",
+      "table_or_item_label": "评分因素",
+      "text_line_start": 609,
+      "text_line_end": 641,
+      "source_text": "6、具有特种设备安全管理和作业人员证书，得10分；8、投标人同时具有有效的质量管理体系认证证书（认证范围为：客户服务、园区保洁、设施维修、安防管理）",
+      "issue_type": "scoring_content_mismatch",
+      "risk_level": "high",
+      "severity_score": 3,
+      "confidence": "high",
+      "compliance_judgment": "likely_non_compliant",
+      "why_it_is_risky": "评分项中出现与当前采购标的领域不匹配的证书、认证范围或专门行业内容。这类内容容易把模板残留或跨领域材料错误地转化为得分点，扭曲评审重心。",
+      "impact_on_competition_or_performance": "可能使评分重心偏离项目实际履约能力，并对少数具备无关材料的供应商形成倾斜。",
+      "legal_or_policy_basis": "政府采购需求管理办法（财政部）；奖项荣誉信用等级评分问题（中国政府采购网）",
+      "rewrite_suggestion": "建议删除与当前采购标的不匹配的证书、认证和行业内容，仅保留与评分主题和履约目标直接相关的因素。",
+      "needs_human_review": true,
+      "human_review_reason": "需结合项目主标的、评分主题和具体证书用途判断该类内容是否属于明显错位或仍有合理业务关联。",
+      "finding_origin": "analyzer"
+    },
+    {
+      "finding_id": "F-005",
+      "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
+      "problem_title": "文件中存在与标的域不匹配的模板残留或义务外扩",
+      "page_hint": "第14页（估算） / 第15页（估算）",
+      "clause_id": "6、具有特种设备安全管理和作业人员证书，得10分",
+      "source_section": "评分因素",
+      "section_path": "评标信息-评分项-技术部分-评分因素",
+      "table_or_item_label": "评分因素",
+      "text_line_start": 609,
+      "text_line_end": 641,
+      "source_text": "6、具有特种设备安全管理和作业人员证书，得10分；8、投标人同时具有有效的质量管理体系认证证书（认证范围为：客户服务、园区保洁、设施维修、安防管理）",
+      "issue_type": "template_mismatch",
+      "risk_level": "high",
+      "severity_score": 3,
+      "confidence": "high",
+      "compliance_judgment": "likely_non_compliant",
+      "why_it_is_risky": "文件中出现与当前采购标的领域不匹配的服务义务、系统对接、安防保洁或专门行业内容。这类条款通常来自跨项目模板复制，容易把无关义务和额外履约成本转嫁给供应商。",
+      "impact_on_competition_or_performance": "可能扩张供应商义务范围，并引入与采购标的不直接相关的实施成本和争议点。",
+      "legal_or_policy_basis": "政府采购需求管理办法（财政部）",
+      "rewrite_suggestion": "建议逐条排查并删除跨领域模板残留；如确需保留，应明确其与当前采购标的的直接业务关联和履约边界。",
+      "needs_human_review": true,
+      "human_review_reason": "需结合项目主标的、业务边界和合同范围判断该条款是否属于模板错贴或确有必要的扩展义务。",
+      "finding_origin": "analyzer"
+    },
+    {
+      "finding_id": "F-006",
+      "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "商务评分将企业背景和一般财务能力直接转化为高分优势",
       "page_hint": "第19页（估算）",
       "clause_id": "1、投标人参与过国家相关标准委员会城市运行管理服务相关平台技术研究的得",
@@ -81,7 +156,7 @@
       "finding_origin": "analyzer"
     },
     {
-      "finding_id": "F-004",
+      "finding_id": "F-007",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "资格条件设置与履约关联不足",
       "page_hint": "第19页（估算）",
@@ -106,7 +181,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-005",
+      "finding_id": "F-008",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "付款条件与履约评价结果深度绑定且评价标准开放",
       "page_hint": "第44页（估算） / 第63页（估算） / 第66页（估算） / 第73页（估算）",
@@ -131,7 +206,7 @@
       "finding_origin": "analyzer"
     },
     {
-      "finding_id": "F-006",
+      "finding_id": "F-009",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分分档缺少明确量化锚点（同一评分项已合并）",
       "page_hint": "第5页（估算）",
@@ -156,7 +231,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-007",
+      "finding_id": "F-010",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分分档缺少明确量化锚点",
       "page_hint": "第5页（估算）",
@@ -181,7 +256,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-008",
+      "finding_id": "F-011",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分分档缺少明确量化锚点（同一评分项已合并）",
       "page_hint": "第6页（估算）",
@@ -206,7 +281,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-009",
+      "finding_id": "F-012",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "安全环保类技术要求可能合理但需补充必要性论证",
       "page_hint": "第7页（估算）",
@@ -231,7 +306,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-010",
+      "finding_id": "F-013",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "安全环保类技术要求可能合理但需补充必要性论证",
       "page_hint": "第7页（估算）",
@@ -256,7 +331,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-011",
+      "finding_id": "F-014",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分分档缺少明确量化锚点（同一评分项已合并）",
       "page_hint": "第7页（估算）",
@@ -281,7 +356,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-012",
+      "finding_id": "F-015",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分分档缺少明确量化锚点",
       "page_hint": "第7页（估算）",
@@ -306,7 +381,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-013",
+      "finding_id": "F-016",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分分档缺少明确量化锚点（同一评分项已合并）",
       "page_hint": "第8页（估算）",
@@ -331,7 +406,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-014",
+      "finding_id": "F-017",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分分档缺少明确量化锚点（同一评分项已合并）",
       "page_hint": "第10页（估算）",
@@ -356,7 +431,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-015",
+      "finding_id": "F-018",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分分档缺少明确量化锚点（同一评分项已合并）",
       "page_hint": "第11页（估算）",
@@ -381,7 +456,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-016",
+      "finding_id": "F-019",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "单一评分因素权重设置过高",
       "page_hint": "第12页（估算）",
@@ -406,7 +481,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-017",
+      "finding_id": "F-020",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分中设置与履约弱相关的荣誉资质加分（同一评分项已合并）",
       "page_hint": "第14页（估算）",
@@ -431,7 +506,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-018",
+      "finding_id": "F-021",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "单一评分因素权重设置过高",
       "page_hint": "第14页（估算）",
@@ -456,7 +531,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-019",
+      "finding_id": "F-022",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分中设置与履约弱相关的荣誉资质加分",
       "page_hint": "第14页（估算）",
@@ -481,7 +556,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-020",
+      "finding_id": "F-023",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分中设置与履约弱相关的荣誉资质加分（同一评分项已合并）",
       "page_hint": "第17页（估算）",
@@ -506,7 +581,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-021",
+      "finding_id": "F-024",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "单一评分因素权重设置过高",
       "page_hint": "第17页（估算）",
@@ -531,7 +606,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-022",
+      "finding_id": "F-025",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分中设置与履约弱相关的荣誉资质加分",
       "page_hint": "第18页（估算）",
@@ -556,7 +631,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-023",
+      "finding_id": "F-026",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "单一评分因素权重设置过高",
       "page_hint": "第19页（估算）",
@@ -581,7 +656,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-024",
+      "finding_id": "F-027",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "安全环保类技术要求可能合理但需补充必要性论证",
       "page_hint": "第46页（估算）",
@@ -606,7 +681,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-025",
+      "finding_id": "F-028",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "安全环保类技术要求可能合理但需补充必要性论证",
       "page_hint": "第54页（估算）",
@@ -631,7 +706,7 @@
       "finding_origin": "rule"
     },
     {
-      "finding_id": "F-026",
+      "finding_id": "F-029",
       "document_name": "[BACG2025000066-A]深圳市宝安区信息中心宝安区民生诉求服务平台（二期）项目.docx",
       "problem_title": "评分中设置与履约弱相关的荣誉资质加分（相邻条款已合并）",
       "page_hint": "第64页（估算）",
@@ -657,11 +732,14 @@
     }
   ],
   "items_for_human_review": [
-    "F-005：需结合合同文本、财政支付流程和履约考核制度判断付款与评价绑定的范围、比例和标准是否合理。",
-    "F-009：需结合安全、环保、院感或有害物质控制要求及市场可得性判断该类技术要求是否应保留。",
-    "F-010：需结合安全、环保、院感或有害物质控制要求及市场可得性判断该类技术要求是否应保留。",
-    "F-024：需结合安全、环保、院感或有害物质控制要求及市场可得性判断该类技术要求是否应保留。",
-    "F-025：需结合安全、环保、院感或有害物质控制要求及市场可得性判断该类技术要求是否应保留。"
+    "F-003：需结合项目主标的、行业许可边界和实际履约场景判断该类资质是否确有必要。",
+    "F-004：需结合项目主标的、评分主题和具体证书用途判断该类内容是否属于明显错位或仍有合理业务关联。",
+    "F-005：需结合项目主标的、业务边界和合同范围判断该条款是否属于模板错贴或确有必要的扩展义务。",
+    "F-008：需结合合同文本、财政支付流程和履约考核制度判断付款与评价绑定的范围、比例和标准是否合理。",
+    "F-012：需结合安全、环保、院感或有害物质控制要求及市场可得性判断该类技术要求是否应保留。",
+    "F-013：需结合安全、环保、院感或有害物质控制要求及市场可得性判断该类技术要求是否应保留。",
+    "F-027：需结合安全、环保、院感或有害物质控制要求及市场可得性判断该类技术要求是否应保留。",
+    "F-028：需结合安全、环保、院感或有害物质控制要求及市场可得性判断该类技术要求是否应保留。"
   ],
   "review_limitations": [
     "当前离线执行引擎已接入本地引用资料检索；如未显式启用本地模型，则模板错贴、评分结构和商务链路仍以规则与启发式为主。",

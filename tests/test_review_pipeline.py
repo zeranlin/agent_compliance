@@ -494,6 +494,55 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertEqual(findings[0].risk_level, "high")
         self.assertEqual(findings[0].issue_type, "one_sided_commercial_term")
 
+    def test_review_adds_domain_match_theme_findings_for_information_system_project(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：民生诉求服务平台（二期）项目",
+                "申请人的资格要求",
+                "投标人须具有特种设备安全管理和作业人员证书。",
+                "评标信息",
+                "投标人同时具有有效的质量管理体系认证证书（认证范围为：客户服务、园区保洁、设施维修、安防管理）。",
+                "商务要求",
+                "中标人应负责园区保洁、设施维修及安防管理服务。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/民生诉求服务平台项目.docx",
+            document_name="民生诉求服务平台项目.docx",
+            file_hash="domain123",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = build_review_result(document, run_rule_scan(document))
+
+        self.assertTrue(any("资格条件中存在与标的域不匹配的资质或登记要求" in finding.problem_title for finding in review.findings))
+        self.assertTrue(any("评分项中存在与标的域不匹配的证书认证或模板内容" in finding.problem_title for finding in review.findings))
+        self.assertTrue(any("文件中存在与标的域不匹配的模板残留或义务外扩" in finding.problem_title for finding in review.findings))
+
+    def test_review_adds_template_domain_theme_for_textile_goods_project(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：低值易耗物品采购",
+                "商务要求",
+                "中标人提供的芯片及系统需无缝对接采购人现有系统。",
+                "如提供货物与实际需求不符，以采购人的实际需求为准。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/低值易耗物品采购.docx",
+            document_name="低值易耗物品采购.docx",
+            file_hash="domain456",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = build_review_result(document, run_rule_scan(document))
+
+        self.assertTrue(any("文件中存在与标的域不匹配的模板残留或义务外扩" in finding.problem_title for finding in review.findings))
+
     def test_review_flags_geographic_and_personnel_restrictions(self) -> None:
         text = "\n".join(
             [

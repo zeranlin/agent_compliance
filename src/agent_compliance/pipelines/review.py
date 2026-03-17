@@ -377,6 +377,7 @@ def _refine_findings(document: NormalizedDocument, findings: list[Finding]) -> l
     refined = _merge_scoring_content_findings(refined)
     refined = _add_scoring_structure_findings(document, refined)
     refined = _add_commercial_chain_findings(document, refined)
+    refined = _add_domain_match_findings(document, refined)
     refined = _merge_technical_justification_findings(refined)
     refined = _filter_technical_justification_noise(refined)
     refined = _merge_similar_technical_findings(refined)
@@ -637,6 +638,13 @@ def _add_commercial_chain_findings(document: NormalizedDocument, findings: list[
     return findings
 
 
+def _add_domain_match_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+    findings = _add_qualification_domain_theme_finding(document, findings)
+    findings = _add_scoring_domain_theme_finding(document, findings)
+    findings = _add_template_domain_theme_finding(document, findings)
+    return findings
+
+
 def _add_scoring_structure_imbalance_finding(findings: list[Finding]) -> list[Finding]:
     weighted = [finding for finding in findings if _is_scoring_weight_candidate(finding)]
     categories = OrderedDict()
@@ -891,6 +899,139 @@ def _add_payment_evaluation_chain_finding(
         )
     )
     return findings
+
+
+def _add_qualification_domain_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("资格条件中存在与标的域不匹配的资质或登记要求" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if any(marker in clause.text for marker in ("有害生物防制", "SPCA", "特种设备安全管理和作业人员证书"))
+    ]
+    if not clauses:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="qualification_domain_mismatch",
+            problem_title="资格条件中存在与标的域不匹配的资质或登记要求",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "资格条件中出现与当前采购标的领域不匹配的资质、登记或专门证书要求。"
+                "这类内容往往意味着模板错贴，或者把与项目履约无直接关系的条件错误地前置为参与门槛。"
+            ),
+            impact_on_competition_or_performance="可能将与标的不相称的行业资质错误转化为准入门槛，直接缩小竞争范围。",
+            legal_or_policy_basis="中华人民共和国政府采购法实施条例；政府采购需求管理办法（财政部）",
+            rewrite_suggestion="建议删除与当前采购标的不匹配的资质、登记和专门证书要求，仅保留与法定资格和项目履约直接相关的条件。",
+            needs_human_review=True,
+            human_review_reason="需结合项目主标的、行业许可边界和实际履约场景判断该类资质是否确有必要。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_scoring_domain_theme_finding(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+    if any("评分项中存在与标的域不匹配的证书认证或模板内容" in finding.problem_title for finding in findings):
+        return findings
+    domain = _document_domain(document)
+    mismatch_markers = _domain_mismatch_markers(domain)
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause) and any(marker in clause.text for marker in mismatch_markers)
+    ]
+    if len(clauses) < 1:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="scoring_content_mismatch",
+            problem_title="评分项中存在与标的域不匹配的证书认证或模板内容",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "评分项中出现与当前采购标的领域不匹配的证书、认证范围或专门行业内容。"
+                "这类内容容易把模板残留或跨领域材料错误地转化为得分点，扭曲评审重心。"
+            ),
+            impact_on_competition_or_performance="可能使评分重心偏离项目实际履约能力，并对少数具备无关材料的供应商形成倾斜。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；奖项荣誉信用等级评分问题（中国政府采购网）",
+            rewrite_suggestion="建议删除与当前采购标的不匹配的证书、认证和行业内容，仅保留与评分主题和履约目标直接相关的因素。",
+            needs_human_review=True,
+            human_review_reason="需结合项目主标的、评分主题和具体证书用途判断该类内容是否属于明显错位或仍有合理业务关联。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_template_domain_theme_finding(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+    if any("文件中存在与标的域不匹配的模板残留或义务外扩" in finding.problem_title for finding in findings):
+        return findings
+    domain = _document_domain(document)
+    mismatch_markers = _domain_mismatch_markers(domain)
+    clauses = [
+        clause
+        for clause in document.clauses
+        if any(marker in clause.text for marker in mismatch_markers)
+        and any(marker in clause.text for marker in ("保洁", "芯片", "系统", "安防", "设施维修", "特种设备", "垃圾", "实际需求为准"))
+    ]
+    if len(clauses) < 1:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="template_mismatch",
+            problem_title="文件中存在与标的域不匹配的模板残留或义务外扩",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "文件中出现与当前采购标的领域不匹配的服务义务、系统对接、安防保洁或专门行业内容。"
+                "这类条款通常来自跨项目模板复制，容易把无关义务和额外履约成本转嫁给供应商。"
+            ),
+            impact_on_competition_or_performance="可能扩张供应商义务范围，并引入与采购标的不直接相关的实施成本和争议点。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）",
+            rewrite_suggestion="建议逐条排查并删除跨领域模板残留；如确需保留，应明确其与当前采购标的的直接业务关联和履约边界。",
+            needs_human_review=True,
+            human_review_reason="需结合项目主标的、业务边界和合同范围判断该条款是否属于模板错贴或确有必要的扩展义务。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _document_domain(document: NormalizedDocument) -> str:
+    text = f"{document.document_name} {document.source_path}"
+    if any(marker in text for marker in ("平台", "信息", "软件", "系统", "数据")):
+        return "information_system"
+    if any(marker in text for marker in ("窗帘", "隔帘", "床品", "服装", "被服")):
+        return "textile_goods"
+    if any(marker in text for marker in ("发电机", "机电", "安装", "设备")):
+        return "equipment_installation"
+    return "general"
+
+
+def _domain_mismatch_markers(domain: str) -> tuple[str, ...]:
+    mapping = {
+        "information_system": ("园区保洁", "设施维修", "安防管理", "保洁", "垃圾", "特种设备"),
+        "textile_goods": ("芯片", "系统", "无缝对接", "平台", "软件"),
+        "equipment_installation": ("有害生物防制", "SPCA", "有机产品认证", "水运机电工程专项监理"),
+        "general": ("园区保洁", "设施维修", "安防管理", "保洁", "芯片", "系统", "特种设备", "有害生物防制", "SPCA"),
+    }
+    return mapping.get(domain, mapping["general"])
 
 
 def _is_scoring_clause(clause) -> bool:
