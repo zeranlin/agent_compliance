@@ -21,6 +21,7 @@
 能力建设重点文档：
 - [capability-overview.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/capability-overview.md)
 - [full-capability-profile.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/full-capability-profile.md)
+- [code-review-system-technical-description.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-system-technical-description.md)
 - [local-runtime-skeleton.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-runtime-skeleton.md)
 - [local-codeification-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-codeification-roadmap.md)
 - [code-review-to-human-parity-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-to-human-parity-roadmap.md)
@@ -29,6 +30,10 @@
 - [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)
 - [continuous-update-mechanism.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/continuous-update-mechanism.md)
 - [consistency-and-caching-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/consistency-and-caching-design.md)
+
+产品与对接文档：
+- [code-review-product-introduction.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/code-review-product-introduction.md)
+- [code-review-technical-integration.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/code-review-technical-integration.md)
 
 本地执行骨架：
 - `setup.py`

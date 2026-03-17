@@ -113,6 +113,11 @@
 
 相关设计：
 - [consistency-and-caching-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/consistency-and-caching-design.md)
+- [code-review-system-technical-description.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-system-technical-description.md)
+
+当前也已补齐两类面向不同读者的说明材料：
+- 面向业务和用户的 [code-review-product-introduction.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/code-review-product-introduction.md)
+- 面向技术接入的 [code-review-technical-integration.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/code-review-technical-integration.md)
 
 ## 四、精确定位能力
 
