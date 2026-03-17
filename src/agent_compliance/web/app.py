@@ -1314,6 +1314,11 @@ def _review_next_html() -> str:
       --llm-soft: #ece0fa;
       --analyzer: #20644a;
       --analyzer-soft: #d9efe5;
+      --doc-bg-top: #eef6ff;
+      --doc-bg-bottom: #e3efff;
+      --doc-border: #c9dbf4;
+      --problem-ink: #a53026;
+      --problem-bg: #fde8e4;
       --shadow: 0 18px 40px rgba(67, 45, 22, 0.08);
       --radius: 18px;
     }
@@ -1466,16 +1471,20 @@ def _review_next_html() -> str:
     }
     .workspace {
       display: grid;
-      grid-template-columns: 460px minmax(0, 1fr);
+      grid-template-columns: 380px minmax(0, 1fr);
       gap: 18px;
       align-items: start;
     }
     .panel { min-height: 720px; }
     .left-pane {
-      padding: 18px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
       gap: 14px;
+      position: sticky;
+      top: 14px;
+      align-self: start;
+      max-height: calc(100vh - 28px);
     }
     .toolbar {
       display: flex;
@@ -1498,8 +1507,9 @@ def _review_next_html() -> str:
     }
     .issue-list {
       display: grid;
-      gap: 12px;
-      max-height: calc(100vh - 320px);
+      gap: 10px;
+      flex: 1 1 auto;
+      min-height: 0;
       overflow: auto;
       padding-right: 4px;
     }
@@ -1567,78 +1577,158 @@ def _review_next_html() -> str:
     }
     .detail-pane {
       display: grid;
-      grid-template-rows: auto auto minmax(0, 1fr);
-      min-height: 720px;
+      grid-template-rows: minmax(0, 4fr) auto auto;
+      min-height: 780px;
+      max-height: calc(100vh - 28px);
     }
     .detail-head, .detail-body, .document-pane {
-      padding: 18px 20px;
+      padding: 14px 16px;
+    }
+    .document-pane {
+      border-bottom: 1px solid var(--line);
+      min-height: 560px;
+      background:
+        linear-gradient(180deg, var(--doc-bg-top) 0%, var(--doc-bg-bottom) 100%);
     }
     .detail-head {
       border-bottom: 1px solid var(--line);
-      display: grid;
-      gap: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      background: rgba(255,250,243,0.88);
+      padding-top: 8px;
+      padding-bottom: 8px;
     }
     .detail-body {
       border-bottom: 1px solid var(--line);
       display: grid;
-      gap: 12px;
+      gap: 6px;
       background: #fffaf3;
+      padding-top: 8px;
+      padding-bottom: 10px;
     }
     .detail-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
+      grid-template-columns: 1fr;
+      gap: 6px;
     }
     .detail-item {
-      padding: 12px;
-      border-radius: 14px;
+      padding: 8px 10px;
+      border-radius: 10px;
       background: #fff;
       border: 1px solid var(--line);
+      font-size: 12px;
+      line-height: 1.55;
     }
     .detail-item strong {
       display: block;
-      margin-bottom: 6px;
-      font-size: 12px;
+      margin-bottom: 3px;
+      font-size: 10px;
       color: var(--muted);
+      letter-spacing: 0.02em;
     }
     .document-pane {
       min-height: 0;
       overflow: auto;
-      background: linear-gradient(180deg, #fffdf8 0%, #fbf6ef 100%);
+      background: linear-gradient(180deg, var(--doc-bg-top) 0%, var(--doc-bg-bottom) 100%);
+      scroll-behavior: smooth;
     }
     .doc-block {
-      border: 1px solid rgba(216,205,193,0.86);
+      border: 1px solid var(--doc-border);
       background: rgba(255,255,255,0.92);
-      border-radius: 14px;
-      padding: 14px;
-      margin-bottom: 12px;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .doc-block p {
+      margin: 0;
+      line-height: 1.95;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 15px;
+    }
+    .doc-block table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+    }
+    .doc-block td {
+      border: 1px solid var(--doc-border);
+      padding: 10px 12px;
+      vertical-align: top;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.8;
+      font-size: 14px;
     }
     .doc-block.is-target {
-      border-color: rgba(156,91,46,0.48);
-      box-shadow: 0 10px 28px rgba(86, 52, 18, 0.12);
-      background: #fff8ec;
+      border-color: #7ca8df;
+      box-shadow: 0 10px 28px rgba(66, 110, 172, 0.18);
+      background: #f4f9ff;
+    }
+    .doc-block.is-target .problem-fragment {
+      color: var(--problem-ink);
+      background: linear-gradient(180deg, rgba(253,232,228,0.95), rgba(253,232,228,0.72));
+      border-radius: 10px;
+      padding: 8px 10px;
+      border: 1px solid rgba(165,48,38,0.18);
+    }
+    .doc-block.is-target .problem-fragment table {
+      background: transparent;
+    }
+    .doc-block.is-target .problem-fragment td {
+      color: var(--problem-ink);
+      background: rgba(253,232,228,0.58);
+      border-color: rgba(165,48,38,0.18);
     }
     .doc-line {
       display: grid;
       grid-template-columns: 72px 1fr;
       gap: 12px;
       align-items: start;
-      padding: 6px 0;
+      padding: 8px 0;
       border-top: 1px dashed rgba(216,205,193,0.45);
-      font-size: 14px;
-      line-height: 1.65;
+      font-size: 15px;
+      line-height: 1.8;
     }
     .doc-line:first-child { border-top: none; }
     .doc-line.target {
-      background: linear-gradient(90deg, rgba(156,91,46,0.14), rgba(156,91,46,0));
+      background: linear-gradient(90deg, rgba(124,168,223,0.22), rgba(124,168,223,0));
       border-radius: 10px;
       padding-left: 8px;
       padding-right: 8px;
+    }
+    .doc-line.target .problem-text {
+      color: var(--problem-ink);
+      background: var(--problem-bg);
+      border-radius: 8px;
+      padding: 4px 8px;
+      display: inline-block;
+      border: 1px solid rgba(165,48,38,0.18);
     }
     .line-no {
       color: var(--muted);
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 12px;
+    }
+    #detail-title {
+      font-size: 14px;
+      line-height: 1.4;
+      margin-right: auto;
+    }
+    #detail-excerpt {
+      font-size: 10px;
+      line-height: 1.5;
+      display: none;
+    }
+    #detail-badges {
+      justify-content: flex-end;
+    }
+    .badge.compact {
+      padding: 4px 8px;
+      font-size: 11px;
     }
     .empty {
       color: var(--muted);
@@ -1650,7 +1740,16 @@ def _review_next_html() -> str:
     }
     @media (max-width: 1180px) {
       .hero, .workspace, .summary-grid, .detail-grid { grid-template-columns: 1fr; }
+      .left-pane {
+        position: static;
+        max-height: none;
+      }
+      .detail-pane {
+        max-height: none;
+        min-height: 0;
+      }
       .issue-list { max-height: none; }
+      .document-pane { min-height: 360px; }
     }
   </style>
 </head>
@@ -1718,22 +1817,20 @@ def _review_next_html() -> str:
       </aside>
 
       <section class="panel detail-pane">
+        <div id="document-pane" class="document-pane">
+          <div class="empty">上传文件后，这里会渲染文档原文，并跟随问题卡片定位到对应位置。</div>
+        </div>
         <div class="detail-head">
           <div class="eyebrow">Focused Review</div>
           <h2 id="detail-title">尚未选择问题</h2>
           <div id="detail-badges" class="badge-row"></div>
-          <p id="detail-excerpt" class="meta">上传文件后，点击左侧问题可以联动定位到右侧正文。</p>
+          <p id="detail-excerpt" class="meta">这里只保留当前问题的风险描述和建议改写，避免和左侧清单重复。</p>
         </div>
         <div class="detail-body">
           <div id="detail-grid" class="detail-grid">
-            <div class="detail-item"><strong>来源链路</strong><div>待运行</div></div>
-            <div class="detail-item"><strong>位置</strong><div>待运行</div></div>
             <div class="detail-item"><strong>风险说明</strong><div>待运行</div></div>
             <div class="detail-item"><strong>建议改写</strong><div>待运行</div></div>
           </div>
-        </div>
-        <div id="document-pane" class="document-pane">
-          <div class="empty">上传文件后，这里会渲染文档原文，并跟随问题卡片定位到对应位置。</div>
         </div>
       </section>
     </section>
@@ -1747,6 +1844,7 @@ def _review_next_html() -> str:
       selectedFindingId: null,
       viewMode: 'main',
       riskMode: 'all',
+      sectionMode: 'all',
     };
 
     const form = document.getElementById('review-form');
@@ -1771,6 +1869,23 @@ def _review_next_html() -> str:
     document.getElementById('risk-toolbar').querySelectorAll('[data-risk]').forEach((node) => {
       node.addEventListener('click', () => {
         state.riskMode = node.dataset.risk;
+        render();
+      });
+    });
+    const sectionToolbarNode = document.createElement('div');
+    sectionToolbarNode.className = 'toolbar';
+    sectionToolbarNode.id = 'section-toolbar';
+    sectionToolbarNode.innerHTML = `
+      <button type="button" data-section="all" class="is-active">全部章节</button>
+      <button type="button" data-section="qualification">资格</button>
+      <button type="button" data-section="scoring">评分</button>
+      <button type="button" data-section="technical">技术</button>
+      <button type="button" data-section="commercial">商务/验收</button>
+    `;
+    document.querySelector('.left-pane').insertBefore(sectionToolbarNode, issueListNode);
+    sectionToolbarNode.querySelectorAll('[data-section]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.sectionMode = node.dataset.section;
         render();
       });
     });
@@ -1823,11 +1938,15 @@ def _review_next_html() -> str:
       document.querySelectorAll('#risk-toolbar [data-risk]').forEach((node) => {
         node.classList.toggle('is-active', node.dataset.risk === state.riskMode);
       });
+      document.querySelectorAll('#section-toolbar [data-section]').forEach((node) => {
+        node.classList.toggle('is-active', node.dataset.section === state.sectionMode);
+      });
     }
 
     function renderSummary() {
       const findings = state.findings;
       const metrics = summarizeFindings(findings);
+      const sectionMetrics = summarizeBySection(findings);
       summaryGridNode.innerHTML = `
         ${renderMetric('当前状态', state.payload ? '已完成' : '待运行')}
         ${renderMetric('主问题', metrics.main)}
@@ -1835,6 +1954,10 @@ def _review_next_html() -> str:
         ${renderMetric('模型新增', metrics.llm)}
         ${renderMetric('高风险', metrics.high)}
         ${renderMetric('中风险', metrics.medium)}
+        ${renderMetric('资格主问题', sectionMetrics.qualification)}
+        ${renderMetric('评分主问题', sectionMetrics.scoring)}
+        ${renderMetric('技术主问题', sectionMetrics.technical)}
+        ${renderMetric('商务/验收主问题', sectionMetrics.commercial)}
       `;
     }
 
@@ -1852,6 +1975,16 @@ def _review_next_html() -> str:
       };
     }
 
+    function summarizeBySection(findings) {
+      const mainFindings = findings.filter(isMainIssue);
+      return {
+        qualification: mainFindings.filter((item) => classifySection(item) === 'qualification').length,
+        scoring: mainFindings.filter((item) => classifySection(item) === 'scoring').length,
+        technical: mainFindings.filter((item) => classifySection(item) === 'technical').length,
+        commercial: mainFindings.filter((item) => classifySection(item) === 'commercial').length,
+      };
+    }
+
     function applyFilters(findings) {
       let items = findings.slice();
       if (state.viewMode === 'main') {
@@ -1861,6 +1994,9 @@ def _review_next_html() -> str:
       }
       if (state.riskMode !== 'all') {
         items = items.filter((item) => item.risk_level === state.riskMode);
+      }
+      if (state.sectionMode !== 'all') {
+        items = items.filter((item) => classifySection(item) === state.sectionMode);
       }
       return items;
     }
@@ -1894,6 +2030,8 @@ def _review_next_html() -> str:
       const badges = [
         `<span class="badge ${escapeHtml(finding.risk_level)}">${riskLabel(finding.risk_level)}</span>`,
         isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : '',
+        `<span class="badge">${escapeHtml(sectionLabel(finding))}</span>`,
+        `<span class="badge">${escapeHtml(subthemeLabel(finding))}</span>`,
         `<span class="badge ${originBadgeClass(finding)}">${escapeHtml(originLabel(finding))}</span>`,
       ].join('');
       return `
@@ -1906,7 +2044,7 @@ def _review_next_html() -> str:
             <span class="mini-pill">位置 ${escapeHtml(compactLocation(finding))}</span>
             <span class="mini-pill">来源 ${escapeHtml(sourceChain(finding))}</span>
           </div>
-          <div class="issue-excerpt">${escapeHtml(finding.source_text || '无原文摘录')}</div>
+          <div class="issue-excerpt"><strong>代表性证据：</strong>${escapeHtml(finding.source_text || '无原文摘录')}</div>
         </article>
       `;
     }
@@ -1916,20 +2054,21 @@ def _review_next_html() -> str:
       if (!finding) {
         detailTitleNode.textContent = '尚未选择问题';
         detailBadgesNode.innerHTML = '';
-        detailExcerptNode.textContent = '上传文件后，点击左侧问题可以联动定位到右侧正文。';
+        detailExcerptNode.textContent = '这里只保留当前问题的风险描述和建议改写，避免和左侧清单重复。';
         detailGridNode.innerHTML = '<div class="detail-item"><strong>状态</strong><div>暂无内容</div></div>';
         return;
       }
       detailTitleNode.textContent = finding.problem_title;
       detailBadgesNode.innerHTML = `
-        <span class="badge ${escapeHtml(finding.risk_level)}">${riskLabel(finding.risk_level)}</span>
-        ${isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : ''}
-        <span class="badge ${originBadgeClass(finding)}">${escapeHtml(originLabel(finding))}</span>
+        <span class="badge compact ${escapeHtml(finding.risk_level)}">${riskLabel(finding.risk_level)}</span>
+        ${isMainIssue(finding) ? '<span class="badge compact main">章节主问题</span>' : ''}
+        <span class="badge compact">${escapeHtml(sectionLabel(finding))}</span>
+        <span class="badge compact">${escapeHtml(subthemeLabel(finding))}</span>
+        <span class="badge compact ${originBadgeClass(finding)}">${escapeHtml(originLabel(finding))}</span>
       `;
-      detailExcerptNode.textContent = finding.source_text || '无原文摘录';
+      detailExcerptNode.textContent = '';
       detailGridNode.innerHTML = `
-        <div class="detail-item"><strong>来源链路</strong><div>${escapeHtml(sourceChain(finding))}</div></div>
-        <div class="detail-item"><strong>定位</strong><div>${escapeHtml(fullLocation(finding))}</div></div>
+        <div class="detail-item"><strong>代表性证据</strong><div>${escapeHtml(finding.source_text || '暂无')}</div></div>
         <div class="detail-item"><strong>风险说明</strong><div>${escapeHtml(finding.why_it_is_risky || '暂无')}</div></div>
         <div class="detail-item"><strong>建议改写</strong><div>${escapeHtml(finding.rewrite_suggestion || '暂无')}</div></div>
       `;
@@ -1948,18 +2087,23 @@ def _review_next_html() -> str:
       documentPaneNode.innerHTML = blocks.map((block, index) => renderBlock(block, index, start, end)).join('');
       if (finding) {
         const node = documentPaneNode.querySelector('[data-target-block="true"]') || documentPaneNode.querySelector('.doc-line.target');
-        if (node) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (node) scrollDocumentPaneToNode(node);
       }
     }
 
     function renderBlock(block, index, start, end) {
-      const hasTarget = (block.lines || []).some((line) => line.number >= start && line.number <= end);
+      const blockLines = block.lines || [];
+      const blockStart = Number(block.start_line || (blockLines[0] ? blockLines[0].number : 0));
+      const blockEnd = Number(block.end_line || (blockLines.length ? blockLines[blockLines.length - 1].number : 0));
+      const hasTarget = blockLines.length
+        ? blockLines.some((line) => line.number >= start && line.number <= end)
+        : (blockStart <= end && blockEnd >= start);
+      const content = block.html
+        ? `<div class="${hasTarget ? 'problem-fragment' : ''}">${block.html}</div>${hasTarget ? `<div class="mini-meta" style="margin-top:8px;"><span class="mini-pill">行 ${escapeHtml(String(blockStart))}-${escapeHtml(String(blockEnd))}</span></div>` : ''}`
+        : (blockLines || []).map((line) => renderLine(line, start, end)).join('');
       return `
-        <section class="doc-block ${hasTarget ? 'is-target' : ''}" data-target-block="${hasTarget ? 'true' : 'false'}">
-          <div class="mini-meta" style="margin-bottom:10px;">
-            <span class="mini-pill">${escapeHtml(block.title || `文档块 ${index + 1}`)}</span>
-          </div>
-          ${(block.lines || []).map((line) => renderLine(line, start, end)).join('')}
+        <section class="doc-block ${hasTarget ? 'is-target' : ''}" data-target-block="${hasTarget ? 'true' : 'false'}" data-start-line="${blockStart}" data-end-line="${blockEnd}">
+          ${content}
         </section>
       `;
     }
@@ -1969,9 +2113,16 @@ def _review_next_html() -> str:
       return `
         <div class="doc-line ${target ? 'target' : ''}">
           <div class="line-no">L${escapeHtml(String(line.number))}</div>
-          <div>${escapeHtml(line.text || '')}</div>
+          <div>${target ? `<span class="problem-text">${escapeHtml(line.text || '')}</span>` : escapeHtml(line.text || '')}</div>
         </div>
       `;
+    }
+
+    function scrollDocumentPaneToNode(node) {
+      const paneRect = documentPaneNode.getBoundingClientRect();
+      const nodeRect = node.getBoundingClientRect();
+      const offset = nodeRect.top - paneRect.top + documentPaneNode.scrollTop - 80;
+      documentPaneNode.scrollTo({ top: Math.max(offset, 0), behavior: 'smooth' });
     }
 
     function isMainIssue(finding) {
@@ -1994,6 +2145,45 @@ def _review_next_html() -> str:
       if (finding.finding_origin === 'analyzer') return '规则命中 → 结构分析 → 仲裁保留';
       if (finding.finding_origin === 'llm_added') return '全文辅助扫描 → 仲裁判断';
       return '规则命中';
+    }
+
+    function classifySection(finding) {
+      const text = [finding.problem_title, finding.section_path, finding.source_section].filter(Boolean).join(' ');
+      if (/资格|申请人的资格要求|准入门槛/.test(text)) return 'qualification';
+      if (/评分|评标信息|演示|品牌档次|认证评分|商务评分/.test(text)) return 'scoring';
+      if (/技术|标准|检测报告|证明材料/.test(text)) return 'technical';
+      return 'commercial';
+    }
+
+    function sectionLabel(finding) {
+      const mapping = {
+        qualification: '资格',
+        scoring: '评分',
+        technical: '技术',
+        commercial: '商务/验收',
+      };
+      return mapping[classifySection(finding)] || '其它';
+    }
+
+    function subthemeLabel(finding) {
+      const title = finding.problem_title || '';
+      if (/一般财务和规模/.test(title)) return '财务/规模';
+      if (/经营年限|属地场所|单项业绩/.test(title)) return '年限/场所/业绩';
+      if (/行业资质|专门许可/.test(title)) return '错位资质';
+      if (/品牌档次/.test(title)) return '品牌评分';
+      if (/认证评分/.test(title)) return '错位认证';
+      if (/证书认证或模板内容/.test(title)) return '评分错位';
+      if (/标准或规范/.test(title)) return '标准错位';
+      if (/证明材料形式/.test(title)) return '证明形式';
+      if (/资金占用/.test(title)) return '资金占用';
+      if (/交货期限/.test(title)) return '交期异常';
+      if (/费用整体转嫁/.test(title)) return '验收费转嫁';
+      if (/责任和违约后果/.test(title)) return '责任失衡';
+      if (/验收程序|最终确认边界/.test(title)) return '验收边界';
+      if (/属地倾斜/.test(title)) return '属地倾斜';
+      if (/模板残留|义务外扩/.test(title)) return '模板残留';
+      if (/行业适配性不足/.test(title)) return '行业适配';
+      return finding.issue_type || '综合';
     }
 
     function riskLabel(level) {
