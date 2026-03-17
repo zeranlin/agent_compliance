@@ -1109,6 +1109,7 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("技术要求引用了与标的不匹配的标准或规范", titles)
         self.assertIn("技术证明材料形式要求过严且带有地方化限制", titles)
         self.assertIn("商务条款设置异常资金占用安排", titles)
+        self.assertIn("混合采购场景叠加自动化设备和信息化接口义务，边界不清", titles)
         self.assertIn("文件中存在与标的域不匹配的模板残留或义务外扩", titles)
         self.assertEqual(
             sum(1 for finding in review.findings if finding.clause_id == "1.6"),

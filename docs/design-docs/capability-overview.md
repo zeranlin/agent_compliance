@@ -252,6 +252,7 @@
 - 全文辅助扫描新增的问题已开始先进入仲裁层，再决定是否上浮为主问题，避免本地模型候选重新把已收束的主问题结构打碎
 - 全文辅助扫描兜底已开始从“补零散句子”升级为“补资格章节主问题、评分章节主问题、商务章节主问题”，即使本地模型未返回，也能优先补出更接近人工式审查的章节级风险概括
 - 当前已开始落地 `document_level_judgment_engine`，可根据高风险和中风险 findings 的章节分布与主题问题，先形成整份文件的主风险画像，并把主导章节与突出主问题写入 `overall_risk_summary`
+- 当前已开始落地 `mixed_scope_boundary_engine`，可在“药品 + 自动化设备 + 信息化接口”等混合采购场景下，把系统对接、自动化配套和附加服务义务收束为单独主问题，而不再只作为普通模板残留碎点出现
 - 本地模型新增的边界问题会自动沉淀成 `rule_candidate`，而不是只停留在一次性 finding 中
 - 每个 `rule_candidate` 至少携带：`candidate_rule_id`、`issue_type`、`source_text`、`trigger_keywords`、`suggested_merge_key`、`false_positive_risk`
 - `eval` 入口已可直接显示最新 benchmark gate 结果，帮助判断候选问题类型是否已被 benchmark 覆盖

@@ -201,6 +201,7 @@
 - `document_audit_llm` 现已开始与 `finding_arbiter` 共用同一套结果收尾逻辑，模型补出的新增问题会先进入候选池，再由仲裁层决定是否保留，避免全文辅助扫描把已收束的结果重新打散
 - `document_audit_llm` 兜底输出已开始从碎点补充提升为章节级主问题补充，可优先补出资格章节、评分章节和商务章节的主风险概括，而不是只补单条句子
 - `document_level_judgment_engine` 已启动落地，开始根据高风险和中风险 findings 的章节分布与主题问题，先形成整份文件的主风险画像，并把主导章节与突出主问题写入 `overall_risk_summary`
+- `mixed_scope_boundary_engine` 已启动落地，开始把“药品 + 自动化设备 + 信息化接口”等混合采购场景中的边界问题收束为单独主问题，而不再只作为模板残留碎点输出
 
 下一阶段补差重点：
 - `document_level_judgment_engine`

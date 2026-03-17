@@ -677,6 +677,12 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
     if "文件中存在与标的域不匹配的模板残留或义务外扩" in title:
         return finding.issue_type in {"template_mismatch", "other"}
 
+    if "混合采购场景叠加自动化设备和信息化接口义务，边界不清" in title:
+        return finding.issue_type in {"template_mismatch", "other", "technical_justification_needed"} and _text_contains_any(
+            finding,
+            ("信息化管理系统", "系统端口", "无缝对接", "综合业务协同平台", "自动化调剂", "发药机", "药瓶清洁", "系统进行管理维护"),
+        )
+
     if "商务条款叠加设置异常资金占用、交货期限和责任负担" in title:
         return finding.issue_type in {
             "one_sided_commercial_term",
@@ -1055,6 +1061,7 @@ def _add_commercial_chain_findings(document: NormalizedDocument, findings: list[
 def _add_domain_match_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
     findings = _add_qualification_domain_theme_finding(document, findings)
     findings = _add_scoring_domain_theme_finding(document, findings)
+    findings = _add_mixed_scope_boundary_theme_finding(document, findings)
     findings = _add_template_domain_theme_finding(document, findings)
     findings = _add_qualification_industry_appropriateness_finding(document, findings)
     return findings
@@ -1782,6 +1789,56 @@ def _add_scoring_domain_theme_finding(document: NormalizedDocument, findings: li
             rewrite_suggestion="建议删除与当前采购标的不匹配的证书、认证和行业内容，仅保留与评分主题和履约目标直接相关的因素。",
             needs_human_review=True,
             human_review_reason="需结合项目主标的、评分主题和具体证书用途判断该类内容是否属于明显错位或仍有合理业务关联。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_mixed_scope_boundary_theme_finding(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+    if any("混合采购场景叠加自动化设备和信息化接口义务，边界不清" in finding.problem_title for finding in findings):
+        return findings
+    domain = _document_domain(document)
+    if domain != "medical_tcm_mixed":
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if any(
+            marker in clause.text
+            for marker in (
+                "信息化管理系统",
+                "系统端口",
+                "无缝对接",
+                "综合业务协同平台",
+                "自动化调剂",
+                "发药机",
+                "药瓶清洁",
+                "系统进行管理维护",
+            )
+        )
+    ]
+    if len(clauses) < 2:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="template_mismatch",
+            problem_title="混合采购场景叠加自动化设备和信息化接口义务，边界不清",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="potentially_problematic",
+            why_it_is_risky=(
+                "文件在中药配方颗粒采购中叠加了自动化设备配套、信息化系统端口无缝对接、系统维护和药瓶清洁等多类义务。"
+                "当药品供货、自动化设备配套和信息化接口开发被混合写入同一采购范围时，容易导致采购边界不清、履约责任外扩和供应商范围被不当收窄。"
+            ),
+            impact_on_competition_or_performance="可能将药品供货以外的自动化设备和信息化接口义务一并转嫁给供应商，抬高履约门槛并增加争议风险。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）",
+            rewrite_suggestion="建议将中药配方颗粒供货、自动化设备配套和信息化接口开发分开表述；与本次药品采购不直接相关的系统维护、药瓶清洁和扩展服务内容应删除或另行采购。",
+            needs_human_review=True,
+            human_review_reason="需结合本次采购边界、现有自动化设备建设情况和信息化接口职责分工判断相关配套义务是否应并入当前采购范围。",
             finding_origin="analyzer",
         )
     )
