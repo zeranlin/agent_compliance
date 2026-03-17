@@ -24,6 +24,7 @@
 - [local-runtime-skeleton.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-runtime-skeleton.md)
 - [local-codeification-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-codeification-roadmap.md)
 - [code-review-to-human-parity-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-to-human-parity-roadmap.md)
+- [continuous-human-parity-architecture.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/continuous-human-parity-architecture.md)
 - [legal-authority-system.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/legal-authority-system.md)
 - [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)
 - [continuous-update-mechanism.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/continuous-update-mechanism.md)

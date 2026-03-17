@@ -248,6 +248,7 @@
 - 每个 `rule_candidate` 至少携带：`candidate_rule_id`、`issue_type`、`source_text`、`trigger_keywords`、`suggested_merge_key`、`false_positive_risk`
 - `eval` 入口已可直接显示最新 benchmark gate 结果，帮助判断候选问题类型是否已被 benchmark 覆盖
 - 当前已补入 `template_mismatch` 问题类型的 benchmark 样本，用于承接模板错贴和标的域错位问题
+- 后续主线已明确升级为“条款分类 + 结构分析 + 章节级 LLM 审查辅助 + finding 仲裁 + 规则候选与 benchmark gate”的自动持续优化架构，而不再只是零散补规则
 
 相关设计：
 - [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)

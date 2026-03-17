@@ -53,6 +53,25 @@
 - 先完成 `P0` 主链路升级
 - 让资格异常识别、评分内容错位识别和全文辅助扫描成为正式能力
 
+## 下一阶段主线
+
+围绕“让代码审查更接近人工式审查，并且能够自动持续优化”这一目标，后续不再以零散补规则为主，而切换为以下主线：
+
+- 先把审查主链路升级为：
+  - 条款分类
+  - 规则初筛
+  - 结构分析
+  - 章节级 LLM 审查辅助
+  - finding 仲裁
+- 再把自动优化闭环固定下来：
+  - 差异样本沉淀
+  - 规则候选生成
+  - benchmark gate
+  - 人工仅确认入库
+
+对应设计文档：
+- [continuous-human-parity-architecture.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/continuous-human-parity-architecture.md)
+
 ## 阶段一：差异驱动的规则增强
 
 目标：
@@ -129,6 +148,41 @@
 3. 接入 `document_audit_llm`，用全文辅助扫描补候选条款  
 4. 加强误报抑制，优先压掉履约反馈表和评审程序章节中的评分噪声  
 5. 再把模型新增问题稳定转入规则候选和 benchmark gate
+
+## P0 / P1 / P2 任务拆分
+
+### P0
+
+- `scoring_structure_analyzer`
+- `commercial_chain_analyzer`
+- `document_audit_llm`
+- `finding_arbiter`
+- `domain_match_engine`
+
+完成标志：
+- 评分、演示、付款、履约评价类问题开始以章节级主问题输出，而不是大量碎点输出
+- 错位证书、错位认证和明显项目域不匹配内容能稳定成点
+
+### P1
+
+- `demo_mechanism_engine`
+- `personnel_certificate_mismatch_engine`
+- “需论证”类 finding 说明增强
+- 长文档 LLM 去重和定位稳定性增强
+
+完成标志：
+- 现场演示、签到时限、驻场要求和短时响应叠加形成的事实性倾斜能稳定进入结果
+
+### P2
+
+- 差异样本自动标注
+- 规则候选自动归纳
+- benchmark 自动回归报告
+- 规则管理页入库流转完善
+
+完成标志：
+- 新问题可自动形成候选规则并进入 gate
+- 人工只需在规则管理页执行“确认入库 / 暂缓 / 忽略”
 
 ## 风险提醒
 
