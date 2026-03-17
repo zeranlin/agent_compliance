@@ -1892,6 +1892,9 @@ def _review_next_html() -> str:
       border-top: 1px solid rgba(124, 168, 223, 0.28);
       background: transparent;
     }
+    .doc-block.text-run {
+      margin-bottom: 2px;
+    }
     .chapter-anchor-title {
       display: inline-flex;
       align-items: center;
@@ -1934,6 +1937,12 @@ def _review_next_html() -> str:
       border-radius: 8px;
       padding: 6px 8px;
       border-left: 4px solid rgba(165,48,38,0.4);
+    }
+    .doc-block.context-band {
+      background: linear-gradient(90deg, rgba(124,168,223,0.06), rgba(124,168,223,0.018) 55%, rgba(124,168,223,0));
+      border-radius: 10px;
+      padding: 4px 8px;
+      margin: 2px 0;
     }
     .doc-block.is-target .problem-fragment table {
       background: transparent;
@@ -2572,9 +2581,31 @@ def _review_next_html() -> str:
             html: `<div class="chapter-anchor-title">${escapeHtml(currentChapterLabel)}</div>`,
           });
         }
-        output.push({ ...block, chapter_key: currentChapterKey, chapter_label: currentChapterLabel });
+        output.push(...flattenBlockForReading({ ...block, chapter_key: currentChapterKey, chapter_label: currentChapterLabel }));
       });
       return output;
+    }
+
+    function flattenBlockForReading(block) {
+      if (block.kind === 'chapter-anchor') {
+        return [block];
+      }
+      if (block.kind === 'table') {
+        return [block];
+      }
+      if (!block.html) {
+        return [block];
+      }
+      const paragraphMatches = String(block.html).match(/<p>[\s\S]*?<\/p>/g);
+      if (!paragraphMatches || paragraphMatches.length <= 1) {
+        return [block];
+      }
+      return paragraphMatches.map((paragraphHtml, index) => ({
+        ...block,
+        block_id: `${block.block_id || 'block'}-p${index + 1}`,
+        html: paragraphHtml,
+        kind: 'paragraph',
+      }));
     }
 
     function detectChapterForBlock(block, index) {
@@ -2632,11 +2663,12 @@ def _review_next_html() -> str:
       const hasTarget = blockLines.length
         ? blockLines.some((line) => line.number >= start && line.number <= end)
         : (blockStart <= end && blockEnd >= start);
+      const inContextBand = start > 0 && blockStart <= end + 40 && blockEnd >= Math.max(1, start - 40);
       const content = block.html
         ? `<div class="${hasTarget ? 'problem-fragment' : ''}">${block.html}</div>${hasTarget ? `<div class="mini-meta" style="margin-top:8px;"><span class="mini-pill">行 ${escapeHtml(String(blockStart))}-${escapeHtml(String(blockEnd))}</span></div>` : ''}`
         : (blockLines || []).map((line) => renderLine(line, start, end)).join('');
       return `
-        <section class="doc-block ${hasTarget ? 'is-target' : ''}" data-target-block="${hasTarget ? 'true' : 'false'}" data-start-line="${blockStart}" data-end-line="${blockEnd}">
+        <section class="doc-block text-run ${hasTarget ? 'is-target' : ''} ${!hasTarget && inContextBand ? 'context-band' : ''}" data-target-block="${hasTarget ? 'true' : 'false'}" data-start-line="${blockStart}" data-end-line="${blockEnd}">
           ${content}
         </section>
       `;
