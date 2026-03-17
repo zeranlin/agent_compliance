@@ -45,6 +45,9 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         if path == "/":
             self._send_html(_index_html())
             return
+        if path == "/review-next":
+            self._send_html(_review_next_html())
+            return
         if path == "/rules":
             self._send_html(_rules_html())
             return
@@ -1279,6 +1282,741 @@ def _index_html() -> str:
 
     function escapeHtml(text) {
       return String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    }
+  </script>
+</body>
+</html>"""
+
+
+def _review_next_html() -> str:
+    return """<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>审查工作台 V2</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --paper: #fffdf8;
+      --ink: #1f1a17;
+      --muted: #6c625b;
+      --line: #d8cdc1;
+      --accent: #9c5b2e;
+      --accent-soft: #efe1d3;
+      --high: #aa2e25;
+      --high-soft: #f7ddd7;
+      --medium: #9a6a14;
+      --medium-soft: #f7ebcd;
+      --rule: #275d8a;
+      --rule-soft: #dbe8f5;
+      --llm: #6e3ea4;
+      --llm-soft: #ece0fa;
+      --analyzer: #20644a;
+      --analyzer-soft: #d9efe5;
+      --shadow: 0 18px 40px rgba(67, 45, 22, 0.08);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Noto Sans SC", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,0.85), transparent 34%),
+        linear-gradient(180deg, #f7f2ea 0%, var(--bg) 100%);
+      color: var(--ink);
+    }
+    .shell {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .hero-card, .panel {
+      background: rgba(255,253,248,0.94);
+      border: 1px solid rgba(216,205,193,0.92);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .hero-card {
+      padding: 22px 24px;
+      overflow: hidden;
+      position: relative;
+    }
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      inset: auto -60px -80px auto;
+      width: 220px;
+      height: 220px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(156,91,46,0.18), rgba(156,91,46,0));
+      pointer-events: none;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    h1, h2, h3, p { margin: 0; }
+    .hero-card h1 {
+      font-size: 30px;
+      line-height: 1.2;
+      margin-bottom: 10px;
+    }
+    .hero-card p {
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 760px;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .hero-actions a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .upload-card {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    form {
+      display: grid;
+      gap: 12px;
+    }
+    input[type="file"] {
+      width: 100%;
+      border: 1px dashed var(--line);
+      background: #fff;
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .switches {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 14px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #b86a34, #8c4b22);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #fff;
+      color: var(--accent);
+      border: 1px solid var(--line);
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .metric {
+      padding: 16px;
+      border-radius: 16px;
+      background: rgba(255,253,248,0.94);
+      border: 1px solid rgba(216,205,193,0.92);
+      box-shadow: var(--shadow);
+    }
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    .metric strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1;
+    }
+    .workspace {
+      display: grid;
+      grid-template-columns: 460px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .panel { min-height: 720px; }
+    .left-pane {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .toolbar button {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .toolbar button.is-active {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: rgba(156,91,46,0.28);
+    }
+    .issue-list {
+      display: grid;
+      gap: 12px;
+      max-height: calc(100vh - 320px);
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .issue-card {
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 14px;
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    }
+    .issue-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px rgba(59, 38, 19, 0.08);
+    }
+    .issue-card.is-active {
+      border-color: rgba(156,91,46,0.44);
+      box-shadow: 0 12px 28px rgba(59, 38, 19, 0.12);
+      background: #fffaf2;
+    }
+    .issue-card.high { border-left: 6px solid var(--high); }
+    .issue-card.medium { border-left: 6px solid var(--medium); }
+    .issue-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: start;
+    }
+    .issue-title {
+      font-size: 15px;
+      line-height: 1.5;
+      font-weight: 700;
+    }
+    .issue-excerpt {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      margin-top: 8px;
+    }
+    .badge-row, .mini-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .badge, .mini-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .badge.high { background: var(--high-soft); color: var(--high); }
+    .badge.medium { background: var(--medium-soft); color: var(--medium); }
+    .badge.main { background: var(--analyzer-soft); color: var(--analyzer); }
+    .badge.origin-rule { background: var(--rule-soft); color: var(--rule); }
+    .badge.origin-llm { background: var(--llm-soft); color: var(--llm); }
+    .mini-pill {
+      background: #f5efe8;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .detail-pane {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      min-height: 720px;
+    }
+    .detail-head, .detail-body, .document-pane {
+      padding: 18px 20px;
+    }
+    .detail-head {
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 10px;
+    }
+    .detail-body {
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 12px;
+      background: #fffaf3;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .detail-item {
+      padding: 12px;
+      border-radius: 14px;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+    .detail-item strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .document-pane {
+      min-height: 0;
+      overflow: auto;
+      background: linear-gradient(180deg, #fffdf8 0%, #fbf6ef 100%);
+    }
+    .doc-block {
+      border: 1px solid rgba(216,205,193,0.86);
+      background: rgba(255,255,255,0.92);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .doc-block.is-target {
+      border-color: rgba(156,91,46,0.48);
+      box-shadow: 0 10px 28px rgba(86, 52, 18, 0.12);
+      background: #fff8ec;
+    }
+    .doc-line {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 6px 0;
+      border-top: 1px dashed rgba(216,205,193,0.45);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    .doc-line:first-child { border-top: none; }
+    .doc-line.target {
+      background: linear-gradient(90deg, rgba(156,91,46,0.14), rgba(156,91,46,0));
+      border-radius: 10px;
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+    .line-no {
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+    }
+    .empty {
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+      background: rgba(255,255,255,0.62);
+    }
+    @media (max-width: 1180px) {
+      .hero, .workspace, .summary-grid, .detail-grid { grid-template-columns: 1fr; }
+      .issue-list { max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="hero-card">
+        <div class="eyebrow">Gov Compliance Review</div>
+        <h1>审查工作台 V2</h1>
+        <p>这是一页专门用来看“主问题化、章节化、仲裁化”升级效果的新页面。它会优先展示章节级主问题、来源链路和仲裁收束效果，而不是只展示扁平 findings 列表。</p>
+        <div class="hero-actions">
+          <a href="/">旧版审查页</a>
+          <a href="/rules">规则管理页</a>
+        </div>
+      </div>
+      <div class="hero-card upload-card">
+        <div>
+          <div class="eyebrow">Run Review</div>
+          <h2>上传文件并验证新链路</h2>
+        </div>
+        <form id="review-form">
+          <input id="file-input" type="file" name="file" accept=".docx,.pdf,.txt" required />
+          <div class="switches">
+            <label class="switch"><input type="checkbox" name="use_llm" checked /> 启用本地模型</label>
+            <label class="switch"><input type="checkbox" name="use_cache" /> 启用缓存</label>
+          </div>
+          <div class="switches">
+            <button type="submit">开始审查</button>
+            <button type="button" class="secondary" id="open-source-btn" disabled>打开原文件</button>
+          </div>
+        </form>
+        <div id="run-meta" class="meta">上传后会同时返回文档原文、主问题视图、明细视图和来源链路信息。</div>
+      </div>
+    </section>
+
+    <section id="summary-grid" class="summary-grid">
+      <div class="metric"><div class="metric-label">当前状态</div><strong>待运行</strong></div>
+      <div class="metric"><div class="metric-label">主问题</div><strong>0</strong></div>
+      <div class="metric"><div class="metric-label">保留明细</div><strong>0</strong></div>
+      <div class="metric"><div class="metric-label">模型新增</div><strong>0</strong></div>
+      <div class="metric"><div class="metric-label">高风险</div><strong>0</strong></div>
+      <div class="metric"><div class="metric-label">中风险</div><strong>0</strong></div>
+    </section>
+
+    <section class="workspace">
+      <aside class="panel left-pane">
+        <div>
+          <div class="eyebrow">Issue Navigator</div>
+          <h2>问题清单</h2>
+          <p class="meta">默认优先看章节级主问题。切换视图后，可以对照明细问题和模型新增问题。</p>
+        </div>
+        <div class="toolbar" id="view-toolbar">
+          <button type="button" data-view="main" class="is-active">主问题视图</button>
+          <button type="button" data-view="all">全部问题</button>
+          <button type="button" data-view="llm">模型新增</button>
+        </div>
+        <div class="toolbar" id="risk-toolbar">
+          <button type="button" data-risk="all" class="is-active">全部风险</button>
+          <button type="button" data-risk="high">高风险</button>
+          <button type="button" data-risk="medium">中风险</button>
+        </div>
+        <div id="issue-list" class="issue-list">
+          <div class="empty">上传文件后，这里会优先显示章节级主问题。</div>
+        </div>
+      </aside>
+
+      <section class="panel detail-pane">
+        <div class="detail-head">
+          <div class="eyebrow">Focused Review</div>
+          <h2 id="detail-title">尚未选择问题</h2>
+          <div id="detail-badges" class="badge-row"></div>
+          <p id="detail-excerpt" class="meta">上传文件后，点击左侧问题可以联动定位到右侧正文。</p>
+        </div>
+        <div class="detail-body">
+          <div id="detail-grid" class="detail-grid">
+            <div class="detail-item"><strong>来源链路</strong><div>待运行</div></div>
+            <div class="detail-item"><strong>位置</strong><div>待运行</div></div>
+            <div class="detail-item"><strong>风险说明</strong><div>待运行</div></div>
+            <div class="detail-item"><strong>建议改写</strong><div>待运行</div></div>
+          </div>
+        </div>
+        <div id="document-pane" class="document-pane">
+          <div class="empty">上传文件后，这里会渲染文档原文，并跟随问题卡片定位到对应位置。</div>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      payload: null,
+      findings: [],
+      filtered: [],
+      selectedFindingId: null,
+      viewMode: 'main',
+      riskMode: 'all',
+    };
+
+    const form = document.getElementById('review-form');
+    const openSourceBtn = document.getElementById('open-source-btn');
+    const runMetaNode = document.getElementById('run-meta');
+    const summaryGridNode = document.getElementById('summary-grid');
+    const issueListNode = document.getElementById('issue-list');
+    const detailTitleNode = document.getElementById('detail-title');
+    const detailBadgesNode = document.getElementById('detail-badges');
+    const detailExcerptNode = document.getElementById('detail-excerpt');
+    const detailGridNode = document.getElementById('detail-grid');
+    const documentPaneNode = document.getElementById('document-pane');
+
+    form.addEventListener('submit', submitReview);
+    openSourceBtn.addEventListener('click', openSourceFile);
+    document.getElementById('view-toolbar').querySelectorAll('[data-view]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.viewMode = node.dataset.view;
+        render();
+      });
+    });
+    document.getElementById('risk-toolbar').querySelectorAll('[data-risk]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.riskMode = node.dataset.risk;
+        render();
+      });
+    });
+
+    async function submitReview(event) {
+      event.preventDefault();
+      const formData = new FormData(form);
+      runMetaNode.textContent = '正在执行审查，请稍候...';
+      issueListNode.innerHTML = '<div class="empty">正在生成主问题视图...</div>';
+      try {
+        const response = await fetch('/api/review', { method: 'POST', body: formData });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || '审查失败');
+        }
+        state.payload = payload;
+        state.findings = payload.review.findings || [];
+        state.selectedFindingId = null;
+        openSourceBtn.disabled = !payload.document || !payload.document.source_path;
+        runMetaNode.textContent = `已完成审查：${payload.review.document_name}；缓存 ${payload.cache.used ? '命中' : '未命中'}；本地模型 ${payload.llm.enabled ? '已启用' : '未启用'}。`;
+        render();
+      } catch (error) {
+        runMetaNode.textContent = `审查失败：${error.message}`;
+        issueListNode.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+      }
+    }
+
+    async function openSourceFile() {
+      const sourcePath = state.payload && state.payload.document ? state.payload.document.source_path : '';
+      if (!sourcePath) return;
+      await fetch('/api/open-source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: sourcePath }),
+      });
+    }
+
+    function render() {
+      renderToolbarState();
+      renderSummary();
+      renderIssues();
+      renderDetail();
+      renderDocument();
+    }
+
+    function renderToolbarState() {
+      document.querySelectorAll('#view-toolbar [data-view]').forEach((node) => {
+        node.classList.toggle('is-active', node.dataset.view === state.viewMode);
+      });
+      document.querySelectorAll('#risk-toolbar [data-risk]').forEach((node) => {
+        node.classList.toggle('is-active', node.dataset.risk === state.riskMode);
+      });
+    }
+
+    function renderSummary() {
+      const findings = state.findings;
+      const metrics = summarizeFindings(findings);
+      summaryGridNode.innerHTML = `
+        ${renderMetric('当前状态', state.payload ? '已完成' : '待运行')}
+        ${renderMetric('主问题', metrics.main)}
+        ${renderMetric('保留明细', metrics.detail)}
+        ${renderMetric('模型新增', metrics.llm)}
+        ${renderMetric('高风险', metrics.high)}
+        ${renderMetric('中风险', metrics.medium)}
+      `;
+    }
+
+    function renderMetric(label, value) {
+      return `<div class="metric"><div class="metric-label">${escapeHtml(label)}</div><strong>${escapeHtml(String(value))}</strong></div>`;
+    }
+
+    function summarizeFindings(findings) {
+      return {
+        main: findings.filter(isMainIssue).length,
+        detail: findings.filter((item) => !isMainIssue(item)).length,
+        llm: findings.filter((item) => item.finding_origin === 'llm_added').length,
+        high: findings.filter((item) => item.risk_level === 'high').length,
+        medium: findings.filter((item) => item.risk_level === 'medium').length,
+      };
+    }
+
+    function applyFilters(findings) {
+      let items = findings.slice();
+      if (state.viewMode === 'main') {
+        items = items.filter(isMainIssue);
+      } else if (state.viewMode === 'llm') {
+        items = items.filter((item) => item.finding_origin === 'llm_added');
+      }
+      if (state.riskMode !== 'all') {
+        items = items.filter((item) => item.risk_level === state.riskMode);
+      }
+      return items;
+    }
+
+    function renderIssues() {
+      const filtered = applyFilters(state.findings);
+      state.filtered = filtered;
+      if (!state.selectedFindingId && filtered.length) {
+        state.selectedFindingId = filtered[0].finding_id;
+      }
+      if (!filtered.some((item) => item.finding_id === state.selectedFindingId) && filtered.length) {
+        state.selectedFindingId = filtered[0].finding_id;
+      }
+      if (!filtered.length) {
+        issueListNode.innerHTML = '<div class="empty">当前筛选条件下没有问题。</div>';
+        return;
+      }
+      issueListNode.innerHTML = filtered.map(renderIssueCard).join('');
+      issueListNode.querySelectorAll('.issue-card').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.selectedFindingId = node.dataset.findingId;
+          renderIssues();
+          renderDetail();
+          renderDocument();
+        });
+      });
+    }
+
+    function renderIssueCard(finding) {
+      const active = finding.finding_id === state.selectedFindingId;
+      const badges = [
+        `<span class="badge ${escapeHtml(finding.risk_level)}">${riskLabel(finding.risk_level)}</span>`,
+        isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : '',
+        `<span class="badge ${originBadgeClass(finding)}">${escapeHtml(originLabel(finding))}</span>`,
+      ].join('');
+      return `
+        <article class="issue-card ${escapeHtml(finding.risk_level)} ${active ? 'is-active' : ''}" data-finding-id="${escapeHtml(finding.finding_id)}">
+          <div class="issue-head">
+            <div class="issue-title">${escapeHtml(finding.problem_title)}</div>
+          </div>
+          <div class="badge-row">${badges}</div>
+          <div class="mini-meta" style="margin-top:10px;">
+            <span class="mini-pill">位置 ${escapeHtml(compactLocation(finding))}</span>
+            <span class="mini-pill">来源 ${escapeHtml(sourceChain(finding))}</span>
+          </div>
+          <div class="issue-excerpt">${escapeHtml(finding.source_text || '无原文摘录')}</div>
+        </article>
+      `;
+    }
+
+    function renderDetail() {
+      const finding = state.filtered.find((item) => item.finding_id === state.selectedFindingId) || state.findings.find((item) => item.finding_id === state.selectedFindingId);
+      if (!finding) {
+        detailTitleNode.textContent = '尚未选择问题';
+        detailBadgesNode.innerHTML = '';
+        detailExcerptNode.textContent = '上传文件后，点击左侧问题可以联动定位到右侧正文。';
+        detailGridNode.innerHTML = '<div class="detail-item"><strong>状态</strong><div>暂无内容</div></div>';
+        return;
+      }
+      detailTitleNode.textContent = finding.problem_title;
+      detailBadgesNode.innerHTML = `
+        <span class="badge ${escapeHtml(finding.risk_level)}">${riskLabel(finding.risk_level)}</span>
+        ${isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : ''}
+        <span class="badge ${originBadgeClass(finding)}">${escapeHtml(originLabel(finding))}</span>
+      `;
+      detailExcerptNode.textContent = finding.source_text || '无原文摘录';
+      detailGridNode.innerHTML = `
+        <div class="detail-item"><strong>来源链路</strong><div>${escapeHtml(sourceChain(finding))}</div></div>
+        <div class="detail-item"><strong>定位</strong><div>${escapeHtml(fullLocation(finding))}</div></div>
+        <div class="detail-item"><strong>风险说明</strong><div>${escapeHtml(finding.why_it_is_risky || '暂无')}</div></div>
+        <div class="detail-item"><strong>建议改写</strong><div>${escapeHtml(finding.rewrite_suggestion || '暂无')}</div></div>
+      `;
+    }
+
+    function renderDocument() {
+      const documentPayload = state.payload ? state.payload.document : null;
+      if (!documentPayload) {
+        documentPaneNode.innerHTML = '<div class="empty">上传文件后，这里会渲染文档原文，并联动定位。</div>';
+        return;
+      }
+      const finding = state.filtered.find((item) => item.finding_id === state.selectedFindingId) || state.findings.find((item) => item.finding_id === state.selectedFindingId);
+      const start = finding ? finding.text_line_start : -1;
+      const end = finding ? finding.text_line_end : -1;
+      const blocks = documentPayload.blocks && documentPayload.blocks.length ? documentPayload.blocks : [{ title: '文档正文', lines: documentPayload.lines || [] }];
+      documentPaneNode.innerHTML = blocks.map((block, index) => renderBlock(block, index, start, end)).join('');
+      if (finding) {
+        const node = documentPaneNode.querySelector('[data-target-block="true"]') || documentPaneNode.querySelector('.doc-line.target');
+        if (node) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    function renderBlock(block, index, start, end) {
+      const hasTarget = (block.lines || []).some((line) => line.number >= start && line.number <= end);
+      return `
+        <section class="doc-block ${hasTarget ? 'is-target' : ''}" data-target-block="${hasTarget ? 'true' : 'false'}">
+          <div class="mini-meta" style="margin-bottom:10px;">
+            <span class="mini-pill">${escapeHtml(block.title || `文档块 ${index + 1}`)}</span>
+          </div>
+          ${(block.lines || []).map((line) => renderLine(line, start, end)).join('')}
+        </section>
+      `;
+    }
+
+    function renderLine(line, start, end) {
+      const target = line.number >= start && line.number <= end;
+      return `
+        <div class="doc-line ${target ? 'target' : ''}">
+          <div class="line-no">L${escapeHtml(String(line.number))}</div>
+          <div>${escapeHtml(line.text || '')}</div>
+        </div>
+      `;
+    }
+
+    function isMainIssue(finding) {
+      return finding.finding_origin === 'analyzer' || (finding.finding_origin === 'llm_added' && /章节|主问题/.test(finding.problem_title || ''));
+    }
+
+    function originLabel(finding) {
+      if (finding.finding_origin === 'llm_added') return '全文辅助扫描';
+      if (finding.finding_origin === 'analyzer') return '结构分析 / 仲裁保留';
+      return '规则命中';
+    }
+
+    function originBadgeClass(finding) {
+      if (finding.finding_origin === 'llm_added') return 'origin-llm';
+      if (finding.finding_origin === 'analyzer') return 'main';
+      return 'origin-rule';
+    }
+
+    function sourceChain(finding) {
+      if (finding.finding_origin === 'analyzer') return '规则命中 → 结构分析 → 仲裁保留';
+      if (finding.finding_origin === 'llm_added') return '全文辅助扫描 → 仲裁判断';
+      return '规则命中';
+    }
+
+    function riskLabel(level) {
+      if (level === 'high') return '高风险';
+      if (level === 'medium') return '中风险';
+      return level || '未知';
+    }
+
+    function compactLocation(finding) {
+      const section = finding.section_path || finding.source_section || '未定位章节';
+      return `${section} / L${finding.text_line_start}`;
+    }
+
+    function fullLocation(finding) {
+      const parts = [];
+      if (finding.section_path) parts.push(finding.section_path);
+      if (finding.page_hint) parts.push(finding.page_hint);
+      parts.push(`行 ${finding.text_line_start}-${finding.text_line_end}`);
+      return parts.join(' | ');
+    }
+
+    function escapeHtml(text) {
+      return String(text || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
     }
   </script>
 </body>
