@@ -2200,6 +2200,83 @@ class ReviewPipelineTest(unittest.TestCase):
         titles = {finding.problem_title for finding in review.findings}
         self.assertNotIn("评分项名称、内容和评分证据之间不一致", titles)
 
+    def test_review_uses_signage_printing_strategy_for_hospital_signage_project(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：坪山区人民医院标识标牌及宣传印制等服务项目",
+                "第三章 用户需求书",
+                "中标供应商应提供标识标牌、宣传品设计、文创产品设计，并具备 UV 打印机、喷绘机和写真机等设备保障。",
+                "评标信息",
+                "投标人具备 IT 服务管理体系认证、保安服务认证和信息安全管理体系认证的得分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/signage.docx",
+            document_name="坪山区人民医院标识标牌及宣传印制等服务项目.docx",
+            file_hash="signage-strategy",
+            normalized_text_path="/tmp/signage.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        self.assertIn("标识标牌及宣传印制综合服务项目", review.overall_risk_summary)
+        self.assertIn("医院、学校或公共机构标识导视、宣传印制和现场制作安装维护类", review.overall_risk_summary)
+
+    def test_review_adds_signage_qualification_bundle_findings(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求：",
+                "供应商必须在中国境内注册，且成立时间不少于五年。",
+                "投标人必须提供税务或社保部门出具的证明文件，显示其最近连续三个月的月均参保人数不少于50人。",
+                "其2024年末经审计的净资产（所有者权益）必须不低于2000万元。",
+                "投标人2024年度实际缴纳的增值税及企业所得税合计金额必须超过200万元。",
+                "供应商的营业执照注册地址必须位于福州市行政区域范围内。",
+                "须具备学生饮用奶定点生产企业资格认定并提供相关证书。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/signage-qualification.docx",
+            document_name="标识标牌及宣传印制服务项目.docx",
+            file_hash="signage-qualification",
+            normalized_text_path="/tmp/signage-qualification.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("资格条件设置一般财务和规模门槛", titles)
+        self.assertIn("资格条件设置经营年限、属地场所或单项业绩门槛", titles)
+        self.assertIn("资格条件中存在与标的域不匹配的行业资质或专门许可", titles)
+        self.assertIn("资格条件整体超出法定准入和履约必需范围", titles)
+
+    def test_review_ignores_explanatory_summary_clause_for_signage_scoring_noise(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "10.投标供应商针对项目制定方案，包括不不限于：1.工作措施 2.工作流程 3.售后服务 4.应急事件处理预案；质量保障措施及方案；借助自身的质量管理体系、环境管理体系、职业健康安全管理体系、商品售后服务评价体系认证情况和标识标牌及印刷类软件著作权方面，对项目提供支撑进行高质量的服务要求。投标供应商中标后自有或租赁跟项目服务相关的 UV 打印机、喷绘机、写真机、有雕刻机、折弯机等关键设备保障项目的履约以及售后。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/signage-summary.docx",
+            document_name="标识标牌及宣传印制服务项目.docx",
+            file_hash="signage-summary",
+            normalized_text_path="/tmp/signage-summary.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("评分项中存在与标的域不匹配的证书认证或模板内容", titles)
+        self.assertNotIn("评分项名称、内容和评分证据之间不一致", titles)
+        self.assertNotIn("技术要求可能合理但需补充必要性论证", titles)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -474,6 +474,9 @@ def _build_document_strategy_profile(
     elif domain == "property_service":
         procurement_mode = "物业管理或综合后勤服务项目"
         domain_hint = "校园、医院或公共机构物业服务及驻场保障类"
+    elif domain == "signage_printing_service":
+        procurement_mode = "标识标牌及宣传印制综合服务项目"
+        domain_hint = "医院、学校或公共机构标识导视、宣传印制和现场制作安装维护类"
     elif any(token in combined for token in ("血透", "透析", "医疗器械", "设备采购", "HIS", "PACS", "LIS", "碳足迹")) or domain == "medical_device_goods":
         procurement_mode = "货物采购并含安装调试项目"
         domain_hint = "医用设备供货、院内接口配套与附加合规义务并存"
@@ -727,9 +730,32 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "scoring_content_mismatch",
             "excessive_supplier_qualification",
             "irrelevant_certification_or_award",
+            "technical_justification_needed",
         } and _text_contains_any(
             finding,
-            ("工程案例", "CMA", "检测报告", "资产总额", "营业收入", "净利润", "标准委员会", "ISO20000", "先进单位", "注册安全工程师", "商品包装", "快递包装"),
+            (
+                "工程案例",
+                "CMA",
+                "检测报告",
+                "资产总额",
+                "营业收入",
+                "净利润",
+                "标准委员会",
+                "ISO20000",
+                "先进单位",
+                "注册安全工程师",
+                "商品包装",
+                "快递包装",
+                "IT服务管理体系认证",
+                "保安服务认证",
+                "信息安全管理体系认证",
+                "软件著作权",
+                "UV 打印机",
+                "喷绘机",
+                "写真机",
+                "雕刻机",
+                "折弯机",
+            ),
         )
 
     if "售后服务评分混入荣誉证书且主观分值偏高" in title:
@@ -912,6 +938,18 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
         return finding.issue_type in {"template_mismatch", "other", "technical_justification_needed"} and _text_contains_any(
             finding,
             ("信息化管理系统", "系统端口", "无缝对接", "综合业务协同平台", "自动化调剂", "发药机", "药瓶清洁", "系统进行管理维护"),
+        )
+
+    if "标识标牌及宣传印制服务叠加设备保障和信息化支撑内容，边界不清" in title:
+        return finding.issue_type in {
+            "scoring_content_mismatch",
+            "technical_justification_needed",
+            "template_mismatch",
+            "other",
+            "irrelevant_certification_or_award",
+        } and _text_contains_any(
+            finding,
+            ("软件著作权", "UV 打印机", "UV打印机", "喷绘机", "写真机", "雕刻机", "折弯机", "系统端口", "无缝对接"),
         )
 
     if "商务条款叠加设置异常资金占用、交货期限和责任负担" in title:
@@ -1488,6 +1526,8 @@ def _add_qualification_financial_scale_theme_finding(
                 "参保人数不少于",
                 "平均资产总额不低于",
                 "资产总额不得低于",
+                "净资产（所有者权益）必须不低于",
+                "净资产不低于",
                 "注册资本不低于",
                 "年收入不低于",
                 "净利润不低于",
@@ -1496,7 +1536,7 @@ def _add_qualification_financial_scale_theme_finding(
     ]
     matched_marker_count = sum(
         1
-        for marker in ("纳税", "员工总数", "参保人数", "资产总额", "注册资本", "年收入", "净利润")
+        for marker in ("纳税", "员工总数", "参保人数", "资产总额", "净资产", "注册资本", "年收入", "净利润")
         if any(marker in clause.text for clause in clauses)
     )
     if not clauses or matched_marker_count < 2:
@@ -1540,6 +1580,8 @@ def _add_qualification_operating_scope_theme_finding(
             for marker in (
                 "营业执照的成立日期不得晚于",
                 "成立日期必须早于",
+                "成立时间不少于",
+                "营业执照注册地址必须位于",
                 "固定的售后服务场所",
                 "主要经营地址",
                 "经营地址（非注册地址）",
@@ -1587,6 +1629,7 @@ def _add_qualification_industry_appropriateness_finding(
         "水运工程监理甲级",
         "有害生物防制",
         "SPCA",
+        "学生饮用奶定点生产企业资格",
         "特种设备安全管理和作业人员证书",
         "棉花加工资格",
         "高空清洗悬吊作业企业安全生产证书",
@@ -1643,16 +1686,21 @@ def _add_qualification_reasoning_theme_finding(
             for marker in (
                 "纳税总额",
                 "年均纳税",
+                "实际缴纳的增值税及企业所得税",
                 "参保人数",
                 "员工总数",
                 "资产总额",
+                "净资产",
                 "成立日期",
+                "成立时间",
                 "固定的售后服务场所",
+                "营业执照注册地址必须位于",
                 "主要经营地址",
                 "单项合同金额",
                 "水运工程监理甲级",
                 "有害生物防制",
                 "SPCA",
+                "学生饮用奶定点生产企业资格",
                 "棉花加工资格",
                 "特种设备安全管理和作业人员证书",
                 "高空清洗悬吊作业企业安全生产证书",
@@ -2360,6 +2408,9 @@ def _add_scoring_semantic_consistency_theme_finding(
                 "工程案例",
                 "CMA",
                 "检测报告",
+                "IT服务管理体系认证",
+                "保安服务认证",
+                "信息安全管理体系认证",
                 "从业人员",
                 "资产总额",
                 "成立时间",
@@ -2388,7 +2439,18 @@ def _add_scoring_semantic_consistency_theme_finding(
     category_markers = {
         "report_formality": ("CMA", "检测报告"),
         "business_background": ("资产总额", "成立时间", "营业收入", "净利润", "科技型中小企业"),
-        "cross_domain": ("高空清洗", "CCRC", "ISO20000", "有机产品认证", "生活垃圾分类", "先进单位", "注册安全工程师"),
+        "cross_domain": (
+            "高空清洗",
+            "CCRC",
+            "ISO20000",
+            "有机产品认证",
+            "生活垃圾分类",
+            "先进单位",
+            "注册安全工程师",
+            "IT服务管理体系认证",
+            "保安服务认证",
+            "信息安全管理体系认证",
+        ),
         "ip_or_system": ("定位管理标签模块", "软件著作权", "专利证书", "资产管理读写基站"),
         "insurance_or_personnel": ("食品安全责任险", "公众责任险", "高级餐饮业职业经理人", "食品安全管理员"),
     }
@@ -2807,6 +2869,13 @@ def _add_commercial_lifecycle_theme_finding(
                 "到场",
                 "解除合同",
                 "实际需求为准",
+                "按市场价",
+                "市场价格",
+                "用户组织有关技术人员",
+                "医院审核后方可制作",
+                "其他合同未明示的相关工作",
+                "必须有能力进行更改",
+                "合同总价为固定不变价格",
                 "售后服务保证金",
                 "复检",
                 "最终验收结果",
@@ -2859,6 +2928,13 @@ def _add_commercial_lifecycle_theme_finding(
                 "暂停支付",
                 "第三方质量检测",
                 "一切损失",
+                "按市场价",
+                "市场价格",
+                "用户组织有关技术人员",
+                "医院审核后方可制作",
+                "其他合同未明示的相关工作",
+                "必须有能力进行更改",
+                "固定不变价格",
             )
         )
     ]
@@ -2929,6 +3005,7 @@ def _add_qualification_domain_theme_finding(
                 "SPCA",
                 "特种设备安全管理和作业人员证书",
                 "生活垃圾分类服务认证证书",
+                "学生饮用奶定点生产企业资格",
                 "公司治理评级证书",
                 "合规管理体系认证证书",
                 "《合规管理体系认证证书》",
@@ -2970,7 +3047,9 @@ def _add_scoring_domain_theme_finding(document: NormalizedDocument, findings: li
     clauses = [
         clause
         for clause in document.clauses
-        if _is_scoring_clause(clause) and any(marker in clause.text for marker in mismatch_markers)
+        if _is_scoring_clause(clause)
+        and not _is_explanatory_summary_clause(clause)
+        and any(marker in clause.text for marker in mismatch_markers)
     ]
     if len(clauses) < 1:
         return findings
@@ -3005,6 +3084,7 @@ def _add_mixed_scope_boundary_theme_finding(document: NormalizedDocument, findin
         "混合采购场景叠加自动化设备和信息化接口义务，边界不清" in existing_titles
         or "家具采购场景叠加资产定位和智能管理系统义务，边界不清" in existing_titles
         or "物业服务场景叠加自动化系统和软件著作权评分，边界不清" in existing_titles
+        or "标识标牌及宣传印制服务叠加设备保障和信息化支撑内容，边界不清" in existing_titles
     ):
         return findings
     domain = _document_domain(document)
@@ -3085,6 +3165,33 @@ def _add_mixed_scope_boundary_theme_finding(document: NormalizedDocument, findin
         impact = "可能把物业服务以外的软件系统建设和知识产权储备一并转化为高分优势，抬高竞争门槛并偏离核心服务能力比较。"
         rewrite = "建议将物业服务能力评价与自动化系统建设能力分开表述；如确需考察数字化管理能力，应围绕实际应用场景、功能效果和服务方案设置低权重、可核验评分因素，而非直接按软件著作权储备赋分。"
         review_reason = "需结合本次物业服务采购范围、学校现有智能化设施情况和数字化管理需求判断相关系统类能力是否应并入本项目评分。"
+    elif domain == "signage_printing_service":
+        clauses = [
+            clause
+            for clause in document.clauses
+            if any(
+                marker in clause.text
+                for marker in (
+                    "软件著作权",
+                    "UV 打印机",
+                    "UV打印机",
+                    "喷绘机",
+                    "写真机",
+                    "雕刻机",
+                    "折弯机",
+                    "系统端口",
+                    "无缝对接",
+                )
+            )
+        ]
+        title = "标识标牌及宣传印制服务叠加设备保障和信息化支撑内容，边界不清"
+        rationale = (
+            "文件在标识标牌及宣传印制服务采购中，同时叠加了印刷设备储备、软件著作权和可能的信息化支撑内容。"
+            "当设计制作服务、设备保障和系统支撑被混合写入同一采购范围时，容易导致采购边界不清，并把额外的设备和数字化能力整体转化为得分或履约前提。"
+        )
+        impact = "可能把标识标牌及宣传印制服务以外的设备储备和信息化支撑能力一并转化为竞争门槛，扩大履约义务边界。"
+        rewrite = "建议将设计制作服务、现场安装维护、设备保障和可能的信息化支撑分开表述；如确需考察设备或数字化能力，应单独说明业务必要性、边界和验收责任。"
+        review_reason = "需结合本次宣传印制服务的真实交付边界判断印刷设备储备和软件著作权等内容是必要支撑，还是被不当上浮为评分或履约要求。"
     elif domain == "medical_device_goods":
         clauses = [
             clause
@@ -3341,6 +3448,14 @@ def _add_template_domain_theme_finding(document: NormalizedDocument, findings: l
                 continue
             if not any(marker in clause.text for marker in ("芯片", "HIS", "PACS", "LIS", "数据交换", "软件著作权", "著作权登记证书", "实际需求为准")):
                 continue
+        if domain == "signage_printing_service":
+            if _is_scoring_clause(clause):
+                continue
+            if not any(
+                marker in clause.text
+                for marker in ("成桥荷载试验", "交通部交工验收", "试验成果", "工程现场勘察", "试验人员", "试验仪器设备", "用户组织有关技术人员")
+            ):
+                continue
         clauses.append(clause)
     if len(clauses) < 1:
         return findings
@@ -3563,6 +3678,10 @@ def _document_domain(document: NormalizedDocument) -> str:
     clause_text = " ".join(clause.text for clause in document.clauses[:200])
     if any(marker in base_text for marker in ("食堂", "供餐", "餐饮", "托管服务")):
         return "catering_service"
+    if any(marker in base_text for marker in ("标识标牌", "宣传印制", "印刷品", "文创产品", "宣传物料")) or any(
+        marker in clause_text for marker in ("UV 打印机", "UV打印机", "喷绘机", "写真机", "雕刻机", "折弯机", "标识标牌", "宣传品设计")
+    ):
+        return "signage_printing_service"
     if any(marker in base_text for marker in ("家具", "办公类家具", "医用家具")):
         return "furniture_goods"
     if any(marker in base_text for marker in ("窗帘", "隔帘", "床品", "服装", "被服")):
@@ -3714,10 +3833,31 @@ def _is_template_instruction_clause(clause) -> bool:
     )
 
 
+def _is_explanatory_summary_clause(clause) -> bool:
+    text = clause.text or ""
+    if len(text) < 80:
+        return False
+    return (
+        any(marker in text for marker in ("包括但不限于", "包括不不限于", "借助自身的", "对项目提供支撑", "高质量的服务要求"))
+        and sum(text.count(marker) for marker in ("；", "。", "：", "1.", "2.", "3.", "4.", "①", "②", "③", "④")) >= 5
+    )
+
+
 def _domain_mismatch_markers(domain: str) -> tuple[str, ...]:
     mapping = {
         "information_system": ("园区保洁", "设施维修", "安防管理", "保洁", "垃圾", "特种设备", "高空清洗", "CCRC", "ISO20000"),
         "property_service": ("芯片", "系统", "软件", "平台", "接口", "HIS", "PACS", "LIS", "数据交换", "棉花加工", "水运工程监理甲级"),
+        "signage_printing_service": (
+            "IT服务管理体系认证",
+            "保安服务认证",
+            "信息安全管理体系认证",
+            "学生饮用奶定点生产企业资格",
+            "成桥荷载试验",
+            "交通部交工验收",
+            "试验成果",
+            "工程现场勘察",
+            "试验人员",
+        ),
         "medical_tcm": ("IT服务管理", "生活垃圾分类", "SPCA", "有害生物防制", "棉花加工", "高空清洗", "CCRC", "ISO20000"),
         "medical_tcm_mixed": (
             "IT服务管理",
