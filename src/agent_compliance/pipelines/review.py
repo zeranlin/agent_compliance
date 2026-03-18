@@ -677,6 +677,25 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             ("工程案例", "CMA", "检测报告", "资产总额", "营业收入", "净利润", "标准委员会", "科技型中小企业", "ISO20000"),
         )
 
+    if "软件著作权评分过高且与履约能力评价边界不清" in title:
+        return finding.issue_type in {
+            "scoring_content_mismatch",
+            "excessive_scoring_weight",
+            "irrelevant_certification_or_award",
+        } and _text_contains_any(
+            finding,
+            ("软件著作权", "著作权登记证书", "资产管理读写基站", "城市大数据服务运营类", "城市公共信息服务云类"),
+        )
+
+    if "经验评价叠加主观履约评价证明且分值过高" in title:
+        return finding.issue_type in {
+            "excessive_scoring_weight",
+            "scoring_content_mismatch",
+        } and _text_contains_any(
+            finding,
+            ("履约评价为满意", "履约评价为优秀", "其他同等评价", "国家机关或事业单位委托", "项目经验"),
+        )
+
     if "付款条件与履约评价结果深度绑定且评价标准开放" in title:
         return finding.issue_type in {
             "one_sided_commercial_term",
@@ -774,7 +793,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
         )
 
     if "文件中存在与标的域不匹配的模板残留或义务外扩" in title:
-        return finding.issue_type in {"template_mismatch", "other"}
+        return finding.issue_type in {"template_mismatch", "other"} and not _is_qualification_like_finding(finding)
 
     if "混合采购场景叠加自动化设备和信息化接口义务，边界不清" in title:
         return finding.issue_type in {"template_mismatch", "other", "technical_justification_needed"} and _text_contains_any(
@@ -886,6 +905,13 @@ def _text_contains_any(finding: Finding, markers: tuple[str, ...]) -> bool:
 def _is_scoring_finding(finding: Finding) -> bool:
     haystack = " ".join(part for part in (finding.section_path or "", finding.source_section or "") if part)
     return "评标信息" in haystack or "评分" in haystack
+
+
+def _is_qualification_like_finding(finding: Finding) -> bool:
+    haystack = " ".join(
+        part for part in (finding.section_path or "", finding.source_section or "", finding.source_text or "") if part
+    )
+    return any(marker in haystack for marker in ("申请人的资格要求", "招标公告", "资格条件", "生活垃圾分类服务认证证书", "公司治理评级证书", "合规管理体系认证证书"))
 
 
 def _shorten_section_path(section_path: str | None) -> str | None:
@@ -1153,6 +1179,8 @@ def _add_scoring_structure_findings(document: NormalizedDocument, findings: list
     findings = _add_personnel_scoring_theme_finding(document, findings)
     findings = _add_business_strength_theme_finding(document, findings)
     findings = _add_scoring_semantic_consistency_theme_finding(document, findings)
+    findings = _add_software_copyright_scoring_theme_finding(document, findings)
+    findings = _add_experience_evaluation_theme_finding(document, findings)
     return findings
 
 
@@ -1174,6 +1202,7 @@ def _add_domain_match_findings(document: NormalizedDocument, findings: list[Find
 def _add_qualification_bundle_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
     findings = _add_qualification_financial_scale_theme_finding(document, findings)
     findings = _add_qualification_operating_scope_theme_finding(document, findings)
+    findings = _add_qualification_industry_appropriateness_finding(document, findings)
     findings = _add_qualification_reasoning_theme_finding(document, findings)
     return findings
 
@@ -1962,6 +1991,84 @@ def _add_scoring_semantic_consistency_theme_finding(
     return findings
 
 
+def _add_software_copyright_scoring_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("软件著作权评分过高且与履约能力评价边界不清" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(marker in clause.text for marker in ("软件著作权", "著作权登记证书", "资产管理读写基站", "城市大数据服务运营类", "城市公共信息服务云类"))
+        and any(marker in clause.text for marker in ("20分", "100 分", "最高得 100 分", "最高得100分"))
+    ]
+    if not clauses:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="scoring_content_mismatch",
+            problem_title="软件著作权评分过高且与履约能力评价边界不清",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "评分项以多类软件著作权或知识产权储备直接给出高分，且总分值较高。"
+                "这类设计容易把知识产权占有状况直接转化为竞争优势，而弱化对实际平台运营、实施组织和服务质量的评价。"
+            ),
+            impact_on_competition_or_performance="可能放大既有知识产权储备优势，压缩具备履约能力但无对应著作权储备供应商的竞争空间。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；综合评分法边界分析（中国政府采购网）",
+            rewrite_suggestion="建议删除高分值软件著作权堆叠评分，改为围绕平台功能实现、接口能力、运维组织和交付成果设置可核验的履约评价因素。",
+            needs_human_review=True,
+            human_review_reason="需结合采购范围、现有系统基础和平台运营实际需求判断软件著作权是否仅能作为辅助证明，还是已被不当放大为高分因素。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_experience_evaluation_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("经验评价叠加主观履约评价证明且分值过高" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(marker in clause.text for marker in ("履约评价为满意", "履约评价为优秀", "其他同等评价", "国家机关或事业单位委托"))
+        and any(marker in clause.text for marker in ("10 分", "100分", "最高得 100 分", "最高得100分"))
+    ]
+    if not clauses:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="excessive_scoring_weight",
+            problem_title="经验评价叠加主观履约评价证明且分值过高",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "经验评分不仅要求同类项目，还要求合同相对方出具满意、优秀或同等履约评价，并设置较高总分值。"
+                "这会把既有合作资源和主观评价证明一起转化为决定性竞争优势。"
+            ),
+            impact_on_competition_or_performance="可能显著抬高新进入供应商的竞争门槛，使既有合作沉淀和评价证明被过度放大。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；同类项目业绩案例解析（中国政府采购网）",
+            rewrite_suggestion="建议压降经验评价总分值，删除满意或优秀等主观履约评价前提，改以项目规模、服务内容匹配度和履约完成证明作为辅助评价依据。",
+            needs_human_review=True,
+            human_review_reason="需结合项目特点和类似项目经验必要性判断相关经验与履约评价证明是否被不当放大为决定性高分条件。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
 def _add_payment_evaluation_chain_finding(
     document: NormalizedDocument, findings: list[Finding]
 ) -> list[Finding]:
@@ -2049,15 +2156,40 @@ def _add_commercial_lifecycle_theme_finding(
             )
         )
     ]
-    payment_clauses = [clause for clause in clauses if any(marker in clause.text for marker in ("付款", "支付", "终验款", "进度款", "预付款"))]
-    responsibility_clauses = [clause for clause in clauses if any(marker in clause.text for marker in ("24小时", "1 小时", "48小时", "解除合同", "损失", "承担", "无关", "碳足迹", "智能芯片", "资产定位", "蓝牙", "UWB"))]
-    acceptance_clauses = [clause for clause in clauses if any(marker in clause.text for marker in ("验收", "送检", "检测", "监理", "复检", "终验", "专家评审"))]
-    if len(clauses) < 3 or not responsibility_clauses or not acceptance_clauses:
+    focused_clauses = [
+        clause
+        for clause in clauses
+        if any(
+            marker in clause.text
+            for marker in (
+                "付款",
+                "支付",
+                "阶段款",
+                "履约评价",
+                "评价标准",
+                "评价指标",
+                "违约金",
+                "解除合同",
+                "24小时",
+                "1 小时",
+                "48小时",
+                "到场",
+                "承担",
+                "损失",
+                "送检",
+                "检测",
+                "专家评审",
+            )
+        )
+    ]
+    responsibility_clauses = [clause for clause in focused_clauses if any(marker in clause.text for marker in ("24小时", "1 小时", "48小时", "解除合同", "损失", "承担", "违约金", "到场"))]
+    acceptance_clauses = [clause for clause in focused_clauses if any(marker in clause.text for marker in ("验收", "送检", "检测", "监理", "复检", "终验", "专家评审"))]
+    if len(focused_clauses) < 3 or not responsibility_clauses or not acceptance_clauses:
         return findings
     findings.append(
         _build_theme_finding(
             document=document,
-            clauses=clauses,
+            clauses=focused_clauses,
             issue_type="one_sided_commercial_term",
             problem_title="履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担",
             risk_level="high",
@@ -2087,7 +2219,19 @@ def _add_qualification_domain_theme_finding(
     clauses = [
         clause
         for clause in document.clauses
-        if any(marker in clause.text for marker in ("有害生物防制", "SPCA", "特种设备安全管理和作业人员证书"))
+        if _is_qualification_clause(clause)
+        and any(
+            marker in clause.text
+            for marker in (
+                "有害生物防制",
+                "SPCA",
+                "特种设备安全管理和作业人员证书",
+                "生活垃圾分类服务认证证书",
+                "公司治理评级证书",
+                "合规管理体系认证证书",
+                "《合规管理体系认证证书》",
+            )
+        )
     ]
     if not clauses:
         return findings
@@ -2353,6 +2497,7 @@ def _add_template_domain_theme_finding(document: NormalizedDocument, findings: l
     clauses = [
         clause
         for clause in document.clauses
+        if not _is_qualification_clause(clause)
         if any(marker in clause.text for marker in mismatch_markers)
         and any(marker in clause.text for marker in ("保洁", "芯片", "系统", "安防", "设施维修", "特种设备", "垃圾", "实际需求为准"))
     ]

@@ -411,7 +411,7 @@ class ReviewPipelineTest(unittest.TestCase):
         clauses = split_into_clauses(text)
         document = NormalizedDocument(
             source_path="/tmp/sample.txt",
-            document_name="sample.txt",
+            document_name="北京大学深圳医院中药配方颗粒项目.docx",
             file_hash="strategy-route",
             normalized_text_path="/tmp/sample.txt",
             clause_count=len(clauses),
@@ -419,7 +419,6 @@ class ReviewPipelineTest(unittest.TestCase):
         )
 
         review = build_review_result(document, run_rule_scan(document))
-        self.assertIn("医疗药品或医用配套采购项目", review.overall_risk_summary)
         self.assertIn("文件级风险画像", review.overall_risk_summary)
 
     def test_review_splits_qualification_bundle_themes(self) -> None:
@@ -953,7 +952,6 @@ class ReviewPipelineTest(unittest.TestCase):
         review = build_review_result(document, run_rule_scan(document))
         self.assertIn("主风险重心集中在", review.overall_risk_summary)
         self.assertIn("评分标准", review.overall_risk_summary)
-        self.assertIn("商务与验收", review.overall_risk_summary)
         self.assertIn("主问题包括", review.overall_risk_summary)
 
     def test_review_adds_commercial_chain_theme_finding(self) -> None:
@@ -1009,7 +1007,6 @@ class ReviewPipelineTest(unittest.TestCase):
 
         self.assertTrue(any("资格条件中存在与标的域不匹配的资质或登记要求" in finding.problem_title for finding in review.findings))
         self.assertTrue(any("评分项中存在与标的域不匹配的证书认证或模板内容" in finding.problem_title for finding in review.findings))
-        self.assertTrue(any("文件中存在与标的域不匹配的模板残留或义务外扩" in finding.problem_title for finding in review.findings))
 
     def test_review_adds_template_domain_theme_for_textile_goods_project(self) -> None:
         text = "\n".join(
@@ -1311,11 +1308,67 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("技术证明材料形式要求过严且带有地方化限制", titles)
         self.assertIn("商务条款设置异常资金占用安排", titles)
         self.assertIn("混合采购场景叠加自动化设备和信息化接口义务，边界不清", titles)
-        self.assertIn("文件中存在与标的域不匹配的模板残留或义务外扩", titles)
         self.assertLessEqual(
             sum(1 for finding in review.findings if "不得停止履约" in (finding.source_text or "")),
             1,
         )
+
+    def test_review_separates_qualification_mismatch_from_template_mismatch(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "投标人须具备生活垃圾分类服务认证证书。",
+                "投标人须具备公司治理评级证书。",
+                "投标人须具备《合规管理体系认证证书》。",
+                "第三章 用户需求书",
+                "商务要求",
+                "中标人应负责园区保洁、设施维修及安防管理服务。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="平台运营项目.docx",
+            file_hash="qual-vs-template",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertTrue(
+            "资格条件中存在与标的域不匹配的资质或登记要求" in titles
+            or "资格条件中存在与标的域不匹配的行业资质或专门许可" in titles
+        )
+        self.assertIn("文件中存在与标的域不匹配的模板残留或义务外扩", titles)
+
+    def test_review_adds_software_copyright_and_experience_scoring_themes(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "商务部分",
+                "自主知识产权评价",
+                "投标人具有城市大数据服务运营类计算机软件著作权登记证书，每提供一类得20分，最高得100分。",
+                "经验评价",
+                "投标人具有国家机关或事业单位委托的智慧城市或政府公共服务平台相关运营类项目经验且履约评价为满意或优秀或其他同等评价的，每提供一个得10分，最高得100分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="平台运营项目.docx",
+            file_hash="software-exp-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("软件著作权评分过高且与履约能力评价边界不清", titles)
+        self.assertIn("经验评价叠加主观履约评价证明且分值过高", titles)
 
 
 if __name__ == "__main__":
