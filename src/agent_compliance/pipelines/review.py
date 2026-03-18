@@ -62,15 +62,16 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
                 "当前 section_path 与 table_or_item_label 仍基于启发式识别，对复杂表格和跨页结构的定位仍需继续增强。",
                 "当前 page_hint 在缺少显式分页标记时会回退为估算页号，正式审查前仍建议结合原文件复核。",
             ],
-        )
+        ),
+        document=document,
     )
 
 
-def reconcile_review_result(review: ReviewResult) -> ReviewResult:
+def reconcile_review_result(review: ReviewResult, document: NormalizedDocument | None = None) -> ReviewResult:
     review.findings = _apply_finding_arbiter(review.findings)
     review.findings = _sort_findings(review.findings)
     review.findings = _renumber_findings(review.findings)
-    review.overall_risk_summary = _overall_summary(review.findings)
+    review.overall_risk_summary = _overall_summary(review.findings, document=document)
     review.items_for_human_review = _human_review_items(review.findings)
     return review
 
@@ -313,6 +314,7 @@ def _drop_false_positive_findings(findings: list[Finding]) -> list[Finding]:
                     "政府采购履约异常情况反馈表",
                     "评审程序及评审方法",
                     "通用条款",
+                    "质疑处理",
                 )
             )
         ):
@@ -366,9 +368,9 @@ def _human_review_reason(issue_type: str) -> str | None:
     return reasons.get(issue_type)
 
 
-def _overall_summary(findings: list[Finding]) -> str:
+def _overall_summary(findings: list[Finding], document: NormalizedDocument | None = None) -> str:
     profile = _build_document_risk_profile(findings)
-    strategy = _build_document_strategy_profile(findings)
+    strategy = _build_document_strategy_profile(findings, document=document)
     high = sum(1 for finding in findings if finding.risk_level == "high")
     medium = sum(1 for finding in findings if finding.risk_level == "medium")
     summary = (
@@ -421,7 +423,9 @@ def _build_document_risk_profile(findings: list[Finding]) -> DocumentRiskProfile
     )
 
 
-def _build_document_strategy_profile(findings: list[Finding]) -> DocumentStrategyProfile:
+def _build_document_strategy_profile(
+    findings: list[Finding], document: NormalizedDocument | None = None
+) -> DocumentStrategyProfile:
     if not findings:
         return DocumentStrategyProfile("综合型政府采购项目", "需结合全部章节综合判断", ("综合条款",), ("综合条款", "文件级风险画像"))
 
@@ -432,6 +436,7 @@ def _build_document_strategy_profile(findings: list[Finding]) -> DocumentStrateg
         section_scores[section] = section_scores.get(section, 0) + weight
     ordered_sections = [section for section, _ in sorted(section_scores.items(), key=lambda item: (-item[1], item[0]))]
 
+    domain = _document_domain(document) if document is not None else "general"
     combined = " ".join(
         filter(
             None,
@@ -442,16 +447,19 @@ def _build_document_strategy_profile(findings: list[Finding]) -> DocumentStrateg
         )
     )
 
-    if any(token in combined for token in ("血透", "透析", "医疗器械", "设备采购", "HIS", "PACS", "LIS", "碳足迹")):
+    if domain == "furniture_goods":
+        procurement_mode = "货物采购并含安装调试项目"
+        domain_hint = "办公或医用家具供货、安装和售后保障类"
+    elif any(token in combined for token in ("血透", "透析", "医疗器械", "设备采购", "HIS", "PACS", "LIS", "碳足迹")) or domain == "medical_device_goods":
         procurement_mode = "货物采购并含安装调试项目"
         domain_hint = "医用设备供货、院内接口配套与附加合规义务并存"
-    elif any(token in combined for token in ("中药", "药品", "颗粒", "医院")):
+    elif any(token in combined for token in ("中药", "药品", "颗粒", "医院")) or domain in {"medical_tcm", "medical_tcm_mixed"}:
         procurement_mode = "医疗药品或医用配套采购项目"
-        domain_hint = "药品供货、设备配套与院内接口并存"
-    elif any(token in combined for token in ("系统", "平台", "接口", "演示", "驻场运维")):
+        domain_hint = "药品供货、设备配套与院内接口并存" if domain == "medical_tcm_mixed" else "药品供货与医用配套服务类"
+    elif any(token in combined for token in ("系统", "平台", "接口", "演示", "驻场运维")) or domain == "information_system":
         procurement_mode = "信息化或数字化服务项目"
         domain_hint = "平台建设、系统对接或持续运维类"
-    elif any(token in combined for token in ("发电机", "机电设备", "安装调试")):
+    elif any(token in combined for token in ("发电机", "机电设备", "安装调试")) or domain == "equipment_installation":
         procurement_mode = "货物采购并含安装调试项目"
         domain_hint = "设备供货与安装验收并行"
     else:
@@ -1226,6 +1234,7 @@ def _technical_justification_human_review_reason(family: str) -> str:
 
 def _add_scoring_structure_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
     findings = _add_scoring_structure_imbalance_finding(findings)
+    findings = _add_goods_capacity_scoring_theme_finding(document, findings)
     findings = _add_subjective_scoring_theme_finding(document, findings)
     findings = _add_demo_mechanism_theme_finding(document, findings)
     findings = _add_personnel_scoring_theme_finding(document, findings)
@@ -1235,6 +1244,69 @@ def _add_scoring_structure_findings(document: NormalizedDocument, findings: list
     findings = _add_warranty_extension_scoring_theme_finding(document, findings)
     findings = _add_software_copyright_scoring_theme_finding(document, findings)
     findings = _add_experience_evaluation_theme_finding(document, findings)
+    return findings
+
+
+def _add_goods_capacity_scoring_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("经验评价、生产设备和认证因素高分集中并偏离核心供货能力" in finding.problem_title for finding in findings):
+        return findings
+    if _document_domain(document) != "furniture_goods":
+        return findings
+    scoring_clauses = [clause for clause in document.clauses if _is_scoring_clause(clause)]
+    category_clauses = [
+        clause
+        for clause in scoring_clauses
+        if any(marker in clause.text for marker in ("经验评价", "生产设备情况", "相关认证情况"))
+    ]
+    if len(category_clauses) < 2:
+        return findings
+    weighted_clauses = [
+        clause
+        for clause in scoring_clauses
+        if any(
+            marker in clause.text
+            for marker in (
+                "最高得100分",
+                "最高得 100 分",
+                "每提供一项得50分",
+                "每提供一项得 50 分",
+                "每具有以上一种相关设备的得10分",
+                "每具有以上一种相关设备的得 10 分",
+                "累计得分，最高得100分",
+                "累计得分，最高得 100 分",
+            )
+        )
+    ]
+    if not weighted_clauses:
+        return findings
+    clauses_by_line: "OrderedDict[int, object]" = OrderedDict()
+    for clause in [*category_clauses, *weighted_clauses]:
+        clauses_by_line.setdefault(clause.line_start, clause)
+    clauses = list(clauses_by_line.values())
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="scoring_structure_imbalance",
+            problem_title="经验评价、生产设备和认证因素高分集中并偏离核心供货能力",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "评分表将经验评价、生产设备储备和多项认证集中设置为高分项，且单项累计分值明显偏高。"
+                "这类设计会把企业既有规模、设备和认证储备放大为决定性优势，弱化对家具供货质量、安装组织和售后履约能力的评价。"
+            ),
+            impact_on_competition_or_performance="可能使评分重心偏离家具供货、安装和售后保障等核心履约能力，对既有资源更强的供应商形成明显倾斜。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；综合评分法边界分析（中国政府采购网）",
+            rewrite_suggestion="建议压降经验评价、生产设备和认证总分值，改为围绕家具供货质量、安装组织、交付计划和售后保障设置更直接的可核验评分因素。",
+            needs_human_review=True,
+            human_review_reason="需结合家具项目的供货、安装和售后履约重点判断经验、设备和认证因素是否被不当放大为高分竞争优势。",
+            finding_origin="analyzer",
+        )
+    )
     return findings
 
 
@@ -2789,10 +2861,12 @@ def _add_template_domain_theme_finding(document: NormalizedDocument, findings: l
     clauses = [
         clause
         for clause in document.clauses
+        if not _is_template_instruction_clause(clause)
         if not _is_qualification_clause(clause)
         if any(marker in clause.text for marker in mismatch_markers)
         and any(marker in clause.text for marker in ("保洁", "芯片", "系统", "安防", "设施维修", "特种设备", "垃圾", "实际需求为准"))
         and not (domain == "medical_device_goods" and any(marker in clause.text for marker in mixed_scope_markers))
+        and not (domain == "furniture_goods" and not any(marker in clause.text for marker in ("资产定位", "定位管理标签模块", "蓝牙", "UWB", "资产管理读写基站", "智能芯片", "碳足迹", "无缝对接")))
     ]
     if len(clauses) < 1:
         return findings
@@ -3127,6 +3201,7 @@ def _is_template_instruction_clause(clause) -> bool:
             "政府采购违法行为风险知悉确认书",
             "特别警示条款",
             "投标书编制软件",
+            "如有方案表述中有出现类似可实现、实现、可支持、支持等描述",
         )
     )
 
@@ -3164,7 +3239,7 @@ def _domain_mismatch_markers(domain: str) -> tuple[str, ...]:
         ),
         "equipment_installation": ("有害生物防制", "SPCA", "有机产品认证", "水运机电工程专项监理", "水运工程监理甲级"),
         "general": ("园区保洁", "设施维修", "安防管理", "保洁", "芯片", "系统", "特种设备", "有害生物防制", "SPCA", "高空清洗", "CCRC", "ISO20000", "水运工程监理甲级", "棉花加工"),
-        "furniture_goods": ("芯片", "系统", "资产定位", "定位管理标签模块", "蓝牙", "UWB", "碳足迹", "平台", "软件", "无缝对接"),
+        "furniture_goods": ("资产定位", "定位管理标签模块", "蓝牙", "UWB", "资产管理读写基站", "智能芯片", "碳足迹", "无缝对接"),
     }
     return mapping.get(domain, mapping["general"])
 

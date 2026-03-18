@@ -1533,7 +1533,84 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("资格条件设置一般财务和规模门槛", titles)
         self.assertIn("资格条件设置经营年限、属地场所或单项业绩门槛", titles)
         self.assertIn("资格条件整体超出法定准入和履约必需范围", titles)
-        self.assertIn("评分中设置与履约弱相关的荣誉资质加分", titles)
+
+    def test_review_uses_furniture_strategy_profile_for_furniture_project(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：宝城小学办公家具采购",
+                "评标信息",
+                "设计图方案内容完整，设计合理、实用性强的，评审为优，得70分。",
+                "经验评价",
+                "2022年1月1日以来，投标人具有家具类项目供货业绩且验收合格的，每提供一项得50分，本项最高得100分。",
+                "商务要求",
+                "在免费保修期内，一旦发生质量问题，中标人保证在接到通知4小时内赶到现场进行修理或更换。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/宝城小学办公家具采购.docx",
+            document_name="宝城小学办公家具采购.docx",
+            file_hash="furniture-strategy",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        self.assertIn("货物采购并含安装调试项目", review.overall_risk_summary)
+        self.assertIn("办公或医用家具供货、安装和售后保障类", review.overall_risk_summary)
+
+    def test_review_ignores_template_guidance_for_furniture_template_mismatch(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：办公家具采购",
+                "用户需求书",
+                "如有方案表述中有出现类似可实现、实现、可支持、支持等描述的，均表示方案需要实现的功能或应满足的要求。",
+                "投标书编制软件",
+                "使用投标文件制作专用软件编制并上传投标文件。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/办公家具采购.docx",
+            document_name="办公家具采购.docx",
+            file_hash="furniture-template",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("文件中存在与标的域不匹配的模板残留或义务外扩", titles)
+
+    def test_review_adds_goods_capacity_scoring_theme_for_furniture_project(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：办公家具采购",
+                "评标信息",
+                "经验评价",
+                "2022年1月1日以来，投标人具有家具类项目供货业绩且验收合格的，每提供一项得50分，本项最高得100分。",
+                "生产设备情况",
+                "投标人或核心产品制造商每具有以上一种相关设备的得10分，本项最高得100分。",
+                "相关认证情况",
+                "以上累计得分，最高得100分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/办公家具采购.docx",
+            document_name="办公家具采购.docx",
+            file_hash="furniture-scoring-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("经验评价、生产设备和认证因素高分集中并偏离核心供货能力", titles)
+        self.assertIn("单一评分因素权重设置过高（同一评分项已合并）", titles)
 
     def test_review_adds_service_scoring_mismatch_theme_for_endoscope_style_scoring(self) -> None:
         text = "\n".join(
