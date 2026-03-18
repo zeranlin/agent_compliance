@@ -39,6 +39,8 @@
 - 先把各一级、二级审查查点盘清，再按查点矩阵逐项补规则、结构分析和局部模型判断
 - 每次增强都要能映射回具体查点，而不是只做零散表达优化
 - 不再按单个项目逐个补差异，而是优先升级审查主链路：规则初筛、全文辅助扫描、局部 LLM 判断和 finding 仲裁协同工作
+- 在保持单文件闭环节奏的前提下，逐步把 [review.py](https://github.com/zeranlin/agent_compliance/blob/main/src/agent_compliance/pipelines/review.py) 从集中式大文件拆回主编排层，避免后续所有增强都继续堆进同一文件
+- 在继续增强主题分析器和仲裁层的同时，引入“采购标的/品目标准化识别层”，先回答文件采购对象、主/次品目和混合场景边界，再驱动规则和分析器优先级
 - 当前真实文件推进节奏固定为“单文件闭环增强”：
   - 先做人工审查
   - 再做代码审查
@@ -75,6 +77,25 @@
 - 每轮改进都优先服务于当前文件暴露的稳定差异，不为单个样本写一次性特化逻辑
 - 若某次改动会同时影响既有样本，应补回归验证，确保不是“修一份坏一批”
 
+## review.py 模块化并行主线
+
+当前 [review.py](https://github.com/zeranlin/agent_compliance/blob/main/src/agent_compliance/pipelines/review.py) 已超过 4000 行，后续需要按低风险、小步方式并行拆分，避免继续成为所有主题分析器、仲裁和证据逻辑的单点堆积。
+
+对应方案：
+- [review.py 模块化拆分方案](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/review-pipeline-modularization-plan.md)
+
+当前拆分顺序：
+1. `clause_classification`
+2. `evidence`
+3. `strategy`
+4. `arbiter`
+5. `scoring / commercial / qualification / domain_match / technical`
+
+执行要求：
+- 模块拆分不能中断当前“单文件闭环增强”节奏
+- 每次只拆一个职责域
+- 拆分后必须回归当前真实样本和 `tests.test_review_pipeline`
+
 ## 当前最新触发
 
 - [2026-03-16-szdl2025000495-comparison.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/reviews/2026-03-16-szdl2025000495-comparison.md)
@@ -83,6 +104,7 @@
 当前最新差距说明：
 - 代码在柴油发电机样本中仍明显漏掉资格异常、评分内容错位、技术固定年份和商务责任边界问题
 - 当前问题根源不再只是“规则太少”，而是候选生成不足、全文辅助扫描缺失、误报抑制不够和仲裁层偏弱
+- 当前跨品目、混合采购场景中的误判和漏判，进一步说明需要补入“采购品目目录层”和标的边界校准能力
 
 当前最新阶段目标：
 - 先完成 `P0` 主链路升级
@@ -107,6 +129,7 @@
 对应设计文档：
 - [continuous-human-parity-architecture.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/continuous-human-parity-architecture.md)
 - [code-review-gap-closure-roadmap.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-gap-closure-roadmap.md)
+- [procurement-catalog-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/procurement-catalog-layer-design.md)
 
 ## 阶段一：差异驱动的规则增强
 
