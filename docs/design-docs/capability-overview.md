@@ -120,6 +120,7 @@
 - 面向技术接入的 [code-review-technical-integration.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/code-review-technical-integration.md)
 - 面向下一阶段架构增强的 [procurement-catalog-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/procurement-catalog-layer-design.md)，用于引入采购品目目录层、标的标准化识别和混合场景边界判断
 - 面向主编排升级的 [code-review-main-pipeline-update.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-main-pipeline-update.md)，用于把品目目录层正式接入代码审查主链路，并重排策略、规则、分析器和仲裁顺序
+- 面向下一阶段架构排查的 [architecture-gap-priorities.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/architecture-gap-priorities.md)，用于明确当前真正缺失的架构层与补强优先级，而不是继续零散补规则
 
 ## 四、精确定位能力
 
