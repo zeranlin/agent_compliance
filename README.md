@@ -75,6 +75,10 @@
 - [案例口径本地引用库](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/case-sources/README.md)
 - [引用资料索引](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/reference-index.md)
 
+本地品目知识：
+- [采购品目目录层设计方案](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/procurement-catalog-layer-design.md)
+- `data/procurement-catalog/catalogs.json`
+
 更新输出模板：
 - [月度规则更新摘要模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/monthly-rule-update-template.md)
 - [新增案例候选模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/new-case-candidates-template.md)

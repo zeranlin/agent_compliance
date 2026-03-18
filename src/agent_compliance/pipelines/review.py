@@ -4,6 +4,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 import re
 
+from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog
 from agent_compliance.knowledge.references_index import ReferenceRecord, find_references
 from agent_compliance.schemas import Finding, NormalizedDocument, ReviewResult, RuleHit, utc_now_iso
 
@@ -144,6 +145,10 @@ class DocumentStrategyProfile:
     domain_hint: str
     primary_focus: tuple[str, ...]
     review_route: tuple[str, ...]
+    primary_catalog_name: str = ""
+    secondary_catalog_names: tuple[str, ...] = ()
+    is_mixed_scope: bool = False
+    catalog_confidence: float = 0.0
 
 
 def _group_hits(document: NormalizedDocument, hits: list[RuleHit]) -> list[HitGroup]:
@@ -394,6 +399,12 @@ def _overall_summary(findings: list[Finding], document: NormalizedDocument | Non
     )
     if strategy.procurement_mode:
         summary += f" 当前文件识别为{strategy.procurement_mode}，主标的提示为{strategy.domain_hint}。"
+    if strategy.primary_catalog_name:
+        summary += f" 当前主品目识别为{strategy.primary_catalog_name}。"
+    if strategy.secondary_catalog_names:
+        summary += f" 次品目提示包括{_join_labels(strategy.secondary_catalog_names)}。"
+    if strategy.is_mixed_scope:
+        summary += " 当前识别为混合采购场景，需重点复核边界不清、义务外扩和错位要求。"
     if profile.dominant_sections:
         summary += f" 该文件的主风险重心集中在{_join_labels(profile.dominant_sections)}。"
     if profile.dominant_theme_titles:
@@ -442,7 +453,29 @@ def _build_document_strategy_profile(
     findings: list[Finding], document: NormalizedDocument | None = None
 ) -> DocumentStrategyProfile:
     if not findings:
-        return DocumentStrategyProfile("综合型政府采购项目", "需结合全部章节综合判断", ("综合条款",), ("综合条款", "文件级风险画像"))
+        classification = classify_procurement_catalog(document) if document is not None else None
+        domain = classification.primary_domain_key if classification is not None else "general"
+        procurement_mode = "综合型政府采购项目"
+        domain_hint = "需结合全部章节综合判断"
+        if domain == "medical_tcm_mixed":
+            procurement_mode = "医疗药品或医用配套采购项目"
+            domain_hint = "药品供货、设备配套与院内接口并存"
+        elif domain == "medical_tcm":
+            procurement_mode = "医疗药品或医用配套采购项目"
+            domain_hint = "药品供货与医用配套服务类"
+        elif domain == "information_system":
+            procurement_mode = "信息化或数字化服务项目"
+            domain_hint = "平台建设、系统对接或持续运维类"
+        return DocumentStrategyProfile(
+            procurement_mode,
+            domain_hint,
+            ("综合条款",),
+            ("综合条款", "文件级风险画像"),
+            primary_catalog_name=classification.primary_catalog_name if classification else "",
+            secondary_catalog_names=classification.secondary_catalog_names if classification else (),
+            is_mixed_scope=classification.is_mixed_scope if classification else False,
+            catalog_confidence=classification.catalog_confidence if classification else 0.0,
+        )
 
     section_scores: dict[str, int] = {}
     for finding in findings:
@@ -451,7 +484,8 @@ def _build_document_strategy_profile(
         section_scores[section] = section_scores.get(section, 0) + weight
     ordered_sections = [section for section, _ in sorted(section_scores.items(), key=lambda item: (-item[1], item[0]))]
 
-    domain = _document_domain(document) if document is not None else "general"
+    classification = classify_procurement_catalog(document) if document is not None else None
+    domain = classification.primary_domain_key if classification is not None else "general"
     combined = " ".join(
         filter(
             None,
@@ -508,6 +542,10 @@ def _build_document_strategy_profile(
         domain_hint=domain_hint,
         primary_focus=primary_focus,
         review_route=review_route,
+        primary_catalog_name=classification.primary_catalog_name if classification else "",
+        secondary_catalog_names=classification.secondary_catalog_names if classification else (),
+        is_mixed_scope=classification.is_mixed_scope if classification else False,
+        catalog_confidence=classification.catalog_confidence if classification else 0.0,
     )
 
 
@@ -3674,33 +3712,7 @@ def _add_industry_appropriateness_findings(document: NormalizedDocument, finding
 
 
 def _document_domain(document: NormalizedDocument) -> str:
-    base_text = f"{document.document_name} {document.source_path}"
-    clause_text = " ".join(clause.text for clause in document.clauses[:200])
-    if any(marker in base_text for marker in ("食堂", "供餐", "餐饮", "托管服务")):
-        return "catering_service"
-    if any(marker in base_text for marker in ("标识标牌", "宣传印制", "印刷品", "文创产品", "宣传物料")) or any(
-        marker in clause_text for marker in ("UV 打印机", "UV打印机", "喷绘机", "写真机", "雕刻机", "折弯机", "标识标牌", "宣传品设计")
-    ):
-        return "signage_printing_service"
-    if any(marker in base_text for marker in ("家具", "办公类家具", "医用家具")):
-        return "furniture_goods"
-    if any(marker in base_text for marker in ("窗帘", "隔帘", "床品", "服装", "被服")):
-        return "textile_goods"
-    if any(marker in base_text for marker in ("家具", "办公类家具", "医用家具")):
-        return "furniture_goods"
-    if any(marker in base_text for marker in ("物业管理", "物业服务", "保安", "保洁", "后勤服务")):
-        return "property_service"
-    if any(marker in base_text for marker in ("血透", "透析", "医疗器械", "三维电生理", "胃肠镜", "设备采购项目")):
-        return "medical_device_goods"
-    if any(marker in base_text for marker in ("中药", "配方颗粒", "医院", "药品", "饮片")):
-        if any(marker in clause_text for marker in ("自动化调剂", "发药机", "信息化管理系统", "无缝对接", "设备需求参数")):
-            return "medical_tcm_mixed"
-        return "medical_tcm"
-    if any(marker in base_text for marker in ("平台", "信息", "软件", "系统", "数据")):
-        return "information_system"
-    if any(marker in base_text for marker in ("发电机", "机电", "安装", "设备")):
-        return "equipment_installation"
-    return "general"
+    return classify_procurement_catalog(document).primary_domain_key
 
 
 def _is_qualification_clause(clause) -> bool:

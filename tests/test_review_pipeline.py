@@ -38,6 +38,31 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("本地离线审查共形成", review.overall_risk_summary)
         self.assertTrue(any(finding.section_path for finding in review.findings))
 
+    def test_review_summary_includes_catalog_strategy(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：中药配方颗粒项目",
+                "设备需求参数",
+                "自动化调剂设备",
+                "系统端口无缝对接",
+                "信息化管理系统",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/tcm.docx",
+            document_name="中药配方颗粒项目.docx",
+            file_hash="tcm123",
+            normalized_text_path="/tmp/tcm.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertIn("当前主品目识别为药品及医用配套", review.overall_risk_summary)
+        self.assertIn("当前识别为混合采购场景", review.overall_risk_summary)
+
     def test_splitter_builds_hierarchical_section_path_and_table_label(self) -> None:
         text = "\n".join(
             [
