@@ -7,11 +7,13 @@ from pathlib import Path
 
 from agent_compliance.config import LLMConfig, detect_paths
 from agent_compliance.evals.runner import benchmark_summary
+from agent_compliance.knowledge.legal_authority_reasoner import apply_legal_authority_reasoner
 from agent_compliance.knowledge.procurement_catalog import (
     CatalogClassification,
     classify_procurement_catalog,
 )
 from agent_compliance.models.llm_client import ChatMessage, OpenAICompatibleLLMClient
+from agent_compliance.pipelines.confidence_calibrator import apply_confidence_calibrator
 from agent_compliance.schemas import Clause, Finding, NormalizedDocument, ReviewResult
 from agent_compliance.pipelines.review import reconcile_review_result
 
@@ -75,6 +77,8 @@ def apply_llm_review_tasks(
     added_findings.extend(_run_template_mismatch_task(document, review, client))
     added_findings.extend(_run_scoring_structure_task(document, review, client))
     added_findings.extend(_run_commercial_chain_task(document, review, client))
+    added_findings = apply_legal_authority_reasoner(added_findings)
+    added_findings = apply_confidence_calibrator(added_findings)
 
     merged_review = _merge_added_findings(review, added_findings)
     rule_candidates = generate_rule_candidates(document, merged_review, added_findings, classification=classification)
@@ -124,6 +128,13 @@ def generate_rule_candidates(
                 "false_positive_risk": _false_positive_risk(finding),
                 "generation_reason": f"LLM 在 review 阶段新增了该问题点，当前规则链路未稳定覆盖。",
                 "benchmark_hint": finding.issue_type,
+                "primary_authority": finding.primary_authority,
+                "secondary_authorities": finding.secondary_authorities or [],
+                "legal_or_policy_basis": finding.legal_or_policy_basis,
+                "applicability_logic": finding.applicability_logic,
+                "confidence": finding.confidence,
+                "needs_human_review": finding.needs_human_review,
+                "human_review_reason": finding.human_review_reason,
                 "primary_catalog_name": classification.primary_catalog_name if classification else None,
                 "primary_domain_key": classification.primary_domain_key if classification else None,
                 "primary_mapped_catalog_codes": classification.primary_mapped_catalog_codes if classification else [],
@@ -142,6 +153,7 @@ def run_benchmark_gate(rule_candidates: list[dict[str, object]]) -> dict[str, ob
     pass_count = 0
     scene_counts: dict[str, int] = {}
     domain_counts: dict[str, int] = {}
+    authority_counts: dict[str, int] = {}
     for item in rule_candidates:
         issue_type = str(item["issue_type"])
         status = "covered" if issue_type in covered else "needs_benchmark"
@@ -153,11 +165,15 @@ def run_benchmark_gate(rule_candidates: list[dict[str, object]]) -> dict[str, ob
             scene_counts[primary_catalog_name] = scene_counts.get(primary_catalog_name, 0) + 1
         if primary_domain_key:
             domain_counts[primary_domain_key] = domain_counts.get(primary_domain_key, 0) + 1
+        primary_authority = str(item.get("primary_authority") or "")
+        if primary_authority:
+            authority_counts[primary_authority] = authority_counts.get(primary_authority, 0) + 1
         results.append(
             {
                 "candidate_rule_id": item["candidate_rule_id"],
                 "issue_type": issue_type,
                 "status": status,
+                "primary_authority": primary_authority or None,
                 "primary_catalog_name": primary_catalog_name or None,
                 "primary_domain_key": primary_domain_key or None,
                 "is_mixed_scope": bool(item.get("is_mixed_scope", False)),
@@ -179,6 +195,10 @@ def run_benchmark_gate(rule_candidates: list[dict[str, object]]) -> dict[str, ob
         "domain_summary": [
             {"primary_domain_key": key, "candidate_count": count}
             for key, count in sorted(domain_counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
+        "authority_summary": [
+            {"primary_authority": key, "candidate_count": count}
+            for key, count in sorted(authority_counts.items(), key=lambda item: (-item[1], item[0]))
         ],
         "results": results,
         "status": "ok" if len(rule_candidates) == 0 or pass_count == len(rule_candidates) else "needs_attention",
@@ -889,10 +909,22 @@ def _render_benchmark_gate(benchmark_gate: dict[str, object]) -> str:
                 f"- `{item.get('primary_domain_key') or 'unknown'}`: `{item.get('candidate_count', 0)}`"
             )
         lines.append("")
+    authority_summary = benchmark_gate.get("authority_summary", [])
+    if isinstance(authority_summary, list) and authority_summary:
+        lines.append("## Authority Summary")
+        lines.append("")
+        for item in authority_summary:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                f"- `{item.get('primary_authority') or '未生成法规主依据'}`: `{item.get('candidate_count', 0)}`"
+            )
+        lines.append("")
     for item in benchmark_gate.get("results", []):
         lines.append(
             f"- {item['candidate_rule_id']} | `{item['issue_type']}` | `{item['status']}` | "
-            f"`{item.get('primary_catalog_name') or '未识别品目'}` | {item['reason']}"
+            f"`{item.get('primary_catalog_name') or '未识别品目'}` | "
+            f"`{item.get('primary_authority') or '未生成法规主依据'}` | {item['reason']}"
         )
     return "\n".join(lines)
 

@@ -210,6 +210,8 @@ class LLMIntegrationTest(unittest.TestCase):
         self.assertGreaterEqual(len(artifacts.rule_candidates), 4)
         self.assertTrue(any(item.get("primary_catalog_name") for item in artifacts.rule_candidates))
         self.assertTrue(any(item.get("primary_domain_key") for item in artifacts.rule_candidates))
+        self.assertTrue(any(item.get("primary_authority") for item in artifacts.rule_candidates))
+        self.assertTrue(any(item.get("applicability_logic") for item in artifacts.rule_candidates))
         self.assertTrue(Path(artifacts.candidate_json_path).exists())
         self.assertTrue(Path(artifacts.benchmark_json_path).exists())
         self.assertTrue(Path(artifacts.difference_json_path).exists())
@@ -237,6 +239,7 @@ class LLMIntegrationTest(unittest.TestCase):
                     "issue_type": "template_mismatch",
                     "primary_catalog_name": "信息系统集成实施服务",
                     "primary_domain_key": "information_system",
+                    "primary_authority": "《政府采购需求管理办法》第二十一条",
                 },
                 {
                     "candidate_rule_id": "CAND-002",
@@ -252,6 +255,7 @@ class LLMIntegrationTest(unittest.TestCase):
         self.assertEqual(gate["status"], "needs_attention")
         self.assertEqual(gate["catalog_scene_summary"][0]["candidate_count"], 1)
         self.assertEqual(len(gate["domain_summary"]), 2)
+        self.assertEqual(len(gate["authority_summary"]), 1)
 
     def test_llm_added_fragment_is_arbitrated_under_existing_theme_finding(self) -> None:
         text = "\n".join(

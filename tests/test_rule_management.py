@@ -30,6 +30,10 @@ class RuleManagementTest(unittest.TestCase):
                         "trigger_keywords": ["测试"],
                         "primary_catalog_name": "物业管理服务",
                         "primary_domain_key": "property_service",
+                        "primary_authority": "《政府采购需求管理办法》第十八条、第三十一条",
+                        "secondary_authorities": ["《政府采购需求管理办法》第十四条"],
+                        "applicability_logic": "资格条件应与履约能力直接相关。",
+                        "human_review_reason": "法规侧复核重点：需核查是否存在法定必要性。",
                         "is_mixed_scope": False,
                     }
                 ],
@@ -70,8 +74,10 @@ class RuleManagementTest(unittest.TestCase):
         self.assertEqual(candidate["gate_status"], "covered")
         self.assertEqual(candidate["decision"], "pending")
         self.assertEqual(candidate["primary_catalog_name"], "物业管理服务")
+        self.assertEqual(candidate["primary_authority"], "《政府采购需求管理办法》第十八条、第三十一条")
         self.assertEqual(payload["catalog_scene_summary"][0]["primary_catalog_name"], "物业管理服务")
         self.assertEqual(payload["domain_summary"][0]["primary_domain_key"], "property_service")
+        self.assertEqual(payload["authority_summary"][0]["primary_authority"], "《政府采购需求管理办法》第十八条、第三十一条")
 
         save_rule_decision("CAND-TEST-001", "confirmed", "准备入库")
 

@@ -192,6 +192,8 @@
 - 已生成第一版 `data/legal-authorities/index/clause-index.json`，把 `LEGAL-001`、`LEGAL-002` 抽成可检索的条文级索引，为后续 `legal_clause_index`、`issue_type_authority_map` 和 `legal_authority_reasoner` 提供基础数据层
 - 已生成第一版 `data/legal-authorities/index/issue-type-authority-map.json`，先把高频 `issue_type` 稳定映射到主依据、辅依据和条文级索引，减少同类问题在不同文件中的法规引用漂移
 - 已接入第一版 `legal_authority_reasoner`，开始基于 `issue_type_authority_map + clause-index + 当前 finding` 自动生成主依据、辅依据、适用逻辑，并补充法规侧人工复核理由
+- 已接入第一版 `confidence_calibrator`，开始把条文级主依据、问题类型边界和人工复核标记合并进 `confidence` 校准
+- `review-next`、规则管理页和 benchmark gate 已开始展示主依据、辅依据、适用逻辑和法规侧复核提示，法规语义层不再只停留在后端
 
 相关设计：
 - [legal-authority-system.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/legal-authority-system.md)

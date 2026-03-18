@@ -30,6 +30,7 @@ def load_rule_management_payload() -> dict[str, Any]:
         "decision_summary": _decision_summary(candidates),
         "catalog_scene_summary": _catalog_scene_summary(candidates),
         "domain_summary": _domain_summary(candidates),
+        "authority_summary": _authority_summary(candidates),
         "decisions_path": str(paths.improvement_root / DECISIONS_FILE),
     }
 
@@ -126,5 +127,18 @@ def _domain_summary(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         counts[key] = counts.get(key, 0) + 1
     return [
         {"primary_domain_key": key, "candidate_count": count}
+        for key, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
+def _authority_summary(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for item in candidates:
+        key = str(item.get("primary_authority") or "").strip()
+        if not key:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+    return [
+        {"primary_authority": key, "candidate_count": count}
         for key, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
     ]

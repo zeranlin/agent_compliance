@@ -2414,6 +2414,8 @@ def _review_next_html() -> str:
         <div class="detail-item"><strong>代表性证据</strong><div>${escapeHtml(finding.source_text || '暂无')}</div></div>
         <div class="detail-item"><strong>风险说明</strong><div>${escapeHtml(finding.why_it_is_risky || '暂无')}</div></div>
         <div class="detail-item"><strong>建议改写</strong><div>${escapeHtml(finding.rewrite_suggestion || '暂无')}</div></div>
+        <div class="detail-item"><strong>法规依据</strong><div>${escapeHtml(finding.legal_or_policy_basis || finding.primary_authority || '暂无')}</div></div>
+        <div class="detail-item"><strong>适用逻辑</strong><div>${escapeHtml(finding.applicability_logic || finding.human_review_reason || '暂无')}</div></div>
       `;
       renderDifferenceLearning(finding);
     }
@@ -3811,9 +3813,11 @@ def _rules_html() -> str:
       const summary = payload.decision_summary || {};
       const topScene = (payload.catalog_scene_summary || [])[0];
       const topDomain = (payload.domain_summary || [])[0];
+      const topAuthority = (payload.authority_summary || [])[0];
       const sceneText = topScene ? `；主品目场景以 ${topScene.primary_catalog_name} 为主` : '';
       const domainText = topDomain ? `；审查领域以 ${topDomain.primary_domain_key} 为主` : '';
-      rulesSummaryNode.textContent = `正式规则 ${payload.formal_rules.length} 条；候选规则 ${payload.candidate_rules.length} 条；待确认 ${summary.pending || 0} 条；已确认 ${summary.confirmed || 0} 条${sceneText}${domainText}。`;
+      const authorityText = topAuthority ? `；主依据以 ${topAuthority.primary_authority} 为主` : '';
+      rulesSummaryNode.textContent = `正式规则 ${payload.formal_rules.length} 条；候选规则 ${payload.candidate_rules.length} 条；待确认 ${summary.pending || 0} 条；已确认 ${summary.confirmed || 0} 条${sceneText}${domainText}${authorityText}。`;
       rulesColHeadNode.innerHTML = `
         <h2>候选规则</h2>
         <div class="meta">候选规则来自模型新增问题和 benchmark gate 结果。确认入库表示进入本地规则候选确认状态，不会自动改代码。</div>
@@ -3852,6 +3856,7 @@ def _rules_html() -> str:
         <div class="rule-card-meta">候选ID：${escapeHtml(item.candidate_rule_id)}</div>
         <div class="rule-card-meta">问题类型：${escapeHtml(item.issue_type)} ｜ gate：${escapeHtml(item.gate_status)} ｜ 状态：${escapeHtml(decisionLabelText(item.decision))}</div>
         <div class="rule-card-meta">主品目：${escapeHtml(sceneLabel)} ｜ 审查领域：${escapeHtml(domainLabel)}${item.is_mixed_scope ? ' ｜ 混合采购' : ''}</div>
+        <div class="rule-card-meta">法规主依据：${escapeHtml(item.primary_authority || '暂无')}</div>
         <div class="rule-card-meta">${escapeHtml(item.source_text || '')}</div>
       </article>`;
     }
@@ -3870,8 +3875,12 @@ def _rules_html() -> str:
         <div class="detail-pair"><div class="detail-label">原文摘录</div><div class="detail-value">${escapeHtml(item.source_text || '')}</div></div>
         <div class="detail-pair"><div class="detail-label">风险说明</div><div class="detail-value">${escapeHtml(item.why_it_is_risky || '')}</div></div>
         <div class="detail-pair"><div class="detail-label">建议改写</div><div class="detail-value">${escapeHtml(item.rewrite_suggestion || '')}</div></div>
+        <div class="detail-pair"><div class="detail-label">法规主依据</div><div class="detail-value">${escapeHtml(item.primary_authority || '暂无')}</div></div>
+        <div class="detail-pair"><div class="detail-label">法规辅依据</div><div class="detail-value">${escapeHtml((item.secondary_authorities || []).join('；') || '暂无')}</div></div>
+        <div class="detail-pair"><div class="detail-label">适用逻辑</div><div class="detail-value">${escapeHtml(item.applicability_logic || '暂无')}</div></div>
         <div class="detail-pair"><div class="detail-label">触发关键词</div><div class="detail-value">${escapeHtml((item.trigger_keywords || []).join('，'))}</div></div>
         <div class="detail-pair"><div class="detail-label">benchmark gate</div><div class="detail-value">${escapeHtml(item.gate_status)} ｜ ${escapeHtml(item.gate_reason || '')}</div></div>
+        <div class="detail-pair"><div class="detail-label">法规侧复核</div><div class="detail-value">${escapeHtml(item.human_review_reason || '暂无')}</div></div>
         <div class="detail-pair"><div class="detail-label">当前状态</div><div class="detail-value">${escapeHtml(decisionLabelText(item.decision))}</div></div>
         <div class="detail-pair">
           <div class="detail-label">备注</div>
