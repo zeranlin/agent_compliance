@@ -9,6 +9,7 @@
 
 当前数据文件：
 - `catalogs.json`
+- `catalogs-full.json`
 - `raw/full-catalog-2022/source.pdf`
 - `raw/full-catalog-2022/metadata.json`
 
@@ -23,3 +24,8 @@
 原始来源说明：
 - `raw/full-catalog-2022/source.pdf` 为 2022 版《政府采购品目分类目录》原始快照
 - 该原始文件将作为后续生成 `catalogs-full.json`、层级树和审查映射的权威来源
+
+当前全量骨架说明：
+- `catalogs-full.json` 已完成第一版全量骨架抽取
+- 当前版本优先保证 `catalog_code / catalog_name / level / parent_code / category_type` 可用
+- `description` 字段暂未做精细抽取，后续会在不破坏层级稳定性的前提下再补全文释义

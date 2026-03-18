@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 import unittest
+from pathlib import Path
 
 from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog, load_procurement_catalogs
 from agent_compliance.parsers.section_splitter import split_into_clauses
 from agent_compliance.pipelines.review_strategy import build_analyzer_execution_order, build_document_strategy_profile
 from agent_compliance.schemas import NormalizedDocument
+from tests._bootstrap import REPO_ROOT
 
 
 class ProcurementCatalogTest(unittest.TestCase):
@@ -72,3 +75,13 @@ class ProcurementCatalogTest(unittest.TestCase):
         self.assertIn("scoring", strategy.preferred_analyzer_groups)
         self.assertIn("commercial", strategy.preferred_analyzer_groups)
         self.assertEqual(analyzer_order[0], "scoring")
+
+    def test_full_catalog_skeleton_exists(self) -> None:
+        path = REPO_ROOT / "data" / "procurement-catalog" / "catalogs-full.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertGreaterEqual(payload["entry_count"], 4000)
+        entries = {item["catalog_code"]: item for item in payload["entries"]}
+        self.assertEqual(entries["A"]["catalog_name"], "货物")
+        self.assertEqual(entries["A01010100"]["parent_code"], "A01010000")
+        self.assertEqual(entries["C20000000"]["category_type"], "service")
