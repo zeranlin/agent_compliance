@@ -189,6 +189,7 @@
 - 对法域差异明显、规则有效性待核实的问题，升级为人工复核而不是强行下结论
 - 对财政部规章类资料，已开始引入“中国政府采购网-财政部规章”目录作为权威核验层，用于补充令号、颁布日期和有效性状态
 - 已开始建立 `data/legal-authorities/` 本地目录结构，为后续权威原文快照和标准化法规文本提供离线存储入口
+- 已生成第一版 `data/legal-authorities/index/clause-index.json`，把 `LEGAL-001`、`LEGAL-002` 抽成可检索的条文级索引，为后续 `legal_clause_index`、`issue_type_authority_map` 和 `legal_authority_reasoner` 提供基础数据层
 
 相关设计：
 - [legal-authority-system.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/legal-authority-system.md)
