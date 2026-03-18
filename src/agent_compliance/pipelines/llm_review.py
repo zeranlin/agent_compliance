@@ -77,9 +77,16 @@ def apply_llm_review_tasks(
     added_findings.extend(_run_commercial_chain_task(document, review, client))
 
     merged_review = _merge_added_findings(review, added_findings)
-    rule_candidates = generate_rule_candidates(document, merged_review, added_findings)
+    rule_candidates = generate_rule_candidates(document, merged_review, added_findings, classification=classification)
     benchmark_gate = run_benchmark_gate(rule_candidates)
-    difference_learning = build_difference_learning_loop(document, merged_review, added_findings, rule_candidates, benchmark_gate)
+    difference_learning = build_difference_learning_loop(
+        document,
+        merged_review,
+        added_findings,
+        rule_candidates,
+        benchmark_gate,
+        classification=classification,
+    )
     artifacts = write_improvement_outputs(output_stem, rule_candidates, benchmark_gate, difference_learning)
     artifacts.added_findings = added_findings
     artifacts.rule_candidates = rule_candidates
@@ -92,6 +99,8 @@ def generate_rule_candidates(
     document: NormalizedDocument,
     review: ReviewResult,
     added_findings: list[Finding],
+    *,
+    classification: CatalogClassification | None = None,
 ) -> list[dict[str, object]]:
     candidates: list[dict[str, object]] = []
     for index, finding in enumerate(added_findings, start=1):
@@ -115,6 +124,12 @@ def generate_rule_candidates(
                 "false_positive_risk": _false_positive_risk(finding),
                 "generation_reason": f"LLM 在 review 阶段新增了该问题点，当前规则链路未稳定覆盖。",
                 "benchmark_hint": finding.issue_type,
+                "primary_catalog_name": classification.primary_catalog_name if classification else None,
+                "primary_domain_key": classification.primary_domain_key if classification else None,
+                "primary_mapped_catalog_codes": classification.primary_mapped_catalog_codes if classification else [],
+                "secondary_catalog_names": classification.secondary_catalog_names if classification else [],
+                "secondary_mapped_catalog_codes": classification.secondary_mapped_catalog_codes if classification else [],
+                "is_mixed_scope": classification.is_mixed_scope if classification else False,
             }
         )
     return candidates
@@ -193,6 +208,8 @@ def build_difference_learning_loop(
     added_findings: list[Finding],
     rule_candidates: list[dict[str, object]],
     benchmark_gate: dict[str, object],
+    *,
+    classification: CatalogClassification | None = None,
 ) -> dict[str, object]:
     issue_types = sorted({finding.issue_type for finding in added_findings})
     rule_suggestions: list[dict[str, object]] = []
@@ -216,7 +233,7 @@ def build_difference_learning_loop(
         prompt_suggestions.append(
             {
                 "target": "llm_review.scoring_structure",
-                "suggestion": "要求模型优先判断评分项名称、评分证据和计分目的是否一致，而不是只描述单个错位材料。",
+                "suggestion": "要求模型优先判断评分项名称、评分证据和计分目的是否一致，并结合当前主品目区分哪些证书、案例和证明材料属于错位内容。",
             }
         )
     if "template_mismatch" in issue_types or any("混合采购场景" in finding.problem_title for finding in added_findings):
@@ -229,7 +246,7 @@ def build_difference_learning_loop(
         prompt_suggestions.append(
             {
                 "target": "llm_review.document_audit",
-                "suggestion": "要求模型先识别主标的，再判断自动化设备、系统接口和扩展服务是否超出当前采购边界。",
+                "suggestion": "要求模型先结合主品目、官方品目映射和混合采购标记识别主标的，再判断自动化设备、系统接口和扩展服务是否超出当前采购边界。",
             }
         )
     if any(
@@ -245,7 +262,7 @@ def build_difference_learning_loop(
         analyzer_suggestions.append(
             {
                 "target": "commercial_lifecycle_analyzer",
-                "suggestion": "从付款、验收、复检、售后和责任承担全链路识别整体偏重供应商承担的后果链。",
+                "suggestion": "从付款、验收、复检、售后和责任承担全链路识别整体偏重供应商承担的后果链，并结合当前品目场景区分货物安装、物业服务和医疗设备的不同履约模式。",
             }
         )
     uncovered = [item for item in benchmark_gate.get("results", []) if item.get("status") != "covered"]
@@ -280,6 +297,12 @@ def build_difference_learning_loop(
         "status": "ok",
         "document_name": document.document_name,
         "file_hash": document.file_hash,
+        "primary_catalog_name": classification.primary_catalog_name if classification else None,
+        "primary_domain_key": classification.primary_domain_key if classification else None,
+        "primary_mapped_catalog_codes": classification.primary_mapped_catalog_codes if classification else [],
+        "secondary_catalog_names": classification.secondary_catalog_names if classification else [],
+        "secondary_mapped_catalog_codes": classification.secondary_mapped_catalog_codes if classification else [],
+        "is_mixed_scope": classification.is_mixed_scope if classification else False,
         "added_issue_types": issue_types,
         "added_finding_count": len(added_findings),
         "rule_candidate_count": len(rule_candidates),
@@ -804,6 +827,9 @@ def _render_rule_candidates(rule_candidates: list[dict[str, object]]) -> str:
             [
                 f"## {item['candidate_rule_id']} {item['problem_title']}",
                 f"- issue_type: `{item['issue_type']}`",
+                f"- primary_catalog_name: `{item.get('primary_catalog_name')}`",
+                f"- primary_domain_key: `{item.get('primary_domain_key')}`",
+                f"- primary_mapped_catalog_codes: `{', '.join(item.get('primary_mapped_catalog_codes', []))}`",
                 f"- source_section: `{item['section_path']}`",
                 f"- source_text: `{item['source_text']}`",
                 f"- trigger_keywords: `{', '.join(item['trigger_keywords'])}`",
@@ -833,6 +859,9 @@ def _render_difference_learning(difference_learning: dict[str, object]) -> str:
     lines = ["# Difference Learning Loop", ""]
     lines.append(f"- status: `{difference_learning.get('status')}`")
     lines.append(f"- document_name: `{difference_learning.get('document_name')}`")
+    lines.append(f"- primary_catalog_name: `{difference_learning.get('primary_catalog_name')}`")
+    lines.append(f"- primary_domain_key: `{difference_learning.get('primary_domain_key')}`")
+    lines.append(f"- primary_mapped_catalog_codes: `{', '.join(difference_learning.get('primary_mapped_catalog_codes', []))}`")
     lines.append(f"- added_finding_count: `{difference_learning.get('added_finding_count', 0)}`")
     lines.append(f"- rule_candidate_count: `{difference_learning.get('rule_candidate_count', 0)}`")
     lines.append("")
