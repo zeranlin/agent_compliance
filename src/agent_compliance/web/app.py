@@ -1880,20 +1880,18 @@ def _review_next_html() -> str:
       font-weight: 800;
     }
     .doc-block {
-      border: 0;
-      background: transparent;
-      border-radius: 0;
-      padding: 0;
-      margin: 0;
+      margin: 12px 16px;
+      padding: 10px 12px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: #fff;
     }
     .doc-block.chapter-anchor {
-      margin: 18px 0 8px;
-      padding-top: 10px;
-      border-top: 1px solid rgba(124, 168, 223, 0.28);
+      margin: 14px 16px 6px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
       background: transparent;
-    }
-    .doc-block.text-run {
-      margin-bottom: 2px;
     }
     .chapter-anchor-title {
       display: inline-flex;
@@ -1916,78 +1914,59 @@ def _review_next_html() -> str:
       width: 100%;
       border-collapse: collapse;
       table-layout: fixed;
-      background: rgba(255,255,255,0.78);
-      margin: 6px 0 14px;
+      background: #fff;
+      margin: 0;
     }
     .doc-block td {
       border: 1px solid rgba(178, 199, 225, 0.42);
-      padding: 9px 10px;
+      padding: 8px 10px;
       vertical-align: top;
       white-space: pre-wrap;
       word-break: break-word;
-      line-height: 1.78;
+      line-height: 1.7;
       font-size: 14px;
     }
-    .doc-block.is-target {
-      background: linear-gradient(90deg, rgba(124,168,223,0.08), rgba(124,168,223,0.02) 45%, rgba(124,168,223,0));
+    .doc-block.active {
+      background: rgba(255, 242, 217, 0.92);
+      border-color: #f0c98a;
     }
-    .doc-block.is-target .problem-fragment {
-      color: var(--problem-ink);
-      background: linear-gradient(180deg, rgba(253,232,228,0.92), rgba(253,232,228,0.7));
-      border-radius: 8px;
-      padding: 6px 8px;
-      border-left: 4px solid rgba(165,48,38,0.4);
-    }
-    .doc-block.context-band {
-      background: linear-gradient(90deg, rgba(124,168,223,0.06), rgba(124,168,223,0.018) 55%, rgba(124,168,223,0));
-      border-radius: 10px;
-      padding: 4px 8px;
-      margin: 2px 0;
-    }
-    .doc-block.is-target .problem-fragment table {
-      background: transparent;
-    }
-    .doc-block.is-target .problem-fragment td {
-      color: var(--problem-ink);
-      background: rgba(253,232,228,0.52);
-      border-color: rgba(165,48,38,0.22);
+    .doc-block-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
     }
     .doc-line {
       display: grid;
-      grid-template-columns: 72px 1fr;
+      grid-template-columns: 72px minmax(0, 1fr);
       gap: 12px;
+      padding: 8px 16px;
+      border-top: 1px solid #f1eadf;
       align-items: start;
-      padding: 8px 0;
-      border-top: 1px dashed rgba(216,205,193,0.45);
-      font-size: 15px;
-      line-height: 1.8;
     }
-    .doc-line:first-child { border-top: none; }
-    .doc-line.target {
-      background: linear-gradient(90deg, rgba(124,168,223,0.22), rgba(124,168,223,0));
-      border-radius: 10px;
-      padding-left: 8px;
-      padding-right: 8px;
+    .doc-line:first-child { border-top: 0; }
+    .doc-line.active {
+      background: rgba(255, 242, 217, 0.92);
+      border-top-color: #f0c98a;
+      border-bottom: 1px solid #f0c98a;
     }
-    .doc-line.target .problem-text {
-      color: var(--problem-ink);
-      background: var(--problem-bg);
-      border-radius: 8px;
-      padding: 4px 8px;
-      display: inline-block;
-      border: 1px solid rgba(165,48,38,0.18);
-    }
-    .line-no {
+    .doc-line-number {
+      text-align: right;
       color: var(--muted);
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 12px;
+      line-height: 1.5;
+    }
+    .doc-line-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
     }
     .doc-reading-surface {
       background: rgba(255, 255, 255, 0.86);
       border: 1px solid rgba(176, 198, 224, 0.38);
       border-radius: 18px;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.55);
-      padding: 10px 16px 18px;
+      padding: 8px 0 14px;
     }
     .context-toggle.is-hidden {
       display: none;
@@ -2102,19 +2081,6 @@ def _review_next_html() -> str:
       </aside>
 
       <section class="panel detail-pane">
-        <div class="document-tools">
-          <div class="document-toolbar-row">
-            <div class="document-toolbar-actions">
-              <div class="toolbar" id="document-mode-toolbar">
-                <button type="button" data-document-mode="context" class="is-active">附近上下文</button>
-                <button type="button" data-document-mode="chapter">查看整章</button>
-              </div>
-              <button type="button" id="context-toggle" class="secondary context-toggle is-hidden">展开更多上下文</button>
-            </div>
-            <div id="document-mode-note" class="document-mode-note">默认只看当前问题附近上下文，方便快速定位和比对。</div>
-          </div>
-          <div id="chapter-nav" class="chapter-nav"></div>
-        </div>
         <div id="document-pane" class="document-pane">
           <div class="empty">上传文件后，这里会渲染文档原文，并跟随问题卡片定位到对应位置。</div>
         </div>
@@ -2167,9 +2133,6 @@ def _review_next_html() -> str:
     const detailGridNode = document.getElementById('detail-grid');
     const documentPaneNode = document.getElementById('document-pane');
     const learningCardNode = document.getElementById('learning-card');
-    const chapterNavNode = document.getElementById('chapter-nav');
-    const documentModeNoteNode = document.getElementById('document-mode-note');
-    const contextToggleNode = document.getElementById('context-toggle');
 
     form.addEventListener('submit', submitReview);
     openSourceBtn.addEventListener('click', openSourceFile);
@@ -2184,21 +2147,6 @@ def _review_next_html() -> str:
         state.riskMode = node.dataset.risk;
         render();
       });
-    });
-    document.getElementById('document-mode-toolbar').querySelectorAll('[data-document-mode]').forEach((node) => {
-      node.addEventListener('click', () => {
-        state.documentMode = node.dataset.documentMode;
-        if (state.documentMode !== 'context') {
-          state.contextExpanded = false;
-        }
-        renderDocumentModeState();
-        renderDocument();
-      });
-    });
-    contextToggleNode.addEventListener('click', () => {
-      state.contextExpanded = !state.contextExpanded;
-      renderDocumentModeState();
-      renderDocument();
     });
     const sectionToolbarNode = document.createElement('div');
     sectionToolbarNode.className = 'toolbar';
@@ -2234,8 +2182,6 @@ def _review_next_html() -> str:
         state.selectedFindingId = null;
         state.activeChapterKey = 'all';
         state.collapsedIssueSections = {};
-        state.documentMode = 'context';
-        state.contextExpanded = false;
         openSourceBtn.disabled = !payload.document || !payload.document.source_path;
         runMetaNode.textContent = `已完成审查：${payload.review.document_name}；缓存 ${payload.cache.used ? '命中' : '未命中'}；本地模型 ${payload.llm.enabled ? '已启用' : '未启用'}。`;
         render();
@@ -2273,20 +2219,6 @@ def _review_next_html() -> str:
       document.querySelectorAll('#section-toolbar [data-section]').forEach((node) => {
         node.classList.toggle('is-active', node.dataset.section === state.sectionMode);
       });
-      renderDocumentModeState();
-    }
-
-    function renderDocumentModeState() {
-      document.querySelectorAll('#document-mode-toolbar [data-document-mode]').forEach((node) => {
-        node.classList.toggle('is-active', node.dataset.documentMode === state.documentMode);
-      });
-      documentModeNoteNode.textContent = state.documentMode === 'chapter'
-        ? '当前显示选中问题所在章节的连续正文，适合整体判断本章条款结构。'
-        : (state.contextExpanded
-          ? '当前显示扩展后的上下文，适合在定位后继续比对前后条款。'
-          : '当前仅显示选中问题附近少量上下文，适合快速定位和核对风险点。');
-      contextToggleNode.classList.toggle('is-hidden', state.documentMode !== 'context');
-      contextToggleNode.textContent = state.contextExpanded ? '收起上下文' : '展开更多上下文';
     }
 
     function renderSummary() {
@@ -2479,143 +2411,64 @@ def _review_next_html() -> str:
     }
 
     function renderDocument() {
+      try {
+        const documentPayload = state.payload ? state.payload.document : null;
+        if (!documentPayload) {
+          documentPaneNode.innerHTML = '<div class="empty">上传文件后，这里会渲染文档原文，并联动定位。</div>';
+          return;
+        }
+        const finding = state.filtered.find((item) => item.finding_id === state.selectedFindingId) || state.findings.find((item) => item.finding_id === state.selectedFindingId);
+        const start = finding ? finding.text_line_start : 0;
+        const end = finding ? finding.text_line_end : 0;
+        documentPaneNode.innerHTML = documentPayload.render_mode === 'docx_blocks'
+          ? `<div class="doc-reading-surface">${(documentPayload.blocks || []).map((block) => renderWorkbenchDocumentBlock(block)).join('')}</div>`
+          : `<div class="doc-reading-surface">${(documentPayload.lines || []).map((line) => renderWorkbenchDocumentLine(line)).join('')}</div>`;
+        highlightWorkbenchRange(start, end);
+      } catch (error) {
+        documentPaneNode.innerHTML = `<div class="empty">文档渲染失败：${escapeHtml(error && error.message ? error.message : String(error))}</div>`;
+      }
+    }
+
+    function renderWorkbenchDocumentBlock(block) {
+      const meta = `行号：${formatLineRange(block.start_line, block.end_line)}`;
+      return `<div class="doc-block" id="${escapeHtml(block.block_id)}" data-start-line="${block.start_line}" data-end-line="${block.end_line}">
+        ${block.html}
+        <div class="doc-block-meta">${escapeHtml(meta)}</div>
+      </div>`;
+    }
+
+    function renderWorkbenchDocumentLine(line) {
+      return `<div class="doc-line" id="review-next-line-${line.number}">
+        <div class="doc-line-number">${String(line.number).padStart(4, '0')}${line.page_hint ? `<br>${escapeHtml(line.page_hint)}` : ''}</div>
+        <div class="doc-line-text">${escapeHtml(line.text || ' ')}</div>
+      </div>`;
+    }
+
+    function highlightWorkbenchRange(start, end) {
+      documentPaneNode.querySelectorAll('.active').forEach((node) => node.classList.remove('active'));
+      let target = null;
       const documentPayload = state.payload ? state.payload.document : null;
-      if (!documentPayload) {
-        documentPaneNode.innerHTML = '<div class="empty">上传文件后，这里会渲染文档原文，并联动定位。</div>';
-        chapterNavNode.innerHTML = '';
-        return;
-      }
-      const finding = state.filtered.find((item) => item.finding_id === state.selectedFindingId) || state.findings.find((item) => item.finding_id === state.selectedFindingId);
-      const start = finding ? finding.text_line_start : -1;
-      const end = finding ? finding.text_line_end : -1;
-      const chapterKey = finding ? chapterKeyForFinding(finding) : 'all';
-      if (!state.activeChapterKey || state.activeChapterKey === 'all') {
-        state.activeChapterKey = chapterKey;
-      }
-      const chapterNav = buildChapterNav(documentPayload, state.findings);
-      chapterNavNode.innerHTML = chapterNav.map((item) => `
-        <button type="button" class="chapter-chip ${item.key === effectiveChapterKey(chapterKey) ? 'is-active' : ''}" data-chapter-key="${escapeHtml(item.key)}">
-          <span>${escapeHtml(item.label)}</span>
-          <span class="count">${escapeHtml(String(item.count))}</span>
-        </button>
-      `).join('');
-      chapterNavNode.querySelectorAll('[data-chapter-key]').forEach((node) => {
-        node.addEventListener('click', () => {
-          state.activeChapterKey = node.dataset.chapterKey;
-          state.documentMode = 'chapter';
-          renderDocumentModeState();
-          renderDocument();
+      if (!documentPayload) return;
+      if (documentPayload.render_mode === 'docx_blocks') {
+        documentPaneNode.querySelectorAll('.doc-block').forEach((node) => {
+          const blockStart = Number(node.dataset.startLine);
+          const blockEnd = Number(node.dataset.endLine);
+          const overlaps = blockStart <= end && blockEnd >= start;
+          if (overlaps) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
         });
-      });
-      const blocks = buildVisibleBlocks(documentPayload, finding, effectiveChapterKey(chapterKey));
-      const outlineItems = chapterNav.map((item) => `
-        <button type="button" class="${item.key === effectiveChapterKey(chapterKey) ? 'is-active' : ''}" data-outline-key="${escapeHtml(item.key)}">
-          <span>${escapeHtml(item.label)}</span><span class="count">${escapeHtml(String(item.count))}</span>
-        </button>
-      `).join('');
-      documentPaneNode.innerHTML = blocks.length
-        ? `<div class="doc-layout"><aside class="doc-outline"><div class="doc-outline-title">章节目录</div>${outlineItems}</aside><div class="doc-reading-surface">${blocks.map((block, index) => renderBlock(block, index, start, end)).join('')}</div></div>`
-        : '<div class="empty">当前章节暂无可展示正文。</div>';
-      documentPaneNode.querySelectorAll('[data-outline-key]').forEach((node) => {
-        node.addEventListener('click', () => {
-          state.activeChapterKey = node.dataset.outlineKey;
-          state.documentMode = 'chapter';
-          state.contextExpanded = false;
-          renderDocumentModeState();
-          renderDocument();
-        });
-      });
-      if (finding) {
-        const node = documentPaneNode.querySelector('[data-target-block="true"]') || documentPaneNode.querySelector('.doc-line.target');
-        if (node) scrollDocumentPaneToNode(node);
-      }
-    }
-
-    function effectiveChapterKey(findingChapterKey) {
-      if (state.documentMode === 'context') return findingChapterKey || state.activeChapterKey || 'all';
-      return state.activeChapterKey && state.activeChapterKey !== 'all'
-        ? state.activeChapterKey
-        : (findingChapterKey || 'all');
-    }
-
-    function buildVisibleBlocks(documentPayload, finding, chapterKey) {
-      const hasBlocks = documentPayload.blocks && documentPayload.blocks.length;
-      const blocks = hasBlocks ? documentPayload.blocks.slice() : [{ kind: 'text', lines: documentPayload.lines || [], start_line: 1, end_line: documentPayload.line_count || 1 }];
-      const normalizedBlocks = addChapterAnchors(blocks);
-      if (!finding) return normalizedBlocks;
-      if (state.documentMode === 'chapter') {
-        return normalizedBlocks.filter((block) => block.chapter_key === chapterKey || block.kind === 'chapter-anchor' && block.chapter_key === chapterKey);
-      }
-      const targetIndex = normalizedBlocks.findIndex((block) => block.kind !== 'chapter-anchor' && blockIntersectsFinding(block, finding));
-      if (targetIndex === -1) return normalizedBlocks.filter((block) => block.chapter_key === chapterKey);
-      const keep = new Set();
-      const radius = state.contextExpanded ? 3 : 1;
-      for (let index = Math.max(0, targetIndex - radius); index <= Math.min(normalizedBlocks.length - 1, targetIndex + radius); index += 1) {
-        keep.add(index);
-      }
-      for (let index = targetIndex; index >= 0; index -= 1) {
-        if (normalizedBlocks[index].kind === 'chapter-anchor') {
-          keep.add(index);
-          break;
+      } else {
+        for (let line = start; line <= end; line += 1) {
+          const node = document.getElementById(`review-next-line-${line}`);
+          if (node) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
         }
       }
-      return normalizedBlocks.filter((_, index) => keep.has(index));
-    }
-
-    function addChapterAnchors(blocks) {
-      const output = [];
-      let currentChapterKey = 'all';
-      let currentChapterLabel = '文档正文';
-      blocks.forEach((block, index) => {
-        const detected = detectChapterForBlock(block, index);
-        if (detected && detected.key !== currentChapterKey) {
-          currentChapterKey = detected.key;
-          currentChapterLabel = detected.label;
-          output.push({
-            kind: 'chapter-anchor',
-            block_id: `anchor-${index}-${detected.key}`,
-            chapter_key: currentChapterKey,
-            chapter_label: currentChapterLabel,
-            start_line: block.start_line,
-            end_line: block.start_line,
-            html: `<div class="chapter-anchor-title">${escapeHtml(currentChapterLabel)}</div>`,
-          });
-        }
-        output.push(...flattenBlockForReading({ ...block, chapter_key: currentChapterKey, chapter_label: currentChapterLabel }));
-      });
-      return output;
-    }
-
-    function flattenBlockForReading(block) {
-      if (block.kind === 'chapter-anchor') {
-        return [block];
-      }
-      if (block.kind === 'table') {
-        return [block];
-      }
-      if (!block.html) {
-        return [block];
-      }
-      const paragraphMatches = String(block.html).match(/<p>[\s\S]*?<\/p>/g);
-      if (!paragraphMatches || paragraphMatches.length <= 1) {
-        return [block];
-      }
-      return paragraphMatches.map((paragraphHtml, index) => ({
-        ...block,
-        block_id: `${block.block_id || 'block'}-p${index + 1}`,
-        html: paragraphHtml,
-        kind: 'paragraph',
-      }));
-    }
-
-    function detectChapterForBlock(block, index) {
-      const text = blockText(block);
-      if (/第一章\s*招标公告|申请人的资格要求/.test(text)) return { key: 'qualification', label: '资格条件' };
-      if (/评标信息|评审因素|评分项|样品|产品设计方案|技术保障措施/.test(text)) return { key: 'scoring', label: '评分标准' };
-      if (/第三章\s*用户需求书-四、技术要求|四、技术要求|技术要求/.test(text)) return { key: 'technical', label: '技术要求' };
-      if (/五、商务要求|履约担保|付款方式|安装、调试和验收|关于违约|关于安全/.test(text)) return { key: 'commercial', label: '商务与验收' };
-      if (index === 0) return { key: 'qualification', label: '资格条件' };
-      return null;
+      if (target) scrollDocumentPaneToNode(target);
     }
 
     function buildChapterNav(documentPayload, findings) {
@@ -2635,54 +2488,6 @@ def _review_next_html() -> str:
       return classifySection(finding);
     }
 
-    function blockIntersectsFinding(block, finding) {
-      const start = Number(block.start_line || 0);
-      const end = Number(block.end_line || start);
-      return start <= finding.text_line_end && end >= finding.text_line_start;
-    }
-
-    function blockText(block) {
-      if (block.html) {
-        return String(block.html).replace(/<[^>]+>/g, ' ');
-      }
-      const blockLines = block.lines || [];
-      return blockLines.map((line) => line.text || '').join(' ');
-    }
-
-    function renderBlock(block, index, start, end) {
-      if (block.kind === 'chapter-anchor') {
-        return `
-          <section class="doc-block chapter-anchor" data-target-block="false" data-start-line="${block.start_line}" data-end-line="${block.end_line}">
-            ${block.html}
-          </section>
-        `;
-      }
-      const blockLines = block.lines || [];
-      const blockStart = Number(block.start_line || (blockLines[0] ? blockLines[0].number : 0));
-      const blockEnd = Number(block.end_line || (blockLines.length ? blockLines[blockLines.length - 1].number : 0));
-      const hasTarget = blockLines.length
-        ? blockLines.some((line) => line.number >= start && line.number <= end)
-        : (blockStart <= end && blockEnd >= start);
-      const inContextBand = start > 0 && blockStart <= end + 40 && blockEnd >= Math.max(1, start - 40);
-      const content = block.html
-        ? `<div class="${hasTarget ? 'problem-fragment' : ''}">${block.html}</div>${hasTarget ? `<div class="mini-meta" style="margin-top:8px;"><span class="mini-pill">行 ${escapeHtml(String(blockStart))}-${escapeHtml(String(blockEnd))}</span></div>` : ''}`
-        : (blockLines || []).map((line) => renderLine(line, start, end)).join('');
-      return `
-        <section class="doc-block text-run ${hasTarget ? 'is-target' : ''} ${!hasTarget && inContextBand ? 'context-band' : ''}" data-target-block="${hasTarget ? 'true' : 'false'}" data-start-line="${blockStart}" data-end-line="${blockEnd}">
-          ${content}
-        </section>
-      `;
-    }
-
-    function renderLine(line, start, end) {
-      const target = line.number >= start && line.number <= end;
-      return `
-        <div class="doc-line ${target ? 'target' : ''}">
-          <div class="line-no">L${escapeHtml(String(line.number))}</div>
-          <div>${target ? `<span class="problem-text">${escapeHtml(line.text || '')}</span>` : escapeHtml(line.text || '')}</div>
-        </div>
-      `;
-    }
 
     function scrollDocumentPaneToNode(node) {
       const paneRect = documentPaneNode.getBoundingClientRect();
@@ -2775,6 +2580,12 @@ def _review_next_html() -> str:
     function compactLocation(finding) {
       const section = finding.section_path || finding.source_section || '未定位章节';
       return `${section} / L${finding.text_line_start}`;
+    }
+
+    function formatLineRange(start, end) {
+      if (!start && !end) return '—';
+      if (!end || start === end) return String(start).padStart(4, '0');
+      return `${String(start).padStart(4, '0')}-${String(end).padStart(4, '0')}`;
     }
 
     function renderDifferenceLearning(finding = null) {
