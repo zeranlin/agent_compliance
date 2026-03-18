@@ -475,6 +475,30 @@ class ReviewPipelineTest(unittest.TestCase):
         titles = {finding.problem_title for finding in review.findings}
         self.assertIn("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担", titles)
 
+    def test_review_adds_technical_themes_for_official_signage_catalog_name(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：印刷服务项目",
+                "技术要求",
+                "需提供交通部交工验收认可的试验成果，并提交工程现场勘察记录。",
+                "投标人应提供经广告审查机关备案的产品彩页及本市具有检验检测机构出具的检测报告原件扫描件。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/official-signage-catalog.txt",
+            document_name="印刷服务项目.docx",
+            file_hash="official-signage-catalog",
+            normalized_text_path="/tmp/official-signage-catalog.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("技术要求引用了与标的不匹配的标准或规范", titles)
+        self.assertIn("技术证明材料形式要求过严且带有地方化限制", titles)
+
     def test_review_adds_property_personnel_theme_for_official_catalog_name(self) -> None:
         text = "\n".join(
             [
@@ -524,6 +548,31 @@ class ReviewPipelineTest(unittest.TestCase):
 
         review = build_review_result(document, run_rule_scan(document))
         titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担", titles)
+
+    def test_review_adds_commercial_themes_for_official_medical_device_catalog_name(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医疗设备项目",
+                "商务要求",
+                "项目验收后履约保证金自动转为售后服务保证金，质保期结束后退还。",
+                "免费保修期内中标人应确保设备年开机率在95%以上，不能及时排除故障的应提供备用设备。",
+                "采购人可以视具体情况暂时中止支付争议款项，必要时委托第三方质量检测。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/official-medical-device-catalog.txt",
+            document_name="医疗设备项目.docx",
+            file_hash="official-medical-device-catalog",
+            normalized_text_path="/tmp/official-medical-device-catalog.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("商务条款设置异常资金占用安排", titles)
         self.assertIn("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担", titles)
 
     def test_review_overall_summary_includes_document_strategy_route(self) -> None:

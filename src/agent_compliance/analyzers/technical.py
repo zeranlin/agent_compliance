@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classification_has_domain
+from agent_compliance.knowledge.procurement_catalog import (
+    CatalogClassification,
+    classification_has_catalog_prefix,
+    classification_has_domain,
+)
 from agent_compliance.schemas import Finding, NormalizedDocument
 
 
@@ -45,6 +49,19 @@ def _add_technical_standard_mismatch_theme_finding(
 ) -> list[Finding]:
     if any("技术要求引用了与标的不匹配的标准或规范" in finding.problem_title for finding in findings):
         return findings
+    is_information_project = classification_has_domain(catalog_classification, "information_system") or classification_has_catalog_prefix(
+        catalog_classification, "C160"
+    )
+    is_medical_device_project = classification_has_domain(catalog_classification, "medical_device_goods") or classification_has_catalog_prefix(
+        catalog_classification, "A0232"
+    )
+    is_signage_project = classification_has_domain(catalog_classification, "signage_printing_service") or any(
+        (
+            classification_has_catalog_prefix(catalog_classification, "C2307"),
+            classification_has_catalog_prefix(catalog_classification, "C2309"),
+            classification_has_catalog_prefix(catalog_classification, "C2315"),
+        )
+    )
     clauses = [
         clause
         for clause in document.clauses
@@ -78,19 +95,26 @@ def _add_technical_standard_mismatch_theme_finding(
             )
         )
     ]
-    if classification_has_domain(catalog_classification, "information_system"):
+    if is_information_project:
         clauses.extend(
             clause
             for clause in document.clauses
             if is_technical_clause(clause)
             and any(marker in clause.text for marker in ("特种设备", "高空清洗", "有害生物防制", "保洁服务"))
         )
-    if classification_has_domain(catalog_classification, "medical_device_goods"):
+    if is_medical_device_project:
         clauses.extend(
             clause
             for clause in document.clauses
             if is_technical_clause(clause)
             and any(marker in clause.text for marker in ("软件接口", "系统平台", "生活垃圾分类"))
+        )
+    if is_signage_project:
+        clauses.extend(
+            clause
+            for clause in document.clauses
+            if is_technical_clause(clause)
+            and any(marker in clause.text for marker in ("桥梁荷载试验", "交通部交工验收", "试验成果", "工程现场勘察", "试验人员"))
         )
     if not clauses:
         return findings
@@ -129,6 +153,16 @@ def _add_proof_formality_findings(
 ) -> list[Finding]:
     if any("技术证明材料形式要求过严且带有地方化限制" in finding.problem_title for finding in findings):
         return findings
+    is_medical_device_project = classification_has_domain(catalog_classification, "medical_device_goods") or classification_has_catalog_prefix(
+        catalog_classification, "A0232"
+    )
+    is_signage_project = classification_has_domain(catalog_classification, "signage_printing_service") or any(
+        (
+            classification_has_catalog_prefix(catalog_classification, "C2307"),
+            classification_has_catalog_prefix(catalog_classification, "C2309"),
+            classification_has_catalog_prefix(catalog_classification, "C2315"),
+        )
+    )
     clauses = [
         clause
         for clause in document.clauses
@@ -153,14 +187,14 @@ def _add_proof_formality_findings(
             )
         )
     ]
-    if classification_has_domain(catalog_classification, "medical_device_goods"):
+    if is_medical_device_project:
         clauses.extend(
             clause
             for clause in document.clauses
             if is_technical_clause(clause)
             and any(marker in clause.text for marker in ("国家级检测中心", "专项检测报告", "经广告审查机关备案的产品彩页"))
         )
-    if classification_has_domain(catalog_classification, "signage_printing_service"):
+    if is_signage_project:
         clauses.extend(
             clause
             for clause in document.clauses

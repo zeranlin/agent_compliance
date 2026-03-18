@@ -3,7 +3,11 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Any, Callable
 
-from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classification_has_domain
+from agent_compliance.knowledge.procurement_catalog import (
+    CatalogClassification,
+    classification_has_catalog_prefix,
+    classification_has_domain,
+)
 from agent_compliance.schemas import Finding, NormalizedDocument
 
 
@@ -38,23 +42,27 @@ def apply_commercial_analyzers(
         findings,
         build_theme_finding=build_theme_finding,
         is_substantive_commercial_clause=is_substantive_commercial_clause,
+        catalog_classification=catalog_classification,
     )
     findings = _add_delivery_deadline_anomaly_theme_finding(
         document,
         findings,
         build_theme_finding=build_theme_finding,
+        catalog_classification=catalog_classification,
     )
     findings = _add_commercial_acceptance_fee_shift_theme_finding(
         document,
         findings,
         build_theme_finding=build_theme_finding,
         is_substantive_commercial_clause=is_substantive_commercial_clause,
+        catalog_classification=catalog_classification,
     )
     findings = _add_liability_imbalance_theme_finding(
         document,
         findings,
         build_theme_finding=build_theme_finding,
         is_substantive_commercial_clause=is_substantive_commercial_clause,
+        catalog_classification=catalog_classification,
     )
     findings = _add_geographic_tendency_findings(
         document,
@@ -81,9 +89,19 @@ def _add_commercial_financing_burden_theme_finding(
     *,
     build_theme_finding: ThemeBuilder,
     is_substantive_commercial_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("商务条款设置异常资金占用安排" in finding.problem_title for finding in findings):
         return findings
+    is_goods_install = classification_has_domain(catalog_classification, "equipment_installation") or classification_has_catalog_prefix(
+        catalog_classification, "B0608"
+    )
+    is_medical_goods = classification_has_domain(catalog_classification, "medical_device_goods") or classification_has_catalog_prefix(
+        catalog_classification, "A0232"
+    )
+    is_property_service = classification_has_domain(catalog_classification, "property_service") or classification_has_catalog_prefix(
+        catalog_classification, "C210400"
+    )
     clauses = [
         clause
         for clause in document.clauses
@@ -101,6 +119,20 @@ def _add_commercial_financing_burden_theme_finding(
             )
         )
     ]
+    if is_goods_install or is_medical_goods:
+        clauses.extend(
+            clause
+            for clause in document.clauses
+            if is_substantive_commercial_clause(clause)
+            and any(marker in clause.text for marker in ("质保金", "售后保证金", "质量保证金", "验收后转为"))
+        )
+    if is_property_service:
+        clauses.extend(
+            clause
+            for clause in document.clauses
+            if is_substantive_commercial_clause(clause)
+            and any(marker in clause.text for marker in ("履约保证金", "备用金", "扣除服务费", "考核扣罚"))
+        )
     if len(clauses) < 1:
         return findings
     findings.append(
@@ -133,6 +165,7 @@ def _add_delivery_deadline_anomaly_theme_finding(
     findings: list[Finding],
     *,
     build_theme_finding: ThemeBuilder,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("交货期限设置异常或明显失真" in finding.problem_title for finding in findings):
         return findings
@@ -177,6 +210,7 @@ def _add_commercial_acceptance_fee_shift_theme_finding(
     *,
     build_theme_finding: ThemeBuilder,
     is_substantive_commercial_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("验收送检、检测和专家评审费用整体转嫁给供应商" in finding.problem_title for finding in findings):
         return findings
@@ -222,6 +256,7 @@ def _add_liability_imbalance_theme_finding(
     *,
     build_theme_finding: ThemeBuilder,
     is_substantive_commercial_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("商务责任和违约后果设置明显偏重" in finding.problem_title for finding in findings):
         return findings
@@ -280,6 +315,12 @@ def _add_payment_evaluation_chain_finding(
 ) -> list[Finding]:
     if any("付款条件与履约评价结果深度绑定且评价标准开放" in finding.problem_title for finding in findings):
         return findings
+    is_property_service = classification_has_domain(catalog_classification, "property_service") or classification_has_catalog_prefix(
+        catalog_classification, "C210400"
+    )
+    is_catering_service = classification_has_domain(catalog_classification, "catering_service") or classification_has_catalog_prefix(
+        catalog_classification, "C220400"
+    )
     clauses = [
         clause
         for clause in document.clauses
@@ -332,7 +373,7 @@ def _add_payment_evaluation_chain_finding(
             )
         )
     ]
-    if not evaluation_clauses and classification_has_domain(catalog_classification, "property_service"):
+    if not evaluation_clauses and (is_property_service or is_catering_service):
         return findings
     if len(clauses) < 3 or not evaluation_clauses:
         return findings
@@ -371,6 +412,15 @@ def _add_commercial_lifecycle_theme_finding(
 ) -> list[Finding]:
     if any("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担" in finding.problem_title for finding in findings):
         return findings
+    is_property_service = classification_has_domain(catalog_classification, "property_service") or classification_has_catalog_prefix(
+        catalog_classification, "C210400"
+    )
+    is_goods_install = classification_has_domain(catalog_classification, "equipment_installation") or classification_has_catalog_prefix(
+        catalog_classification, "B0608"
+    )
+    is_medical_goods = classification_has_domain(catalog_classification, "medical_device_goods") or classification_has_catalog_prefix(
+        catalog_classification, "A0232"
+    )
     clauses = [
         clause
         for clause in document.clauses
@@ -419,6 +469,20 @@ def _add_commercial_lifecycle_theme_finding(
             )
         )
     ]
+    if is_property_service:
+        clauses.extend(
+            clause
+            for clause in document.clauses
+            if is_substantive_commercial_clause(clause)
+            and any(marker in clause.text for marker in ("管理费直接挂钩", "满意度评价结果与服务费挂钩", "按1%扣减", "按2%扣减", "按3%扣减"))
+        )
+    if is_goods_install or is_medical_goods:
+        clauses.extend(
+            clause
+            for clause in document.clauses
+            if is_substantive_commercial_clause(clause)
+            and any(marker in clause.text for marker in ("备用设备", "开机率", "暂停支付", "第三方质量检测", "财政审批"))
+        )
     focused_clauses = [
         clause
         for clause in clauses
