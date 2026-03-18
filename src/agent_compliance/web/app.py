@@ -48,6 +48,9 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         if path == "/review-next":
             self._send_html(_review_next_html())
             return
+        if path == "/review-fresh":
+            self._send_html(_review_fresh_html())
+            return
         if path == "/rules":
             self._send_html(_rules_html())
             return
@@ -2638,6 +2641,971 @@ def _review_next_html() -> str:
       if (finding.page_hint) parts.push(finding.page_hint);
       parts.push(`行 ${finding.text_line_start}-${finding.text_line_end}`);
       return parts.join(' | ');
+    }
+
+    function escapeHtml(text) {
+      return String(text || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    }
+  </script>
+</body>
+</html>"""
+
+
+def _review_fresh_html() -> str:
+    return """<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>审查工作台 V3</title>
+  <style>
+    :root {
+      --bg: #f4efe5;
+      --panel: #fffdf8;
+      --line: #ddd2c2;
+      --ink: #20252b;
+      --muted: #6c675e;
+      --accent: #9d4a24;
+      --high: #a33d22;
+      --medium: #8f6714;
+      --active: #fff2dd;
+      --chapter: #e9f2ff;
+      --chapter-ink: #315476;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
+    }
+    .app {
+      max-width: 1520px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(52, 41, 29, 0.06);
+    }
+    .hero-card {
+      padding: 18px 20px;
+      display: grid;
+      gap: 10px;
+    }
+    .hero-card h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+    .hero-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 14px;
+    }
+    .hero-actions a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    form {
+      display: grid;
+      gap: 12px;
+    }
+    input[type="file"] {
+      width: 100%;
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: #fff;
+    }
+    .toolbar-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    button.filter,
+    button.chapter-filter {
+      background: #fff;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-weight: 600;
+    }
+    button.filter.active,
+    button.chapter-filter.active {
+      background: #fff5ea;
+      color: var(--accent);
+      border-color: #d3b89f;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+    .summary {
+      margin-bottom: 16px;
+      padding: 16px;
+      display: none;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+    .stat .label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .stat .value {
+      margin-top: 8px;
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .workspace {
+      display: none;
+      grid-template-columns: 420px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .left-pane {
+      min-height: 760px;
+      padding: 16px;
+      position: sticky;
+      top: 12px;
+      align-self: start;
+      max-height: calc(100vh - 24px);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto auto auto 1fr;
+      gap: 12px;
+    }
+    .issue-list {
+      min-height: 0;
+      overflow: auto;
+      display: grid;
+      gap: 10px;
+      padding-right: 4px;
+    }
+    .issue-group {
+      display: grid;
+      gap: 8px;
+    }
+    .issue-group-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      cursor: pointer;
+    }
+    .issue-group-title {
+      display: grid;
+      gap: 2px;
+    }
+    .issue-group-title strong {
+      font-size: 14px;
+    }
+    .issue-group-title span {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .issue-group-metrics {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .issue-group-high,
+    .issue-group-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .issue-group-high {
+      background: rgba(163, 61, 34, 0.12);
+      color: var(--high);
+    }
+    .issue-group-count {
+      background: var(--chapter);
+      color: var(--chapter-ink);
+    }
+    .issue-group.is-collapsed .issue-group-body {
+      display: none;
+    }
+    .issue-group-body {
+      display: grid;
+      gap: 8px;
+    }
+    .issue-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      background: #fff;
+      cursor: pointer;
+      display: grid;
+      gap: 8px;
+    }
+    .issue-card.high {
+      border-left: 5px solid var(--high);
+      background: linear-gradient(90deg, rgba(163, 61, 34, 0.05), #fff 14%);
+    }
+    .issue-card.medium {
+      border-left: 5px solid var(--medium);
+      background: linear-gradient(90deg, rgba(143, 103, 20, 0.05), #fff 14%);
+    }
+    .issue-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(157, 74, 36, 0.12);
+      background: #fff8f1;
+    }
+    .issue-title {
+      font-size: 16px;
+      line-height: 1.5;
+      font-weight: 700;
+    }
+    .badge-row, .mini-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .badge, .mini-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .badge.high { background: rgba(163, 61, 34, 0.1); color: var(--high); }
+    .badge.medium { background: rgba(143, 103, 20, 0.12); color: var(--medium); }
+    .badge.main { background: rgba(32, 100, 74, 0.12); color: #20644a; }
+    .badge.origin-rule { background: rgba(39, 93, 138, 0.12); color: #275d8a; }
+    .badge.origin-llm { background: rgba(110, 62, 164, 0.12); color: #6e3ea4; }
+    .mini-pill {
+      background: #f5efe8;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .issue-excerpt {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .right-pane {
+      min-height: 760px;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      overflow: hidden;
+    }
+    .document-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 8px;
+    }
+    .document-body {
+      max-height: calc(100vh - 360px);
+      overflow: auto;
+      padding: 8px 0;
+      background: #fff;
+    }
+    .doc-block {
+      margin: 12px 16px;
+      padding: 10px 12px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .doc-block.active {
+      background: var(--active);
+      border-color: #f0c98a;
+    }
+    .doc-block p {
+      margin: 0;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .doc-block table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+    }
+    .doc-block td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      vertical-align: top;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .doc-block-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .doc-line {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr);
+      gap: 12px;
+      padding: 8px 16px;
+      border-top: 1px solid #f1eadf;
+      align-items: start;
+    }
+    .doc-line:first-child { border-top: 0; }
+    .doc-line.active {
+      background: var(--active);
+      border-top-color: #f0c98a;
+      border-bottom: 1px solid #f0c98a;
+    }
+    .doc-line-number {
+      text-align: right;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .doc-line-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .detail-pane {
+      border-top: 1px solid var(--line);
+      padding: 12px 16px;
+      background: #fffaf3;
+      display: grid;
+      gap: 10px;
+    }
+    .detail-title {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .detail-title strong {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .detail-item {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .detail-item strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .empty {
+      padding: 20px 16px;
+      color: var(--muted);
+      line-height: 1.7;
+      text-align: center;
+    }
+    @media (max-width: 1180px) {
+      .hero, .workspace, .summary-grid, .detail-grid { grid-template-columns: 1fr; }
+      .left-pane {
+        position: static;
+        max-height: none;
+      }
+      .document-body {
+        max-height: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="hero">
+      <div class="panel hero-card">
+        <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#9d4a24; font-weight:700;">Review Fresh</div>
+        <h1>审查工作台 V3</h1>
+        <p>这个新页面只做两件事：左侧按章节展示主问题，右侧完全复用老采购审查工作台的文档渲染和定位方式。这样我们把“主问题视图”和“稳定正文渲染”拆开，不再继续让 `review-next` 承担两套实验逻辑。</p>
+        <div class="hero-actions">
+          <a href="/">旧版审查页</a>
+          <a href="/review-next">review-next</a>
+          <a href="/rules">规则管理页</a>
+        </div>
+      </div>
+      <div class="panel hero-card">
+        <form id="review-form">
+          <input type="file" name="file" accept=".docx,.doc,.pdf,.txt,.md,.rtf" required />
+          <div class="toolbar-row">
+            <label><input type="checkbox" name="use_cache" /> 启用缓存</label>
+            <label><input type="checkbox" name="use_llm" /> 启用本地模型</label>
+          </div>
+          <div class="toolbar-row">
+            <button type="submit" id="submit-btn">上传并审查</button>
+            <button type="button" id="open-source-btn" class="secondary" disabled>打开原文件</button>
+          </div>
+        </form>
+        <div id="status" class="meta">等待上传文件</div>
+      </div>
+    </section>
+
+    <section id="summary" class="panel summary"></section>
+
+    <section id="workspace" class="workspace">
+      <aside class="panel left-pane">
+        <div>
+          <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#9d4a24; font-weight:700;">Issue Navigator</div>
+          <h2 style="margin:8px 0 6px;">问题清单</h2>
+          <div class="meta">左侧只负责主问题导航和章节分组，右侧正文渲染直接复用老工作台。</div>
+        </div>
+        <div class="toolbar-row" id="view-toolbar">
+          <button type="button" class="filter active" data-view="main">主问题视图</button>
+          <button type="button" class="filter" data-view="all">全部问题</button>
+          <button type="button" class="filter" data-view="llm">模型新增</button>
+        </div>
+        <div class="toolbar-row" id="risk-toolbar">
+          <button type="button" class="filter active" data-risk="all">全部风险</button>
+          <button type="button" class="filter" data-risk="high">高风险</button>
+          <button type="button" class="filter" data-risk="medium">中风险</button>
+        </div>
+        <div class="toolbar-row" id="section-toolbar">
+          <button type="button" class="chapter-filter active" data-section="all">全部章节</button>
+          <button type="button" class="chapter-filter" data-section="qualification">资格</button>
+          <button type="button" class="chapter-filter" data-section="scoring">评分</button>
+          <button type="button" class="chapter-filter" data-section="technical">技术</button>
+          <button type="button" class="chapter-filter" data-section="commercial">商务/验收</button>
+        </div>
+        <div id="issue-list" class="issue-list">
+          <div class="empty">上传文件后，这里会按章节分组展示问题。</div>
+        </div>
+      </aside>
+
+      <section class="panel right-pane">
+        <div>
+          <div id="document-head" class="document-head"></div>
+          <div id="document-body" class="document-body"></div>
+        </div>
+        <div class="detail-pane">
+          <div class="detail-title">
+            <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#9d4a24; font-weight:700;">Focused Review</div>
+            <strong id="detail-title">尚未选择问题</strong>
+            <div id="detail-badges" class="badge-row"></div>
+          </div>
+          <div id="detail-grid" class="detail-grid">
+            <div class="detail-item"><strong>风险说明</strong><div>待运行</div></div>
+            <div class="detail-item"><strong>建议改写</strong><div>待运行</div></div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      payload: null,
+      findings: [],
+      filtered: [],
+      selectedFindingId: null,
+      viewMode: 'main',
+      riskMode: 'all',
+      sectionMode: 'all',
+      collapsedIssueSections: {},
+    };
+
+    const form = document.getElementById('review-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const openSourceBtn = document.getElementById('open-source-btn');
+    const statusNode = document.getElementById('status');
+    const summaryNode = document.getElementById('summary');
+    const workspaceNode = document.getElementById('workspace');
+    const issueListNode = document.getElementById('issue-list');
+    const documentHeadNode = document.getElementById('document-head');
+    const documentBodyNode = document.getElementById('document-body');
+    const detailTitleNode = document.getElementById('detail-title');
+    const detailBadgesNode = document.getElementById('detail-badges');
+    const detailGridNode = document.getElementById('detail-grid');
+
+    form.addEventListener('submit', submitReview);
+    openSourceBtn.addEventListener('click', openSourceFile);
+    document.querySelectorAll('#view-toolbar [data-view]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.viewMode = node.dataset.view;
+        renderToolbarState();
+        renderIssues();
+        renderDetail();
+        renderDocument();
+      });
+    });
+    document.querySelectorAll('#risk-toolbar [data-risk]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.riskMode = node.dataset.risk;
+        renderToolbarState();
+        renderIssues();
+        renderDetail();
+        renderDocument();
+      });
+    });
+    document.querySelectorAll('#section-toolbar [data-section]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.sectionMode = node.dataset.section;
+        renderToolbarState();
+        renderIssues();
+        renderDetail();
+        renderDocument();
+      });
+    });
+
+    async function submitReview(event) {
+      event.preventDefault();
+      submitBtn.disabled = true;
+      openSourceBtn.disabled = true;
+      statusNode.textContent = '正在审查，请稍候...';
+      summaryNode.style.display = 'none';
+      workspaceNode.style.display = 'none';
+      try {
+        const formData = new FormData(form);
+        const response = await fetch('/api/review', { method: 'POST', body: formData });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '审查失败');
+        state.payload = payload;
+        state.findings = payload.review.findings || [];
+        state.selectedFindingId = null;
+        state.collapsedIssueSections = {};
+        openSourceBtn.disabled = !payload.document || !payload.document.source_path;
+        statusNode.textContent = '审查完成';
+        renderSummary();
+        renderToolbarState();
+        renderIssues();
+        renderDetail();
+        renderDocument();
+        workspaceNode.style.display = 'grid';
+      } catch (error) {
+        statusNode.textContent = `失败：${error.message}`;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    async function openSourceFile() {
+      const sourcePath = state.payload && state.payload.document ? state.payload.document.source_path : '';
+      if (!sourcePath) return;
+      try {
+        await fetch('/api/open-source', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: sourcePath }),
+        });
+      } catch (error) {
+        statusNode.textContent = `打开原文件失败：${error.message}`;
+      }
+    }
+
+    function renderSummary() {
+      const payload = state.payload;
+      if (!payload) return;
+      const findings = state.findings;
+      const mainCount = findings.filter(isMainIssue).length;
+      const llmCount = findings.filter((item) => item.finding_origin === 'llm_added').length;
+      const highCount = findings.filter((item) => item.risk_level === 'high').length;
+      const mediumCount = findings.filter((item) => item.risk_level === 'medium').length;
+      const bySection = summarizeBySection(findings);
+      summaryNode.innerHTML = `
+        <h2 style="margin:0 0 10px;">审查摘要</h2>
+        <div>${escapeHtml(payload.review.overall_risk_summary || '')}</div>
+        <div class="summary-grid">
+          ${renderStat('文件', payload.review.document_name)}
+          ${renderStat('主问题', mainCount)}
+          ${renderStat('模型新增', llmCount)}
+          ${renderStat('高风险', highCount)}
+          ${renderStat('中风险', mediumCount)}
+          ${renderStat('缓存/模型', `${payload.cache.enabled ? '缓存开' : '缓存关'} / ${payload.llm.enabled ? '模型开' : '模型关'}`)}
+          ${renderStat('资格主问题', bySection.qualification)}
+          ${renderStat('评分主问题', bySection.scoring)}
+          ${renderStat('技术主问题', bySection.technical)}
+          ${renderStat('商务/验收主问题', bySection.commercial)}
+        </div>
+      `;
+      summaryNode.style.display = 'block';
+    }
+
+    function renderStat(label, value) {
+      return `<div class="stat"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(String(value))}</div></div>`;
+    }
+
+    function renderToolbarState() {
+      document.querySelectorAll('#view-toolbar [data-view]').forEach((node) => node.classList.toggle('active', node.dataset.view === state.viewMode));
+      document.querySelectorAll('#risk-toolbar [data-risk]').forEach((node) => node.classList.toggle('active', node.dataset.risk === state.riskMode));
+      document.querySelectorAll('#section-toolbar [data-section]').forEach((node) => node.classList.toggle('active', node.dataset.section === state.sectionMode));
+    }
+
+    function renderIssues() {
+      const filtered = applyFilters(sortFindings(state.findings));
+      state.filtered = filtered;
+      if (!filtered.length) {
+        issueListNode.innerHTML = '<div class="empty">当前筛选条件下没有问题。</div>';
+        state.selectedFindingId = null;
+        return;
+      }
+      if (!filtered.some((item) => item.finding_id === state.selectedFindingId)) {
+        state.selectedFindingId = filtered[0].finding_id;
+      }
+      issueListNode.innerHTML = renderIssueGroups(filtered);
+      issueListNode.querySelectorAll('.issue-group-head').forEach((node) => {
+        node.addEventListener('click', () => {
+          const key = node.dataset.groupKey;
+          state.collapsedIssueSections[key] = !isIssueGroupCollapsed(key);
+          renderIssues();
+        });
+      });
+      issueListNode.querySelectorAll('.issue-card').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.selectedFindingId = node.dataset.findingId;
+          const finding = state.findings.find((item) => item.finding_id === state.selectedFindingId);
+          if (finding) state.collapsedIssueSections[classifySection(finding)] = false;
+          renderIssues();
+          renderDetail();
+          renderDocument();
+        });
+      });
+    }
+
+    function renderIssueGroups(findings) {
+      const order = ['qualification', 'scoring', 'technical', 'commercial'];
+      const groups = new Map(order.map((key) => [key, []]));
+      findings.forEach((finding) => {
+        const key = classifySection(finding);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(finding);
+      });
+      return Array.from(groups.entries())
+        .filter(([, items]) => items.length)
+        .map(([key, items]) => {
+          const collapsed = isIssueGroupCollapsed(key);
+          const highCount = items.filter((item) => item.risk_level === 'high').length;
+          return `
+            <section class="issue-group ${collapsed ? 'is-collapsed' : ''}">
+              <div class="issue-group-head" data-group-key="${escapeHtml(key)}">
+                <div class="issue-group-title">
+                  <strong>${escapeHtml(sectionLabelFromKey(key))}</strong>
+                  <span>${escapeHtml(sectionDescription(key))}</span>
+                </div>
+                <div class="issue-group-metrics">
+                  <span class="issue-group-high">高 ${escapeHtml(String(highCount))}</span>
+                  <span class="issue-group-count">${escapeHtml(String(items.length))}</span>
+                </div>
+              </div>
+              <div class="issue-group-body">
+                ${items.map(renderIssueCard).join('')}
+              </div>
+            </section>
+          `;
+        })
+        .join('');
+    }
+
+    function renderIssueCard(finding) {
+      const active = finding.finding_id === state.selectedFindingId ? 'active' : '';
+      return `
+        <article class="issue-card ${escapeHtml(finding.risk_level || '')} ${active}" data-finding-id="${escapeHtml(finding.finding_id)}">
+          <div class="issue-title">${escapeHtml(finding.problem_title || '')}</div>
+          <div class="badge-row">
+            <span class="badge ${escapeHtml(finding.risk_level || '')}">${escapeHtml(riskLabel(finding.risk_level))}</span>
+            ${isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : ''}
+            <span class="badge">${escapeHtml(sectionLabel(finding))}</span>
+            <span class="badge">${escapeHtml(subthemeLabel(finding))}</span>
+            <span class="badge ${originBadgeClass(finding)}">${escapeHtml(originLabel(finding))}</span>
+          </div>
+          <div class="mini-meta">
+            <span class="mini-pill">位置 ${escapeHtml(compactLocation(finding))}</span>
+            <span class="mini-pill">来源 ${escapeHtml(sourceChain(finding))}</span>
+          </div>
+          <div class="issue-excerpt"><strong>代表性证据：</strong>${escapeHtml(finding.source_text || '无原文摘录')}</div>
+        </article>
+      `;
+    }
+
+    function renderDetail() {
+      const finding = getSelectedFinding();
+      if (!finding) {
+        detailTitleNode.textContent = '尚未选择问题';
+        detailBadgesNode.innerHTML = '';
+        detailGridNode.innerHTML = `
+          <div class="detail-item"><strong>风险说明</strong><div>待运行</div></div>
+          <div class="detail-item"><strong>建议改写</strong><div>待运行</div></div>
+        `;
+        return;
+      }
+      detailTitleNode.textContent = finding.problem_title || '未命名问题';
+      detailBadgesNode.innerHTML = `
+        <span class="badge ${escapeHtml(finding.risk_level || '')}">${escapeHtml(riskLabel(finding.risk_level))}</span>
+        ${isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : ''}
+        <span class="badge">${escapeHtml(sectionLabel(finding))}</span>
+        <span class="badge">${escapeHtml(subthemeLabel(finding))}</span>
+      `;
+      detailGridNode.innerHTML = `
+        <div class="detail-item"><strong>风险说明</strong><div>${escapeHtml(finding.why_it_is_risky || '暂无')}</div></div>
+        <div class="detail-item"><strong>建议改写</strong><div>${escapeHtml(finding.rewrite_suggestion || '暂无')}</div></div>
+      `;
+    }
+
+    function renderDocument() {
+      const documentPayload = state.payload ? state.payload.document : null;
+      if (!documentPayload) {
+        documentHeadNode.innerHTML = '<h2 style="margin:0;">文件正文</h2>';
+        documentBodyNode.innerHTML = '<div class="empty">上传文件后，这里会渲染文档原文，并联动定位。</div>';
+        return;
+      }
+      documentHeadNode.innerHTML = `
+        <h2 style="margin:0;">文件正文</h2>
+        <div class="meta">原文件：${escapeHtml(documentPayload.source_path)}</div>
+        <div class="meta">稳定文本：${escapeHtml(documentPayload.normalized_text_path)}</div>
+        <div class="meta">总行数：${documentPayload.line_count} ｜ 渲染模式：${documentPayload.render_mode === 'docx_blocks' ? 'DOCX 原文结构' : '稳定文本'}</div>
+      `;
+      documentBodyNode.innerHTML = documentPayload.render_mode === 'docx_blocks'
+        ? (documentPayload.blocks || []).map((block) => renderDocumentBlock(block)).join('')
+        : (documentPayload.lines || []).map((line) => renderDocumentLine(line)).join('');
+      const finding = getSelectedFinding();
+      if (finding) highlightDocumentRange(finding.text_line_start, finding.text_line_end);
+    }
+
+    function renderDocumentBlock(block) {
+      const meta = `行号：${formatLineRange(block.start_line, block.end_line)}`;
+      return `<div class="doc-block" id="${escapeHtml(block.block_id)}" data-start-line="${block.start_line}" data-end-line="${block.end_line}">
+        ${block.html}
+        <div class="doc-block-meta">${escapeHtml(meta)}</div>
+      </div>`;
+    }
+
+    function renderDocumentLine(line) {
+      return `<div class="doc-line" id="fresh-line-${line.number}">
+        <div class="doc-line-number">${String(line.number).padStart(4, '0')}${line.page_hint ? `<br>${escapeHtml(line.page_hint)}` : ''}</div>
+        <div class="doc-line-text">${escapeHtml(line.text || ' ')}</div>
+      </div>`;
+    }
+
+    function highlightDocumentRange(start, end) {
+      documentBodyNode.querySelectorAll('.active').forEach((node) => node.classList.remove('active'));
+      let target = null;
+      const documentPayload = state.payload ? state.payload.document : null;
+      if (!documentPayload) return;
+      if (documentPayload.render_mode === 'docx_blocks') {
+        documentBodyNode.querySelectorAll('.doc-block').forEach((node) => {
+          const blockStart = Number(node.dataset.startLine);
+          const blockEnd = Number(node.dataset.endLine);
+          const overlaps = blockStart <= end && blockEnd >= start;
+          if (overlaps) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
+        });
+      } else {
+        for (let line = start; line <= end; line += 1) {
+          const node = document.getElementById(`fresh-line-${line}`);
+          if (node) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
+        }
+      }
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function getSelectedFinding() {
+      return state.filtered.find((item) => item.finding_id === state.selectedFindingId) || state.findings.find((item) => item.finding_id === state.selectedFindingId) || null;
+    }
+
+    function applyFilters(findings) {
+      let items = findings.slice();
+      if (state.viewMode === 'main') {
+        items = items.filter(isMainIssue);
+      } else if (state.viewMode === 'llm') {
+        items = items.filter((item) => item.finding_origin === 'llm_added');
+      }
+      if (state.riskMode !== 'all') items = items.filter((item) => item.risk_level === state.riskMode);
+      if (state.sectionMode !== 'all') items = items.filter((item) => classifySection(item) === state.sectionMode);
+      return items;
+    }
+
+    function sortFindings(findings) {
+      const priority = { high: 0, medium: 1, low: 2, none: 3 };
+      return [...findings].sort((left, right) => {
+        const levelDiff = (priority[left.risk_level] ?? 9) - (priority[right.risk_level] ?? 9);
+        if (levelDiff !== 0) return levelDiff;
+        const lineDiff = (left.text_line_start || 0) - (right.text_line_start || 0);
+        if (lineDiff !== 0) return lineDiff;
+        return String(left.finding_id).localeCompare(String(right.finding_id));
+      });
+    }
+
+    function summarizeBySection(findings) {
+      const mainFindings = findings.filter(isMainIssue);
+      return {
+        qualification: mainFindings.filter((item) => classifySection(item) === 'qualification').length,
+        scoring: mainFindings.filter((item) => classifySection(item) === 'scoring').length,
+        technical: mainFindings.filter((item) => classifySection(item) === 'technical').length,
+        commercial: mainFindings.filter((item) => classifySection(item) === 'commercial').length,
+      };
+    }
+
+    function isIssueGroupCollapsed(sectionKey) {
+      if (Object.prototype.hasOwnProperty.call(state.collapsedIssueSections, sectionKey)) {
+        return Boolean(state.collapsedIssueSections[sectionKey]);
+      }
+      const selected = getSelectedFinding();
+      if (!selected) return sectionKey !== 'qualification';
+      return classifySection(selected) !== sectionKey;
+    }
+
+    function isMainIssue(finding) {
+      return finding.finding_origin === 'analyzer' || (finding.finding_origin === 'llm_added' && /章节|主问题/.test(finding.problem_title || ''));
+    }
+
+    function originLabel(finding) {
+      if (finding.finding_origin === 'llm_added') return '全文辅助扫描';
+      if (finding.finding_origin === 'analyzer') return '结构分析 / 仲裁保留';
+      return '规则命中';
+    }
+
+    function originBadgeClass(finding) {
+      if (finding.finding_origin === 'llm_added') return 'origin-llm';
+      if (finding.finding_origin === 'analyzer') return 'main';
+      return 'origin-rule';
+    }
+
+    function sourceChain(finding) {
+      if (finding.finding_origin === 'analyzer') return '规则命中 → 结构分析 → 仲裁保留';
+      if (finding.finding_origin === 'llm_added') return '全文辅助扫描 → 仲裁判断';
+      return '规则命中';
+    }
+
+    function classifySection(finding) {
+      const text = [finding.problem_title, finding.section_path, finding.source_section].filter(Boolean).join(' ');
+      if (/资格|申请人的资格要求|准入门槛/.test(text)) return 'qualification';
+      if (/评分|评标信息|演示|品牌档次|认证评分|商务评分/.test(text)) return 'scoring';
+      if (/技术|标准|检测报告|证明材料/.test(text)) return 'technical';
+      return 'commercial';
+    }
+
+    function sectionLabel(finding) {
+      return sectionLabelFromKey(classifySection(finding));
+    }
+
+    function sectionLabelFromKey(sectionKey) {
+      const mapping = {
+        qualification: '资格',
+        scoring: '评分',
+        technical: '技术',
+        commercial: '商务/验收',
+      };
+      return mapping[sectionKey] || '其它';
+    }
+
+    function sectionDescription(sectionKey) {
+      const mapping = {
+        qualification: '一般门槛、属地场所、经营年限和错位资质会优先归并在这里。',
+        scoring: '品牌、认证、演示和主观评分等结构性问题会集中展示。',
+        technical: '标准错位、证明形式和技术必要性边界问题会集中展示。',
+        commercial: '资金占用、验收费转嫁、责任失衡和验收边界问题会集中展示。',
+      };
+      return mapping[sectionKey] || '当前筛选条件下的问题会按章节归在这里。';
+    }
+
+    function subthemeLabel(finding) {
+      const title = finding.problem_title || '';
+      if (/一般财务和规模/.test(title)) return '财务/规模';
+      if (/经营年限|属地场所|单项业绩/.test(title)) return '年限/场所/业绩';
+      if (/行业资质|专门许可/.test(title)) return '错位资质';
+      if (/品牌档次/.test(title)) return '品牌评分';
+      if (/认证评分/.test(title)) return '错位认证';
+      if (/证书认证或模板内容/.test(title)) return '评分错位';
+      if (/标准或规范/.test(title)) return '标准错位';
+      if (/证明材料形式/.test(title)) return '证明形式';
+      if (/资金占用/.test(title)) return '资金占用';
+      if (/交货期限/.test(title)) return '交期异常';
+      if (/费用整体转嫁/.test(title)) return '验收费转嫁';
+      if (/责任和违约后果/.test(title)) return '责任失衡';
+      if (/验收程序|最终确认边界/.test(title)) return '验收边界';
+      if (/属地倾斜/.test(title)) return '属地倾斜';
+      if (/模板残留|义务外扩/.test(title)) return '模板残留';
+      if (/行业适配性不足/.test(title)) return '行业适配';
+      return finding.issue_type || '综合';
+    }
+
+    function compactLocation(finding) {
+      const section = finding.section_path || finding.source_section || '未定位章节';
+      return `${section} / L${finding.text_line_start}`;
+    }
+
+    function formatLineRange(start, end) {
+      if (!start && !end) return '—';
+      if (!end || start === end) return String(start).padStart(4, '0');
+      return `${String(start).padStart(4, '0')}-${String(end).padStart(4, '0')}`;
+    }
+
+    function riskLabel(level) {
+      return ({ high: '高风险', medium: '中风险', low: '低风险' }[level] || level || '未标注');
     }
 
     function escapeHtml(text) {
