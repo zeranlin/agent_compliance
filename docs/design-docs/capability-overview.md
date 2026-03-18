@@ -123,6 +123,7 @@
 - 面向下一阶段架构排查的 [architecture-gap-priorities.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/architecture-gap-priorities.md)，用于明确当前真正缺失的架构层与补强优先级，而不是继续零散补规则
 - 面向当前持续调优阶段的 [engine-tuning-checklist.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/engine-tuning-checklist.md)，用于明确哪些 engine 是当前高优先级校准项、误判高发点和跨层联动问题
 - 面向法规条文级语义增强的 [legal-semantic-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/legal-semantic-layer-design.md)，用于正式设计 `legal_clause_index`、`issue_type_authority_map` 和 `legal_authority_reasoner`
+- 面向规则治理增强的 [rule-governance-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/rule-governance-layer-design.md)，用于定义 `rule_registry`、`rule_priority_profile` 和 `catalog_sensitive_rule_router`
 
 ## 四、精确定位能力
 
@@ -196,6 +197,10 @@
 - 已接入第一版 `confidence_calibrator`，开始把条文级主依据、问题类型边界和人工复核标记合并进 `confidence` 校准
 - `review-next`、规则管理页和 benchmark gate 已开始展示主依据、辅依据、适用逻辑和法规侧复核提示，法规语义层不再只停留在后端
 - 已接入规则治理层，开始具备 `rule_registry`、`rule_priority_profile` 和 `catalog_sensitive_rule_router`，并让规则扫描按采购品目优先级压缩同一条款同一风险簇的重复命中；当前已支持正式规则状态分层、按品目显式停用/降权，以及在 `/rules` 页面展示规则治理信息
+- 已开始把采购品目层从“分类”推进到“画像”：
+  - 已新增体育器材及运动场设施场景，能识别 `全民健身`、`多功能运动场`、`围网`、`硅PU`、`体育比赛用灯` 等官方品目和高频业务表达
+  - 品目知识画像已补入“技术评分过高、负偏离扣分过重、专项检测报告加分、轻量智能化边界外扩、品牌定向痕迹”等运动场高风险模式
+  - 评分引擎已开始按真实评分表结构识别 `技术部分评分PT`、`商务部分评分PB`、`评审项` 等表达，不再只依赖 `评标信息` 或简单 `评分` 标签
 
 相关设计：
 - [legal-authority-system.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/legal-authority-system.md)

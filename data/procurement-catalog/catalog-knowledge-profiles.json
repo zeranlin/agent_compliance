@@ -26,6 +26,18 @@
       "preferred_analyzers": ["brand_and_certification_scoring_analyzer", "technical_reference_consistency_engine", "commercial_burden_analyzer"]
     },
     {
+      "catalog_id": "CAT-SPORTS",
+      "catalog_name": "体育器材及运动场设施",
+      "review_domain_key": "sports_facility_goods",
+      "category_type": "mixed",
+      "reasonable_requirements": ["器材供货", "场地铺装", "围网与照明安装", "基础智能显示和售后维护"],
+      "high_risk_patterns": ["技术评分过高", "负偏离扣分过重", "专项检测报告加分", "轻量智能化边界外扩", "品牌定向痕迹"],
+      "common_mismatch_clues": ["软件平台", "系统集成实施服务", "二维码报修系统", "OTA远程升级", "leyard", "品牌："],
+      "boundary_notes": "体育器材及运动场设施项目允许围绕场地材料、安全性能、照明、围网、安装和基础运维提出要求，但把轻量智能化功能、专项检测储备、品牌偏好或负偏离扣分过重叠加为高分或高罚项时，应重点审查是否超出体育器材供货并安装调试的合理边界。",
+      "related_issue_types": ["scoring_structure_imbalance", "technical_justification_needed", "template_mismatch"],
+      "preferred_analyzers": ["scoring_semantic_consistency_engine", "technical_reference_consistency_engine", "mixed_scope_boundary_engine"]
+    },
+    {
       "catalog_id": "CAT-PROPERTY",
       "catalog_name": "物业管理服务",
       "review_domain_key": "property_service",

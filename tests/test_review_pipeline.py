@@ -13,6 +13,61 @@ from agent_compliance.schemas import Finding, NormalizedDocument
 
 
 class ReviewPipelineTest(unittest.TestCase):
+    def test_review_summary_prefers_sports_facility_catalog(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：2025年省级全民健身工程（多功能运动场项目）",
+                "运动场围网及照明系统",
+                "硅PU面层",
+                "体育比赛用灯",
+                "二维码报修",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sports.docx",
+            document_name="2025年省级全民健身工程（多功能运动场项目）.docx",
+            file_hash="sports123",
+            normalized_text_path="/tmp/sports.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertIn("当前主品目识别为体育器材及运动场设施", review.overall_risk_summary)
+
+    def test_sports_scoring_theme_is_raised_for_technical_weight_and_test_bonus(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：2025年省级全民健身工程（多功能运动场项目）",
+                "评标信息",
+                "技术部分满分78分。",
+                "价格部分满分10分。",
+                "每一项负偏离扣2分，扣完为止。",
+                "提供CMA或CNAS检测报告的，每提供1项得2分。",
+                "围网、硅PU面层和体育比赛用灯等运动场设施应满足采购需求。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sports-score.docx",
+            document_name="2025年省级全民健身工程（多功能运动场项目）.docx",
+            file_hash="sports-score",
+            normalized_text_path="/tmp/sports-score.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertTrue(
+            any(
+                finding.problem_title == "技术评分权重过高且负偏离、专项检测加分进一步放大结构失衡"
+                for finding in review.findings
+            )
+        )
+
     def test_representative_evidence_prefers_catalog_relevant_keywords(self) -> None:
         text = "\n".join(
             [

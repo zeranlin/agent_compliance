@@ -16,13 +16,18 @@ from agent_compliance.pipelines.review_strategy import build_document_strategy_p
 class CatalogKnowledgeProfileTest(unittest.TestCase):
     def test_load_catalog_knowledge_profiles(self) -> None:
         profiles = load_catalog_knowledge_profiles()
-        self.assertGreaterEqual(len(profiles), 9)
+        self.assertGreaterEqual(len(profiles), 10)
         furniture = catalog_knowledge_profile_by_catalog_id("CAT-FURNITURE")
         self.assertIsNotNone(furniture)
         assert furniture is not None
         self.assertIn("环保要求", furniture.reasonable_requirements)
         self.assertIn("智能管理边界外扩", furniture.high_risk_patterns)
         self.assertTrue(furniture.boundary_notes)
+        sports = catalog_knowledge_profile_by_catalog_id("CAT-SPORTS")
+        self.assertIsNotNone(sports)
+        assert sports is not None
+        self.assertIn("技术评分过高", sports.high_risk_patterns)
+        self.assertIn("二维码报修系统", sports.common_mismatch_clues)
 
     def test_profiles_follow_classification(self) -> None:
         classification = CatalogClassification(

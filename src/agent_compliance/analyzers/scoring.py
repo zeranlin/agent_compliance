@@ -70,6 +70,14 @@ def apply_scoring_analyzers(
     findings = _add_scoring_semantic_consistency_theme_finding(
         document, findings, build_theme_finding=build_theme_finding, is_scoring_clause=is_scoring_clause
     )
+    findings = _add_sports_facility_scoring_theme_finding(
+        document,
+        findings,
+        build_theme_finding=build_theme_finding,
+        is_scoring_clause=is_scoring_clause,
+        document_domain=document_domain,
+        catalog_classification=catalog_classification,
+    )
     findings = _add_service_scoring_mismatch_theme_finding(
         document, findings, build_theme_finding=build_theme_finding, is_scoring_clause=is_scoring_clause
     )
@@ -771,6 +779,85 @@ def _add_service_scoring_mismatch_theme_finding(
             rewrite_suggestion="建议删除售后服务评分中与服务主题不一致的荣誉和证书要求，压降主观分档权重，仅围绕响应机制、升级维护、备件保障和服务组织评分。",
             needs_human_review=True,
             human_review_reason="需结合设备售后服务组织方式判断注册安全工程师和先进单位荣誉是否与本项目售后履约能力直接相关。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_sports_facility_scoring_theme_finding(
+    document: NormalizedDocument,
+    findings: list[Finding],
+    *,
+    build_theme_finding: ThemeBuilder,
+    is_scoring_clause: ClausePredicate,
+    document_domain: DomainResolver,
+    catalog_classification: CatalogClassification | None = None,
+) -> list[Finding]:
+    if any("技术评分权重过高且负偏离、专项检测加分进一步放大结构失衡" in finding.problem_title for finding in findings):
+        return findings
+    if not _matches_catalog_domain(document, document_domain, catalog_classification, "sports_facility_goods"):
+        return findings
+
+    scoring_clauses = [clause for clause in document.clauses if is_scoring_clause(clause)]
+    if not scoring_clauses:
+        return findings
+
+    tech_weight_clauses = [
+        clause
+        for clause in scoring_clauses
+        if any(marker in f"{clause.section_path or ''} {clause.text}" for marker in ("技术", "技术部分", "技术评分", "技术分"))
+        and any(
+            marker in clause.text
+            for marker in ("78分", "78 分", "78.0000分", "70分", "70 分", "80分", "80 分", "90分", "90 分")
+        )
+    ]
+    price_weight_clauses = [
+        clause
+        for clause in scoring_clauses
+        if any(marker in f"{clause.section_path or ''} {clause.text}" for marker in ("报价", "价格", "投标报价"))
+        and any(marker in clause.text for marker in ("10分", "10 分", "12分", "12 分", "15分", "15 分"))
+    ]
+    deviation_clauses = [
+        clause
+        for clause in scoring_clauses
+        if any(marker in clause.text for marker in ("负偏离", "每负偏离", "每项负偏离", "每一项负偏离"))
+    ]
+    proof_bonus_clauses = [
+        clause
+        for clause in scoring_clauses
+        if any(marker in clause.text for marker in ("检测报告", "CMA", "CNAS", "SGS", "质检报告", "专项检测"))
+    ]
+
+    category_hits = sum(1 for group in (tech_weight_clauses, price_weight_clauses, deviation_clauses, proof_bonus_clauses) if group)
+    has_core_pattern = bool(tech_weight_clauses and deviation_clauses and proof_bonus_clauses)
+    if category_hits < 3 and not has_core_pattern:
+        return findings
+
+    clauses_by_line: "OrderedDict[int, Any]" = OrderedDict()
+    for clause in [*tech_weight_clauses, *price_weight_clauses, *deviation_clauses, *proof_bonus_clauses]:
+        clauses_by_line.setdefault(clause.line_start, clause)
+    clauses = list(clauses_by_line.values())
+
+    findings.append(
+        build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="scoring_structure_imbalance",
+            problem_title="技术评分权重过高且负偏离、专项检测加分进一步放大结构失衡",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "体育器材及运动场设施评分中，技术部分权重过高，同时又通过负偏离扣分和专项检测报告加分进一步拉开分差。"
+                "这类设计容易把技术细项和证明材料储备放大为决定性高分因素，使报价和基础履约能力评价明显被边缘化。"
+            ),
+            impact_on_competition_or_performance="可能导致整张评分表明显偏向既有检测储备更充分、技术描述更贴近参数模板的供应商，削弱价格和综合履约能力的平衡评价。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；综合评分法边界分析（中国政府采购网）",
+            rewrite_suggestion="建议压降技术评分总权重，避免通过负偏离扣分和专项检测报告重复放大技术分差，并将检测证明改为围绕基础安全、质量和验收所必需的少量客观证明。",
+            needs_human_review=True,
+            human_review_reason="需结合体育器材及运动场设施项目的安全性能、场地材料和安装验收重点判断技术分值、负偏离扣分和专项检测加分是否被不当放大。",
             finding_origin="analyzer",
         )
     )

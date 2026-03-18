@@ -32,10 +32,22 @@ class ProcurementCatalogTest(unittest.TestCase):
 
     def test_load_procurement_catalogs(self) -> None:
         catalogs = load_procurement_catalogs()
-        self.assertGreaterEqual(len(catalogs), 8)
+        self.assertGreaterEqual(len(catalogs), 10)
         self.assertTrue(any(item.domain_key == "information_system" for item in catalogs))
         info_catalog = next(item for item in catalogs if item.domain_key == "information_system")
         self.assertIn("信息系统集成实施服务", info_catalog.domain_keywords)
+
+    def test_classify_sports_facility_project(self) -> None:
+        document = self._document(
+            "2025年省级全民健身工程（多功能运动场项目）.docx",
+            ["全民健身工程", "多功能运动场", "围网", "硅PU", "体育比赛用灯", "二维码报修"],
+        )
+        classification = classify_procurement_catalog(document)
+
+        self.assertEqual(classification.primary_domain_key, "sports_facility_goods")
+        self.assertEqual(classification.primary_catalog_name, "体育器材及运动场设施")
+        self.assertTrue(classification_has_catalog_prefix(classification, "A0246"))
+        self.assertTrue(classification.is_mixed_scope)
 
     def test_classify_information_system_project(self) -> None:
         document = self._document(
@@ -108,10 +120,11 @@ class ProcurementCatalogTest(unittest.TestCase):
 
     def test_review_domain_map_exists_and_covers_high_frequency_domains(self) -> None:
         entries = load_review_domain_map()
-        self.assertGreaterEqual(len(entries), 9)
+        self.assertGreaterEqual(len(entries), 10)
 
         by_domain = {item.review_domain_key: item for item in entries}
         self.assertIn("furniture_goods", by_domain)
+        self.assertIn("sports_facility_goods", by_domain)
         self.assertIn("information_system", by_domain)
         self.assertIn("medical_device_goods", by_domain)
         self.assertIn("signage_printing_service", by_domain)
@@ -128,11 +141,13 @@ class ProcurementCatalogTest(unittest.TestCase):
                 self.assertTrue(any(code.startswith(prefix) for code in full_codes), prefix)
 
         self.assertIn("C21040000", by_domain["property_service"].mapped_catalog_codes)
+        self.assertIn("A0246", by_domain["sports_facility_goods"].mapped_catalog_prefixes)
         self.assertIn("C1602", by_domain["information_system"].mapped_catalog_prefixes)
         self.assertIn("C2309", by_domain["signage_printing_service"].mapped_catalog_prefixes)
 
     def test_full_catalog_names_are_resolved_for_review_domains(self) -> None:
         mapping = full_catalog_names_by_code_or_prefix()
         self.assertIn("家具", mapping["CAT-FURNITURE"])
+        self.assertIn("体育设备设施", mapping["CAT-SPORTS"])
         self.assertIn("物业管理服务", mapping["CAT-PROPERTY"])
         self.assertIn("信息系统集成实施服务", mapping["CAT-INFO"])

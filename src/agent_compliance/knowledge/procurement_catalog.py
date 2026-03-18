@@ -158,7 +158,19 @@ def classify_procurement_catalog(document: NormalizedDocument) -> CatalogClassif
     catalogs = load_procurement_catalogs()
     title_text = f"{document.document_name} {document.source_path}".lower()
     body_text = " ".join(clause.text for clause in document.clauses[:200]).lower()
-    mixed_info_markers = ("系统端口", "无缝对接", "信息化管理系统", "综合业务协同平台", "软件著作权", "智能管理系统", "资产定位")
+    mixed_info_markers = (
+        "系统端口",
+        "无缝对接",
+        "信息化管理系统",
+        "综合业务协同平台",
+        "软件著作权",
+        "智能管理系统",
+        "资产定位",
+        "二维码报修",
+        "OTA",
+        "远程升级",
+        "智能显示",
+    )
     mixed_device_markers = ("自动化调剂", "发药机", "自动化设备", "设备需求参数", "设备接口")
 
     scored: list[tuple[int, int, ProcurementCatalog, tuple[str, ...]]] = []
@@ -228,6 +240,12 @@ def classify_procurement_catalog(document: NormalizedDocument) -> CatalogClassif
         if info_catalog is not None and info_catalog.catalog_name not in [item[1].catalog_name for item in secondary]:
             secondary.append((2, info_catalog, tuple(marker for marker in mixed_info_markers if marker in body_text)[:2]))
     elif primary_catalog.domain_key in {"furniture_goods", "signage_printing_service"} and (
+        any(item[1].domain_key == "information_system" for item in secondary)
+        or any(marker in body_text for marker in mixed_info_markers)
+    ):
+        is_mixed_scope = True
+        category_type = "mixed"
+    elif primary_catalog.domain_key == "sports_facility_goods" and (
         any(item[1].domain_key == "information_system" for item in secondary)
         or any(marker in body_text for marker in mixed_info_markers)
     ):

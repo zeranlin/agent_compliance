@@ -1831,7 +1831,14 @@ def _is_scoring_clause(clause) -> bool:
     section_path = clause.section_path or ""
     source_section = clause.source_section or ""
     table_label = clause.table_or_item_label or ""
-    return "评标信息" in section_path or "评分" in source_section or "评分" in table_label
+    text = clause.text or ""
+    return (
+        "评标信息" in section_path
+        or "评分" in section_path
+        or "评分" in source_section
+        or "评分" in table_label
+        or any(marker in text for marker in ("技术部分评分", "商务部分评分", "价格部分评分", "评分PT", "评分PB", "评审项"))
+    )
 
 
 def _build_theme_finding(

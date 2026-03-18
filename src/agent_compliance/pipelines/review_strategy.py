@@ -124,6 +124,9 @@ def build_document_strategy_profile(
         elif domain == "medical_tcm":
             procurement_mode = "医疗药品或医用配套采购项目"
             domain_hint = "药品供货与医用配套服务类"
+        elif domain == "sports_facility_goods":
+            procurement_mode = "体育器材供货并含运动场设施安装项目"
+            domain_hint = "运动场器材、围网照明、场地面层与轻量智能化功能并存"
         elif domain == "information_system":
             procurement_mode = "信息化或数字化服务项目"
             domain_hint = "平台建设、系统对接或持续运维类"
@@ -179,6 +182,9 @@ def build_document_strategy_profile(
     elif domain == "signage_printing_service":
         procurement_mode = "标识标牌及宣传印制综合服务项目"
         domain_hint = "医院、学校或公共机构标识导视、宣传印制和现场制作安装维护类"
+    elif domain == "sports_facility_goods":
+        procurement_mode = "体育器材供货并含运动场设施安装项目"
+        domain_hint = "运动场器材、围网照明、场地面层与轻量智能化功能并存"
     elif any(token in combined for token in ("血透", "透析", "医疗器械", "设备采购", "HIS", "PACS", "LIS", "碳足迹")) or domain == "medical_device_goods":
         procurement_mode = "货物采购并含安装调试项目"
         domain_hint = "医用设备供货、院内接口配套与附加合规义务并存"
