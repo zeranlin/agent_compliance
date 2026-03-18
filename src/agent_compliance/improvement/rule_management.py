@@ -28,6 +28,8 @@ def load_rule_management_payload() -> dict[str, Any]:
         ],
         "candidate_rules": candidates,
         "decision_summary": _decision_summary(candidates),
+        "catalog_scene_summary": _catalog_scene_summary(candidates),
+        "domain_summary": _domain_summary(candidates),
         "decisions_path": str(paths.improvement_root / DECISIONS_FILE),
     }
 
@@ -100,3 +102,29 @@ def _decision_summary(candidates: list[dict[str, Any]]) -> dict[str, int]:
         summary[decision] = summary.get(decision, 0) + 1
     summary["total"] = len(candidates)
     return summary
+
+
+def _catalog_scene_summary(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for item in candidates:
+        key = str(item.get("primary_catalog_name") or "").strip()
+        if not key:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+    return [
+        {"primary_catalog_name": key, "candidate_count": count}
+        for key, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
+def _domain_summary(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    counts: dict[str, int] = {}
+    for item in candidates:
+        key = str(item.get("primary_domain_key") or "").strip()
+        if not key:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+    return [
+        {"primary_domain_key": key, "candidate_count": count}
+        for key, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]

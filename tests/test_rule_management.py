@@ -28,6 +28,9 @@ class RuleManagementTest(unittest.TestCase):
                         "why_it_is_risky": "测试风险",
                         "rewrite_suggestion": "测试建议",
                         "trigger_keywords": ["测试"],
+                        "primary_catalog_name": "物业管理服务",
+                        "primary_domain_key": "property_service",
+                        "is_mixed_scope": False,
                     }
                 ],
                 ensure_ascii=False,
@@ -66,6 +69,9 @@ class RuleManagementTest(unittest.TestCase):
         candidate = next(item for item in payload["candidate_rules"] if item["candidate_rule_id"] == "CAND-TEST-001")
         self.assertEqual(candidate["gate_status"], "covered")
         self.assertEqual(candidate["decision"], "pending")
+        self.assertEqual(candidate["primary_catalog_name"], "物业管理服务")
+        self.assertEqual(payload["catalog_scene_summary"][0]["primary_catalog_name"], "物业管理服务")
+        self.assertEqual(payload["domain_summary"][0]["primary_domain_key"], "property_service")
 
         save_rule_decision("CAND-TEST-001", "confirmed", "准备入库")
 
@@ -73,4 +79,3 @@ class RuleManagementTest(unittest.TestCase):
         candidate = next(item for item in payload["candidate_rules"] if item["candidate_rule_id"] == "CAND-TEST-001")
         self.assertEqual(candidate["decision"], "confirmed")
         self.assertEqual(candidate["decision_note"], "准备入库")
-

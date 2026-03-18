@@ -235,10 +235,14 @@ class LLMIntegrationTest(unittest.TestCase):
                 {
                     "candidate_rule_id": "CAND-001",
                     "issue_type": "template_mismatch",
+                    "primary_catalog_name": "信息系统集成实施服务",
+                    "primary_domain_key": "information_system",
                 },
                 {
                     "candidate_rule_id": "CAND-002",
                     "issue_type": "unknown_issue_type",
+                    "primary_catalog_name": "物业管理服务",
+                    "primary_domain_key": "property_service",
                 },
             ]
         )
@@ -246,6 +250,8 @@ class LLMIntegrationTest(unittest.TestCase):
         self.assertEqual(gate["covered_count"], 1)
         self.assertEqual(gate["needs_benchmark_count"], 1)
         self.assertEqual(gate["status"], "needs_attention")
+        self.assertEqual(gate["catalog_scene_summary"][0]["candidate_count"], 1)
+        self.assertEqual(len(gate["domain_summary"]), 2)
 
     def test_llm_added_fragment_is_arbitrated_under_existing_theme_finding(self) -> None:
         text = "\n".join(

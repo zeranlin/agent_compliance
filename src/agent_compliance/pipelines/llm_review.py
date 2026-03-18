@@ -140,16 +140,27 @@ def run_benchmark_gate(rule_candidates: list[dict[str, object]]) -> dict[str, ob
     covered = set(benchmark.get("issue_types_covered", []))
     results: list[dict[str, object]] = []
     pass_count = 0
+    scene_counts: dict[str, int] = {}
+    domain_counts: dict[str, int] = {}
     for item in rule_candidates:
         issue_type = str(item["issue_type"])
         status = "covered" if issue_type in covered else "needs_benchmark"
         if status == "covered":
             pass_count += 1
+        primary_catalog_name = str(item.get("primary_catalog_name") or "")
+        primary_domain_key = str(item.get("primary_domain_key") or "")
+        if primary_catalog_name:
+            scene_counts[primary_catalog_name] = scene_counts.get(primary_catalog_name, 0) + 1
+        if primary_domain_key:
+            domain_counts[primary_domain_key] = domain_counts.get(primary_domain_key, 0) + 1
         results.append(
             {
                 "candidate_rule_id": item["candidate_rule_id"],
                 "issue_type": issue_type,
                 "status": status,
+                "primary_catalog_name": primary_catalog_name or None,
+                "primary_domain_key": primary_domain_key or None,
+                "is_mixed_scope": bool(item.get("is_mixed_scope", False)),
                 "reason": (
                     "当前 benchmark 已覆盖该问题类型，可进入规则候选复核。"
                     if status == "covered"
@@ -161,6 +172,14 @@ def run_benchmark_gate(rule_candidates: list[dict[str, object]]) -> dict[str, ob
         "candidate_count": len(rule_candidates),
         "covered_count": pass_count,
         "needs_benchmark_count": len(rule_candidates) - pass_count,
+        "catalog_scene_summary": [
+            {"primary_catalog_name": name, "candidate_count": count}
+            for name, count in sorted(scene_counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
+        "domain_summary": [
+            {"primary_domain_key": key, "candidate_count": count}
+            for key, count in sorted(domain_counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
         "results": results,
         "status": "ok" if len(rule_candidates) == 0 or pass_count == len(rule_candidates) else "needs_attention",
     }
@@ -848,9 +867,32 @@ def _render_benchmark_gate(benchmark_gate: dict[str, object]) -> str:
     lines.append(f"- covered_count: `{benchmark_gate.get('covered_count', 0)}`")
     lines.append(f"- needs_benchmark_count: `{benchmark_gate.get('needs_benchmark_count', 0)}`")
     lines.append("")
+    scene_summary = benchmark_gate.get("catalog_scene_summary", [])
+    if isinstance(scene_summary, list) and scene_summary:
+        lines.append("## Catalog Scene Summary")
+        lines.append("")
+        for item in scene_summary:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                f"- `{item.get('primary_catalog_name') or '未识别品目'}`: `{item.get('candidate_count', 0)}`"
+            )
+        lines.append("")
+    domain_summary = benchmark_gate.get("domain_summary", [])
+    if isinstance(domain_summary, list) and domain_summary:
+        lines.append("## Domain Summary")
+        lines.append("")
+        for item in domain_summary:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                f"- `{item.get('primary_domain_key') or 'unknown'}`: `{item.get('candidate_count', 0)}`"
+            )
+        lines.append("")
     for item in benchmark_gate.get("results", []):
         lines.append(
-            f"- {item['candidate_rule_id']} | `{item['issue_type']}` | `{item['status']}` | {item['reason']}"
+            f"- {item['candidate_rule_id']} | `{item['issue_type']}` | `{item['status']}` | "
+            f"`{item.get('primary_catalog_name') or '未识别品目'}` | {item['reason']}"
         )
     return "\n".join(lines)
 

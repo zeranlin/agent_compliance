@@ -2619,12 +2619,17 @@ def _review_next_html() -> str:
       const suggestions = learning.suggestions || {};
       const relatedIssueType = finding ? finding.issue_type : '';
       const badgeText = learning.added_finding_count ? `新增问题 ${learning.added_finding_count}` : '无新增问题';
+      const sceneBits = [
+        learning.primary_catalog_name || '',
+        learning.primary_domain_key || '',
+        learning.is_mixed_scope ? '混合采购' : '',
+      ].filter(Boolean).join(' ｜ ');
       learningCardNode.innerHTML = `
         <div class="learning-head">
           <strong>Difference Learning</strong>
           <span class="badge compact">${escapeHtml(badgeText)}</span>
         </div>
-        <div class="learning-meta">本轮自动把模型新增问题沉淀为后续增强建议。${relatedIssueType ? ` 当前选中问题类型：${escapeHtml(relatedIssueType)}` : ''}</div>
+        <div class="learning-meta">本轮自动把模型新增问题沉淀为后续增强建议。${sceneBits ? ` 当前品目场景：${escapeHtml(sceneBits)}。` : ''}${relatedIssueType ? ` 当前选中问题类型：${escapeHtml(relatedIssueType)}` : ''}</div>
         ${renderLearningSection('规则建议', suggestions.rules || [], relatedIssueType)}
         ${renderLearningSection('分析器建议', suggestions.theme_analyzers || [], relatedIssueType)}
         ${renderLearningSection('LLM Prompt 建议', suggestions.llm_prompts || [], relatedIssueType)}
@@ -3804,7 +3809,11 @@ def _rules_html() -> str:
 
     function renderRules(payload) {
       const summary = payload.decision_summary || {};
-      rulesSummaryNode.textContent = `正式规则 ${payload.formal_rules.length} 条；候选规则 ${payload.candidate_rules.length} 条；待确认 ${summary.pending || 0} 条；已确认 ${summary.confirmed || 0} 条。`;
+      const topScene = (payload.catalog_scene_summary || [])[0];
+      const topDomain = (payload.domain_summary || [])[0];
+      const sceneText = topScene ? `；主品目场景以 ${topScene.primary_catalog_name} 为主` : '';
+      const domainText = topDomain ? `；审查领域以 ${topDomain.primary_domain_key} 为主` : '';
+      rulesSummaryNode.textContent = `正式规则 ${payload.formal_rules.length} 条；候选规则 ${payload.candidate_rules.length} 条；待确认 ${summary.pending || 0} 条；已确认 ${summary.confirmed || 0} 条${sceneText}${domainText}。`;
       rulesColHeadNode.innerHTML = `
         <h2>候选规则</h2>
         <div class="meta">候选规则来自模型新增问题和 benchmark gate 结果。确认入库表示进入本地规则候选确认状态，不会自动改代码。</div>
@@ -3836,10 +3845,13 @@ def _rules_html() -> str:
 
     function renderRuleCard(item) {
       const active = item.candidate_rule_id === selectedCandidateId ? 'active' : '';
+      const sceneLabel = item.primary_catalog_name || '未识别品目';
+      const domainLabel = item.primary_domain_key || 'unknown';
       return `<article class="rule-card ${active}" data-candidate-id="${escapeHtml(item.candidate_rule_id)}">
         <div class="rule-card-title">${escapeHtml(item.problem_title)}</div>
         <div class="rule-card-meta">候选ID：${escapeHtml(item.candidate_rule_id)}</div>
         <div class="rule-card-meta">问题类型：${escapeHtml(item.issue_type)} ｜ gate：${escapeHtml(item.gate_status)} ｜ 状态：${escapeHtml(decisionLabelText(item.decision))}</div>
+        <div class="rule-card-meta">主品目：${escapeHtml(sceneLabel)} ｜ 审查领域：${escapeHtml(domainLabel)}${item.is_mixed_scope ? ' ｜ 混合采购' : ''}</div>
         <div class="rule-card-meta">${escapeHtml(item.source_text || '')}</div>
       </article>`;
     }
@@ -3853,6 +3865,7 @@ def _rules_html() -> str:
         <div class="detail-pair"><div class="detail-label">候选规则ID</div><div class="detail-value">${escapeHtml(item.candidate_rule_id)}</div></div>
         <div class="detail-pair"><div class="detail-label">问题标题</div><div class="detail-value">${escapeHtml(item.problem_title)}</div></div>
         <div class="detail-pair"><div class="detail-label">问题类型</div><div class="detail-value">${escapeHtml(item.issue_type)}</div></div>
+        <div class="detail-pair"><div class="detail-label">采购品目场景</div><div class="detail-value">${escapeHtml(item.primary_catalog_name || '未识别品目')} ｜ ${escapeHtml(item.primary_domain_key || 'unknown')}${item.is_mixed_scope ? ' ｜ 混合采购' : ''}</div></div>
         <div class="detail-pair"><div class="detail-label">来源位置</div><div class="detail-value">${escapeHtml(item.section_path || '')}</div></div>
         <div class="detail-pair"><div class="detail-label">原文摘录</div><div class="detail-value">${escapeHtml(item.source_text || '')}</div></div>
         <div class="detail-pair"><div class="detail-label">风险说明</div><div class="detail-value">${escapeHtml(item.why_it_is_risky || '')}</div></div>
