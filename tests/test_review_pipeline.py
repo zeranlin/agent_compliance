@@ -1507,6 +1507,146 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertNotIn("文件中存在与标的域不匹配的模板残留或义务外扩", titles)
         self.assertIn("货物采购并含安装调试项目", review.overall_risk_summary)
 
+    def test_review_adds_qualification_reasoning_for_endoscope_style_thresholds(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "投标单位须为外商投资及民营企业，国资企业不具备投标资格。",
+                "供应商注册资本不低于100万元。同时，供应商年收入不低于50万元，净利润不低于20万元。",
+                "该企业的股权结构由国有资本持股51%以确保控股地位。经营年限不低于10年。",
+                "投标人必须是经认定的国家级高新技术企业。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="胃肠镜项目.docx",
+            file_hash="endoscope-qual",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("资格条件设置一般财务和规模门槛", titles)
+        self.assertIn("资格条件设置经营年限、属地场所或单项业绩门槛", titles)
+        self.assertIn("资格条件整体超出法定准入和履约必需范围", titles)
+        self.assertIn("评分中设置与履约弱相关的荣誉资质加分", titles)
+
+    def test_review_adds_service_scoring_mismatch_theme_for_endoscope_style_scoring(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "技术部分",
+                "评分因素",
+                "投标人承诺的售后服务内容和工作方案",
+                "如果在医疗行业存在相关项目的业绩，可得10分。",
+                "若供应商提供守合同重信用企业，可得10分。",
+                "若供应商提供全国科技型中小企业证明，可以得10分。",
+                "如果供应商提供营业执照或事业单位法人证书等证明资料扫描件，可得1分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="胃肠镜项目.docx",
+            file_hash="endoscope-service-score",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("售后服务评分混入业绩、荣誉和资格材料", titles)
+
+    def test_review_commercial_lifecycle_ignores_generic_contract_burden_words(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "商务要求",
+                "在免费保修期内，中标人应在2小时内响应，12小时内到达现场维修，48小时内消除故障。",
+                "若因为财政审批的原因造成采购人延期付款的，采购人不承担违约责任。",
+                "如采购人需要，中标人需无条件配合采购人委托有资质的第三方质量检测部门进行技术参数检测确认。",
+                "第五章 合同条款及格式",
+                "乙方对其所销售的货物应当享有知识产权或经权利人合法授权，保证没有侵犯任何第三方的合法权益并承担相应责任。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="胃肠镜项目.docx",
+            file_hash="endoscope-commercial",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        lifecycle = next(
+            finding
+            for finding in review.findings
+            if finding.problem_title == "履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担"
+        )
+        self.assertNotIn("知识产权", lifecycle.section_path)
+        self.assertGreaterEqual(lifecycle.text_line_end, lifecycle.text_line_start)
+
+    def test_review_commercial_lifecycle_prefers_dominant_business_chapter(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "★五、商务要求",
+                "1.付款方式：验收合格后支付95%。",
+                "2.如采购人需要，中标人需配合第三方质量检测，检测费用由中标人承担。",
+                "3.中标人须2小时响应，12小时到达现场，48小时排除故障。",
+                "第五章 合同条款及格式",
+                "11.1 如乙方不履约，应承担违约责任。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="胃肠镜项目.docx",
+            file_hash="endoscope-commercial-dominant",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        lifecycle = next(
+            finding
+            for finding in review.findings
+            if finding.problem_title == "履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担"
+        )
+        self.assertIn("第三章 用户需求书", lifecycle.section_path)
+        self.assertNotIn("第五章 合同条款及格式", lifecycle.section_path)
+
+    def test_review_certification_theme_requires_actual_certification_context(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "评分因素",
+                "若供应商提供全国科技型中小企业证明，可以得10分。",
+                "采用环保材料进行包装，需提供检测报告。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="胃肠镜项目.docx",
+            file_hash="endoscope-cert-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("认证评分混入错位证书且高分值结构失衡", titles)
+
 
 if __name__ == "__main__":
     unittest.main()

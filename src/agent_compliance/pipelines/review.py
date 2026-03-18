@@ -677,7 +677,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "irrelevant_certification_or_award",
         } and _text_contains_any(
             finding,
-            ("工程案例", "CMA", "检测报告", "资产总额", "营业收入", "净利润", "标准委员会", "科技型中小企业", "ISO20000", "先进单位", "注册安全工程师"),
+            ("工程案例", "CMA", "检测报告", "资产总额", "营业收入", "净利润", "标准委员会", "ISO20000", "先进单位", "注册安全工程师", "商品包装", "快递包装"),
         )
 
     if "售后服务评分混入荣誉证书且主观分值偏高" in title:
@@ -688,6 +688,17 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
         } and _text_contains_any(
             finding,
             ("先进单位", "注册安全工程师", "售后服务方案", "方案极合理", "产品升级", "配品配件"),
+        )
+
+    if "售后服务评分混入业绩、荣誉和资格材料" in title:
+        return finding.issue_type in {
+            "scoring_content_mismatch",
+            "duplicative_scoring_advantage",
+            "irrelevant_certification_or_award",
+            "excessive_scoring_weight",
+        } and _text_contains_any(
+            finding,
+            ("售后服务", "医疗行业", "守合同重信用", "科技型中小企业", "营业执照", "事业单位法人证书"),
         )
 
     if "免费质保期延长按年度直接高分赋值" in title:
@@ -754,7 +765,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "excessive_supplier_qualification",
         } and _text_contains_any(
             finding,
-            ("纳税", "员工总数", "资产总额", "参保人数", "月均参保", "社保"),
+            ("纳税", "员工总数", "资产总额", "参保人数", "月均参保", "社保", "注册资本", "年收入", "净利润"),
         )
 
     if "资格条件设置经营年限、属地场所或单项业绩门槛" in title:
@@ -764,7 +775,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "geographic_restriction",
         } and _text_contains_any(
             finding,
-            ("成立日期", "成立时间", "高新区", "固定的售后服务场所", "单项合同金额", "经营地址", "主城四区", "福州市"),
+            ("成立日期", "成立时间", "高新区", "固定的售后服务场所", "单项合同金额", "经营地址", "主城四区", "福州市", "经营年限", "外商投资及民营企业"),
         )
 
     if "资格条件整体超出法定准入和履约必需范围" in title:
@@ -774,7 +785,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "geographic_restriction",
         } and _text_contains_any(
             finding,
-            ("纳税", "参保人数", "员工总数", "资产总额", "成立日期", "固定的售后服务场所", "经营地址", "单项合同金额", "有害生物防制", "SPCA", "棉花加工资格", "水运工程监理"),
+            ("纳税", "参保人数", "员工总数", "资产总额", "成立日期", "固定的售后服务场所", "经营地址", "单项合同金额", "有害生物防制", "SPCA", "棉花加工资格", "水运工程监理", "注册资本", "年收入", "净利润", "股权结构", "经营年限", "高新技术企业", "外商投资及民营企业"),
         )
 
     if "评分项直接按品牌档次赋分" in title:
@@ -790,7 +801,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "scoring_structure_imbalance",
         } and _text_contains_any(
             finding,
-            ("科技型中小企业", "高空清洗", "CCRC", "ISO20000", "认证证书", "体系认证", "生活垃圾分类", "售后服务认证", "五星售后", "商品售后服务评价"),
+            ("高空清洗", "CCRC", "ISO20000", "认证证书", "体系认证", "生活垃圾分类", "售后服务认证", "五星售后", "商品售后服务评价", "环境标志产品", "节能产品"),
         )
 
     if "评分项中存在与标的域不匹配的证书认证或模板内容" in title:
@@ -1269,10 +1280,18 @@ def _add_qualification_financial_scale_theme_finding(
                 "参保人数不少于",
                 "平均资产总额不低于",
                 "资产总额不得低于",
+                "注册资本不低于",
+                "年收入不低于",
+                "净利润不低于",
             )
         )
     ]
-    if len(clauses) < 2:
+    matched_marker_count = sum(
+        1
+        for marker in ("纳税", "员工总数", "参保人数", "资产总额", "注册资本", "年收入", "净利润")
+        if any(marker in clause.text for clause in clauses)
+    )
+    if not clauses or matched_marker_count < 2:
         return findings
     findings.append(
         _build_theme_finding(
@@ -1319,6 +1338,8 @@ def _add_qualification_operating_scope_theme_finding(
                 "主城四区范围内",
                 "福州市",
                 "单项合同金额不低于",
+                "经营年限不低于",
+                "外商投资及民营企业",
             )
         )
     ]
@@ -1426,9 +1447,16 @@ def _add_qualification_reasoning_theme_finding(
                 "特种设备安全管理和作业人员证书",
                 "高空清洗悬吊作业企业安全生产证书",
                 "高新技术企业证书",
+                "国家级高新技术企业",
                 "企业诚信管理体系认证证书",
                 "《企业诚信管理体系认证证书》",
                 "农民专业合作社不具备投标资格",
+                "外商投资及民营企业",
+                "注册资本不低于",
+                "年收入不低于",
+                "净利润不低于",
+                "股权结构",
+                "经营年限不低于",
             )
         )
     ]
@@ -2067,7 +2095,45 @@ def _add_scoring_semantic_consistency_theme_finding(
 def _add_service_scoring_mismatch_theme_finding(
     document: NormalizedDocument, findings: list[Finding]
 ) -> list[Finding]:
-    if any("售后服务评分混入荣誉证书且主观分值偏高" in finding.problem_title for finding in findings):
+    if any(
+        finding.problem_title in {"售后服务评分混入荣誉证书且主观分值偏高", "售后服务评分混入业绩、荣誉和资格材料"}
+        for finding in findings
+    ):
+        return findings
+    has_service_scoring_context = any(
+        _is_scoring_clause(clause)
+        and any(marker in f"{clause.section_path or ''} {clause.text}" for marker in ("售后服务", "产品维护服务", "产品培训方案", "备品备件", "产品配件价格优惠"))
+        for clause in document.clauses
+    )
+    service_content_clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(marker in clause.text for marker in ("医疗行业", "守合同重信用", "科技型中小企业", "营业执照", "事业单位法人证书"))
+    ]
+    if has_service_scoring_context and len(service_content_clauses) >= 2:
+        findings.append(
+            _build_theme_finding(
+                document=document,
+                clauses=service_content_clauses,
+                issue_type="scoring_content_mismatch",
+                problem_title="售后服务评分混入业绩、荣誉和资格材料",
+                risk_level="high",
+                severity_score=3,
+                confidence="high",
+                compliance_judgment="likely_non_compliant",
+                why_it_is_risky=(
+                    "售后服务评分项中混入了医疗行业业绩、守合同重信用称号、科技型中小企业证明以及营业执照等资格材料。"
+                    "这会把与售后服务方案主题关联不足的企业背景和资格证明直接转化为高分优势。"
+                ),
+                impact_on_competition_or_performance="可能让售后服务评分偏离响应机制、备件保障和培训方案等核心履约能力，放大无关材料的竞争影响。",
+                legal_or_policy_basis="政府采购需求管理办法（财政部）；综合评分法边界分析（中国政府采购网）",
+                rewrite_suggestion="建议删除售后服务评分中的业绩、企业荣誉和资格证明加分，仅围绕售后团队、响应机制、备件保障和培训安排评分。",
+                needs_human_review=False,
+                human_review_reason=None,
+                finding_origin="analyzer",
+            )
+        )
         return findings
     clauses = [
         clause
@@ -2333,19 +2399,25 @@ def _add_commercial_lifecycle_theme_finding(
                 "1 小时",
                 "48小时",
                 "到场",
-                "承担",
-                "损失",
                 "送检",
                 "检测",
                 "专家评审",
+                "终验",
                 "开机率",
                 "备用设备",
                 "财政审批",
                 "暂停支付",
+                "第三方质量检测",
+                "一切损失",
             )
         )
     ]
-    responsibility_clauses = [clause for clause in focused_clauses if any(marker in clause.text for marker in ("24小时", "1 小时", "48小时", "解除合同", "损失", "承担", "违约金", "到场"))]
+    focused_clauses = _prefer_dominant_commercial_section(focused_clauses)
+    responsibility_clauses = [
+        clause
+        for clause in focused_clauses
+        if any(marker in clause.text for marker in ("24小时", "1 小时", "48小时", "解除合同", "违约金", "到场", "开机率", "备用设备", "一切损失"))
+    ]
     acceptance_clauses = [clause for clause in focused_clauses if any(marker in clause.text for marker in ("验收", "送检", "检测", "监理", "复检", "终验", "专家评审"))]
     if len(focused_clauses) < 3 or not responsibility_clauses or not acceptance_clauses:
         return findings
@@ -2632,6 +2704,16 @@ def _add_certification_scoring_theme_finding(
 ) -> list[Finding]:
     if any("认证评分混入错位证书且高分值结构失衡" in finding.problem_title for finding in findings):
         return findings
+    explicit_cert_markers = (
+        "认证证书",
+        "体系认证",
+        "商品售后服务评价",
+        "售后服务认证",
+        "五星售后",
+        "品牌价值",
+        "环境标志产品",
+        "节能产品",
+    )
     clauses = [
         clause
         for clause in document.clauses
@@ -2639,7 +2721,6 @@ def _add_certification_scoring_theme_finding(
         and any(
             marker in clause.text
             for marker in (
-                "科技型中小企业",
                 "高空清洗",
                 "CCRC",
                 "ISO20000",
@@ -2652,7 +2733,7 @@ def _add_certification_scoring_theme_finding(
             )
         )
     ]
-    if len(clauses) < 2:
+    if len(clauses) < 2 or not any(any(marker in clause.text for marker in explicit_cert_markers) for clause in clauses):
         return findings
     findings.append(
         _build_theme_finding(
@@ -2665,8 +2746,8 @@ def _add_certification_scoring_theme_finding(
             confidence="high",
             compliance_judgment="likely_non_compliant",
             why_it_is_risky=(
-                "认证评分中同时混入企业称号、跨领域证书和 IT 服务类认证，并通过较高分值结构集中放大。"
-                "这类内容与电子仪器仪表供货履约关联较弱，却被整体转化为高分竞争优势。"
+                "认证评分中同时混入企业称号、跨领域证书和与项目主题关联不足的认证项，并通过较高分值结构集中放大。"
+                "这类内容与项目供货和售后履约关联较弱，却被整体转化为高分竞争优势。"
             ),
             impact_on_competition_or_performance="可能使评分重心偏离产品供货和售后能力，并对具备无关证书的供应商形成倾斜。",
             legal_or_policy_basis="政府采购需求管理办法（财政部）；奖项荣誉信用等级评分问题（中国政府采购网）",
@@ -2677,6 +2758,26 @@ def _add_certification_scoring_theme_finding(
         )
     )
     return findings
+
+
+def _prefer_dominant_commercial_section(clauses):
+    if not clauses:
+        return clauses
+    counts: OrderedDict[str, int] = OrderedDict()
+    for clause in clauses:
+        key = _top_level_section_key(clause.section_path)
+        counts[key] = counts.get(key, 0) + 1
+    dominant_key, dominant_count = max(counts.items(), key=lambda item: item[1])
+    if dominant_count < 3:
+        return clauses
+    preferred = [clause for clause in clauses if _top_level_section_key(clause.section_path) == dominant_key]
+    return preferred or clauses
+
+
+def _top_level_section_key(section_path: str | None) -> str:
+    if not section_path:
+        return ""
+    return section_path.split("-")[0].strip()
 
 
 def _add_template_domain_theme_finding(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
@@ -3069,6 +3170,8 @@ def _domain_mismatch_markers(domain: str) -> tuple[str, ...]:
 
 
 def _is_scoring_clause(clause) -> bool:
+    if _is_template_instruction_clause(clause):
+        return False
     section_path = clause.section_path or ""
     source_section = clause.source_section or ""
     table_label = clause.table_or_item_label or ""
@@ -3133,10 +3236,14 @@ def _apply_theme_splitter_and_summarizer(findings: list[Finding]) -> list[Findin
         if finding.problem_title == "认证评分混入错位证书且高分值结构失衡":
             finding.why_it_is_risky = (
                 "认证评分同时混入企业称号、跨领域证书和高权重认证项。"
-                "这类内容不仅与电子仪器仪表供货履约关联较弱，还会通过高分值结构放大无关材料的竞争优势。"
+                "这类内容不仅与项目供货和售后履约关联较弱，还会通过高分值结构放大无关材料的竞争优势。"
             )
             finding.rewrite_suggestion = (
                 "建议将企业称号、跨领域证书和体系认证拆开审视，仅保留与质量控制和售后履约直接相关的少量辅助性证明，并整体压降分值。"
+            )
+        if finding.problem_title == "售后服务评分混入业绩、荣誉和资格材料":
+            finding.rewrite_suggestion = (
+                "建议删除售后服务评分中的医疗行业业绩、守合同重信用、科技型中小企业和营业执照等加分，仅保留与售后人员、响应机制、备件保障和培训方案直接相关的评分因素。"
             )
         if finding.problem_title == "资格条件设置一般财务和规模门槛":
             finding.why_it_is_risky = (
@@ -3275,6 +3382,7 @@ def _evidence_keywords_for_title(title: str) -> tuple[str, ...]:
             "验收",
             "送检",
             "检测",
+            "第三方质量检测",
             "专家评审",
             "24小时",
             "到场",
