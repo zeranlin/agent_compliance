@@ -2085,7 +2085,10 @@ def _review_next_html() -> str:
 
       <section class="panel detail-pane">
         <div id="document-pane" class="document-pane">
-          <div class="empty">上传文件后，这里会渲染文档原文，并跟随问题卡片定位到对应位置。</div>
+          <div id="document-head" class="document-head"></div>
+          <div id="document-body" class="document-body">
+            <div class="empty">上传文件后，这里会渲染文档原文，并跟随问题卡片定位到对应位置。</div>
+          </div>
         </div>
         <div class="detail-head">
           <div class="eyebrow">Focused Review</div>
@@ -2135,6 +2138,8 @@ def _review_next_html() -> str:
     const detailExcerptNode = document.getElementById('detail-excerpt');
     const detailGridNode = document.getElementById('detail-grid');
     const documentPaneNode = document.getElementById('document-pane');
+    const documentHeadNode = document.getElementById('document-head');
+    const documentBodyNode = document.getElementById('document-body');
     const learningCardNode = document.getElementById('learning-card');
 
     form.addEventListener('submit', submitReview);
@@ -2417,18 +2422,26 @@ def _review_next_html() -> str:
       try {
         const documentPayload = state.payload ? state.payload.document : null;
         if (!documentPayload) {
-          documentPaneNode.innerHTML = '<div class="empty">上传文件后，这里会渲染文档原文，并联动定位。</div>';
+          documentHeadNode.innerHTML = '<h2 style="margin:0;">文件正文</h2>';
+          documentBodyNode.innerHTML = '<div class="empty">上传文件后，这里会渲染文档原文，并联动定位。</div>';
           return;
         }
         const finding = state.filtered.find((item) => item.finding_id === state.selectedFindingId) || state.findings.find((item) => item.finding_id === state.selectedFindingId);
         const start = finding ? finding.text_line_start : 0;
         const end = finding ? finding.text_line_end : 0;
-        documentPaneNode.innerHTML = documentPayload.render_mode === 'docx_blocks'
-          ? `<div class="doc-reading-surface">${(documentPayload.blocks || []).map((block) => renderWorkbenchDocumentBlock(block)).join('')}</div>`
-          : `<div class="doc-reading-surface">${(documentPayload.lines || []).map((line) => renderWorkbenchDocumentLine(line)).join('')}</div>`;
+        documentHeadNode.innerHTML = `
+          <h2 style="margin:0;">文件正文</h2>
+          <div class="meta">原文件：${escapeHtml(documentPayload.source_path)}</div>
+          <div class="meta">稳定文本：${escapeHtml(documentPayload.normalized_text_path)}</div>
+          <div class="meta">总行数：${documentPayload.line_count} ｜ 渲染模式：${documentPayload.render_mode === 'docx_blocks' ? 'DOCX 原文结构' : '稳定文本'}</div>
+        `;
+        documentBodyNode.innerHTML = documentPayload.render_mode === 'docx_blocks'
+          ? (documentPayload.blocks || []).map((block) => renderWorkbenchDocumentBlock(block)).join('')
+          : (documentPayload.lines || []).map((line) => renderWorkbenchDocumentLine(line)).join('');
         highlightWorkbenchRange(start, end);
       } catch (error) {
-        documentPaneNode.innerHTML = `<div class="empty">文档渲染失败：${escapeHtml(error && error.message ? error.message : String(error))}</div>`;
+        documentHeadNode.innerHTML = '<h2 style="margin:0;">文件正文</h2>';
+        documentBodyNode.innerHTML = `<div class="empty">文档渲染失败：${escapeHtml(error && error.message ? error.message : String(error))}</div>`;
       }
     }
 
@@ -2448,12 +2461,12 @@ def _review_next_html() -> str:
     }
 
     function highlightWorkbenchRange(start, end) {
-      documentPaneNode.querySelectorAll('.active').forEach((node) => node.classList.remove('active'));
+      documentBodyNode.querySelectorAll('.active').forEach((node) => node.classList.remove('active'));
       let target = null;
       const documentPayload = state.payload ? state.payload.document : null;
       if (!documentPayload) return;
       if (documentPayload.render_mode === 'docx_blocks') {
-        documentPaneNode.querySelectorAll('.doc-block').forEach((node) => {
+        documentBodyNode.querySelectorAll('.doc-block').forEach((node) => {
           const blockStart = Number(node.dataset.startLine);
           const blockEnd = Number(node.dataset.endLine);
           const overlaps = blockStart <= end && blockEnd >= start;
