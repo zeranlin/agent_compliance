@@ -1616,6 +1616,83 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("经验评价、生产设备和认证因素高分集中并偏离核心供货能力", titles)
         self.assertIn("单一评分因素权重设置过高（同一评分项已合并）", titles)
 
+    def test_review_adds_furniture_production_capacity_theme(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医院办公家具采购",
+                "评标信息",
+                "技术保障措施",
+                "投标人或所投核心产品制造商具有以下生产设备：数控剪板机、自动化生产线、异性海绵切割机；每提供一项生产设备得10分，最高得100分。",
+                "若为自有设备，提供购买合同和发票；若为租赁设备，提供租赁合同、租赁发票和租赁方购买设备发票。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/医院办公家具采购.docx",
+            document_name="医院办公家具采购.docx",
+            file_hash="furniture-production-capacity",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("生产设备和制造能力直接高分赋值且与核心履约评价边界不清", titles)
+
+    def test_review_adds_sample_submission_barrier_theme_for_furniture_project(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医院办公家具采购",
+                "评标信息",
+                "样品",
+                "每提供一件符合样品清单要求的样品得20分，最高得80分；评审为优加20分，评审为良加10分。",
+                "六、样品要求",
+                "样品递交签到：投标供应商授权人需在开标当日9:00-9:30到签到地点进行样品递交签到。",
+                "上述资料提供不齐全，不予签到；签到时间截止后，不再受理签到；未进行签到的，样品不予接收。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/医院办公家具采购.docx",
+            document_name="医院办公家具采购.docx",
+            file_hash="furniture-sample-signin",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("样品评分叠加递交签到和不接收机制形成额外门槛", titles)
+
+    def test_review_distinguishes_dense_furniture_certifications_from_mismatch(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医院办公家具采购",
+                "评标信息",
+                "认证情况",
+                "质量管理体系认证证书、环境管理体系认证证书、职业健康安全管理体系认证证书（认证范围包含办公家具、钢制家具、软体家具）的，得20分。",
+                "低VOCs家具产品认证证书、家具中有害物质限量认证证书、产品抗菌认证证书、产品防霉认证证书，每项得20分，上述证书全部提供得100分。",
+                "如投标人距本项目开标之日的注册成立时间不足3个月，可承诺中标（成交）后4个月内取得以上认证证书。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/医院办公家具采购.docx",
+            document_name="医院办公家具采购.docx",
+            file_hash="furniture-certification-dense",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("认证评分项目过密且高分值集中", titles)
+        self.assertNotIn("认证评分混入错位证书且高分值结构失衡", titles)
+        self.assertFalse(any(finding.issue_type == "technical_justification_needed" and "认证" in (finding.source_text or "") for finding in review.findings))
+
     def test_review_uses_property_service_strategy_profile_for_property_project(self) -> None:
         text = "\n".join(
             [

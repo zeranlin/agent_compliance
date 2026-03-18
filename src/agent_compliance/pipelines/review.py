@@ -681,6 +681,26 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             ("演示", "原型", "PPT", "视频", "签到", "60分钟", "60 分钟", "得 0 分"),
         )
 
+    if "样品评分叠加递交签到和不接收机制形成额外门槛" in title:
+        return finding.issue_type in {
+            "ambiguous_requirement",
+            "excessive_scoring_weight",
+            "geographic_restriction",
+            "other",
+        } and _text_contains_any(
+            finding,
+            ("样品", "签到", "不予签到", "样品不予接收", "授权委托书", "签到地点", "9:00-9:30", "14:00-14:30"),
+        )
+
+    if "生产设备和制造能力直接高分赋值且与核心履约评价边界不清" in title:
+        return finding.issue_type in {
+            "excessive_scoring_weight",
+            "scoring_content_mismatch",
+        } and _text_contains_any(
+            finding,
+            ("生产设备", "数控剪板机", "自动化生产线", "异性海绵切割机", "购买发票", "租赁设备"),
+        )
+
     if "人员与团队评分混入错位证书并过度堆叠条件" in title:
         return finding.issue_type in {
             "scoring_content_mismatch",
@@ -843,6 +863,16 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
         } and _text_contains_any(
             finding,
             ("高空清洗", "CCRC", "ISO20000", "认证证书", "体系认证", "生活垃圾分类", "售后服务认证", "五星售后", "商品售后服务评价", "环境标志产品", "节能产品"),
+        )
+
+    if "认证评分项目过密且高分值集中" in title:
+        return finding.issue_type in {
+            "excessive_scoring_weight",
+            "post_award_proof_substitution",
+            "technical_justification_needed",
+        } and _text_contains_any(
+            finding,
+            ("质量管理体系认证", "环境管理体系认证", "职业健康安全管理体系认证", "低VOCs", "有害物质限量", "抗菌", "防霉", "中标（成交）后4个月内取得", "取得以上认证证书"),
         )
 
     if "评分项中存在与标的域不匹配的证书认证或模板内容" in title:
@@ -1105,6 +1135,8 @@ def _filter_technical_justification_noise(document: NormalizedDocument, findings
         if finding.issue_type != "technical_justification_needed":
             filtered.append(finding)
             continue
+        if _is_scoring_finding(finding):
+            continue
         normalized = (finding.source_text or "").strip()
         if len(normalized) <= 12:
             continue
@@ -1295,8 +1327,10 @@ def _technical_justification_human_review_reason(family: str) -> str:
 def _add_scoring_structure_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
     findings = _add_scoring_structure_imbalance_finding(findings)
     findings = _add_goods_capacity_scoring_theme_finding(document, findings)
+    findings = _add_furniture_production_capacity_scoring_theme_finding(document, findings)
     findings = _add_subjective_scoring_theme_finding(document, findings)
     findings = _add_demo_mechanism_theme_finding(document, findings)
+    findings = _add_sample_submission_barrier_theme_finding(document, findings)
     findings = _add_personnel_scoring_theme_finding(document, findings)
     findings = _add_business_strength_theme_finding(document, findings)
     findings = _add_scoring_semantic_consistency_theme_finding(document, findings)
@@ -1365,6 +1399,47 @@ def _add_goods_capacity_scoring_theme_finding(
             rewrite_suggestion="建议压降经验评价、生产设备和认证总分值，改为围绕家具供货质量、安装组织、交付计划和售后保障设置更直接的可核验评分因素。",
             needs_human_review=True,
             human_review_reason="需结合家具项目的供货、安装和售后履约重点判断经验、设备和认证因素是否被不当放大为高分竞争优势。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_furniture_production_capacity_scoring_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("生产设备和制造能力直接高分赋值且与核心履约评价边界不清" in finding.problem_title for finding in findings):
+        return findings
+    if _document_domain(document) != "furniture_goods":
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(marker in clause.text for marker in ("生产设备", "数控剪板机", "自动化生产线", "异性海绵切割机", "购买发票", "租赁设备"))
+        and any(marker in clause.text for marker in ("每提供一项得10分", "最高得100分", "最高得 100 分"))
+    ]
+    if not clauses:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="scoring_content_mismatch",
+            problem_title="生产设备和制造能力直接高分赋值且与核心履约评价边界不清",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "评分项直接按生产设备和制造线储备给予高分，并通过购买合同、租赁合同和发票等材料逐项计分。"
+                "这类设计会把企业既有设备规模直接转化为高分优势，弱化对家具供货质量、安装组织和售后保障能力的评价。"
+            ),
+            impact_on_competition_or_performance="可能显著放大既有制造设备储备的竞争优势，使评分重心偏离本项目实际交付和安装履约能力。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；综合评分法边界分析（中国政府采购网）",
+            rewrite_suggestion="建议删除按生产设备清单逐项赋高分的设计，改为围绕供货保障、交付计划、安装组织和质量控制能力设置低权重、可核验的评分因素。",
+            needs_human_review=True,
+            human_review_reason="需结合家具供货项目的实际履约重点判断生产设备和制造能力是否被不当放大为决定性高分因素。",
             finding_origin="analyzer",
         )
     )
@@ -2087,6 +2162,61 @@ def _add_demo_mechanism_theme_finding(document: NormalizedDocument, findings: li
             rewrite_suggestion="建议降低演示项权重，弱化展示形式差异，不宜将短时签到和现场到场条件直接与高分值绑定。",
             needs_human_review=False,
             human_review_reason=None,
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_sample_submission_barrier_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("样品评分叠加递交签到和不接收机制形成额外门槛" in finding.problem_title for finding in findings):
+        return findings
+    sample_scoring_clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(marker in clause.text for marker in ("样品", "样品清单", "样品不得3D打印", "评审为优", "材质、外观、工艺"))
+    ]
+    sign_in_clauses = [
+        clause
+        for clause in document.clauses
+        if any(
+            marker in clause.text
+            for marker in (
+                "样品递交签到",
+                "不予签到",
+                "样品不予接收",
+                "签到时间截止后",
+                "未进行签到",
+                "授权委托书",
+                "签到地点",
+            )
+        )
+    ]
+    if not sample_scoring_clauses or not sign_in_clauses:
+        return findings
+    clauses = [*sample_scoring_clauses[:4], *sign_in_clauses[:4]]
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="scoring_structure_imbalance",
+            problem_title="样品评分叠加递交签到和不接收机制形成额外门槛",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "样品评分本身权重较高，同时又要求投标人在固定时段和固定地点完成样品签到，未签到即不予接收样品。"
+                "这会把现场组织条件和短时递交能力叠加转化为得分前提，形成额外竞争门槛。"
+            ),
+            impact_on_competition_or_performance="可能对非本地或现场组织条件较弱的供应商形成不利影响，并放大样品递交程序对中标结果的影响。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；综合评分法边界分析（中国政府采购网）",
+            rewrite_suggestion="建议压降样品评分权重，简化样品递交和签到要求，不宜将固定时段签到和不接收机制直接叠加为高分项前置条件。",
+            needs_human_review=True,
+            human_review_reason="需结合样品评审必要性、现场组织条件和样品递交流程判断签到时限和不接收机制是否构成实质性额外门槛。",
             finding_origin="analyzer",
         )
     )
@@ -3065,7 +3195,10 @@ def _contains_explicit_brand_marker(text: str) -> bool:
 def _add_certification_scoring_theme_finding(
     document: NormalizedDocument, findings: list[Finding]
 ) -> list[Finding]:
-    if any("认证评分混入错位证书且高分值结构失衡" in finding.problem_title for finding in findings):
+    if any(
+        finding.problem_title in {"认证评分混入错位证书且高分值结构失衡", "认证评分项目过密且高分值集中"}
+        for finding in findings
+    ):
         return findings
     explicit_cert_markers = (
         "认证证书",
@@ -3097,6 +3230,44 @@ def _add_certification_scoring_theme_finding(
         )
     ]
     if len(clauses) < 2 or not any(any(marker in clause.text for marker in explicit_cert_markers) for clause in clauses):
+        return findings
+    mismatch_markers = (
+        "高空清洗",
+        "CCRC",
+        "ISO20000",
+        "生活垃圾分类",
+        "商品售后服务评价",
+        "售后服务认证",
+        "五星售后",
+        "品牌价值",
+        "有机产品认证",
+        "先进单位",
+        "注册安全工程师",
+    )
+    has_domain_mismatch = any(any(marker in clause.text for marker in mismatch_markers) for clause in clauses)
+    if not has_domain_mismatch and _document_domain(document) == "furniture_goods":
+        findings.append(
+            _build_theme_finding(
+                document=document,
+                clauses=clauses,
+                issue_type="excessive_scoring_weight",
+                problem_title="认证评分项目过密且高分值集中",
+                risk_level="high",
+                severity_score=3,
+                confidence="high",
+                compliance_judgment="likely_non_compliant",
+                why_it_is_risky=(
+                    "评分表连续设置体系认证、低VOCs、家具有害物质限量、抗菌和防霉等多类认证，并通过较高分值集中放大认证储备优势。"
+                    "即使这些认证与家具场景存在一定关联，过密设置并叠加高分值，仍会使认证储备对中标结果产生过强影响。"
+                ),
+                impact_on_competition_or_performance="可能使认证储备而非供货质量、安装组织和售后履约能力成为主要得分来源，压缩其他具备履约能力供应商的竞争空间。",
+                legal_or_policy_basis="政府采购需求管理办法（财政部）；综合评分法边界分析（中国政府采购网）",
+                rewrite_suggestion="建议压降认证类总分值，避免连续设置多项高分认证；仅保留与家具质量控制和环保安全直接相关的少量辅助性证明，并取消中标后补证安排。",
+                needs_human_review=True,
+                human_review_reason="需结合医院家具场景的质量、环保和院感要求判断相关认证是否应保留，以及分值是否被不当放大。",
+                finding_origin="analyzer",
+            )
+        )
         return findings
     findings.append(
         _build_theme_finding(
@@ -3653,6 +3824,30 @@ def _apply_theme_splitter_and_summarizer(findings: list[Finding]) -> list[Findin
             )
             finding.rewrite_suggestion = (
                 "建议将企业称号、跨领域证书和体系认证拆开审视，仅保留与质量控制和售后履约直接相关的少量辅助性证明，并整体压降分值。"
+            )
+        if finding.problem_title == "认证评分项目过密且高分值集中":
+            finding.why_it_is_risky = (
+                "评分表对体系认证、低VOCs、家具有害物质限量、抗菌和防霉等多类认证连续赋予高分。"
+                "即使这些认证与家具场景存在一定关联，过密设置并叠加高分值，也会使认证储备对中标结果产生过强影响。"
+            )
+            finding.rewrite_suggestion = (
+                "建议压降认证类总分值，避免连续设置多项高分认证；仅保留与家具质量控制和环保安全直接相关的少量辅助性证明，并取消中标后补证安排。"
+            )
+        if finding.problem_title == "生产设备和制造能力直接高分赋值且与核心履约评价边界不清":
+            finding.why_it_is_risky = (
+                "评分项直接按生产设备和制造线储备给予高分，并通过购买合同、租赁合同和发票逐项取证。"
+                "这会把企业既有设备规模放大为高分优势，弱化对家具供货质量、安装组织和售后保障能力的评价。"
+            )
+            finding.rewrite_suggestion = (
+                "建议删除按生产设备清单逐项赋高分的设计，改为围绕供货保障、交付计划、安装组织和质量控制能力设置低权重、可核验的评分因素。"
+            )
+        if finding.problem_title == "样品评分叠加递交签到和不接收机制形成额外门槛":
+            finding.why_it_is_risky = (
+                "样品评分本身权重较高，同时又要求投标人在固定时段和固定地点完成样品签到，未签到即不予接收样品。"
+                "这会把现场组织条件和短时递交能力叠加转化为得分前提，形成额外竞争门槛。"
+            )
+            finding.rewrite_suggestion = (
+                "建议压降样品评分权重，简化样品递交和签到要求，不宜将固定时段签到和不接收机制直接叠加为高分项前置条件。"
             )
         if finding.problem_title == "售后服务评分混入业绩、荣誉和资格材料":
             finding.rewrite_suggestion = (
