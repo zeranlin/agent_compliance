@@ -12,6 +12,18 @@ from agent_compliance.pipelines.review_arbiter import (
     renumber_findings,
     sort_findings,
 )
+from agent_compliance.pipelines.review_evidence import (
+    build_theme_excerpt as _build_theme_excerpt,
+    clip_excerpt as _clip_excerpt,
+    drop_appendix_semantic_duplicates as _drop_appendix_semantic_duplicates,
+    is_appendix_duplicate_candidate as _is_appendix_duplicate_candidate,
+    matches_existing_signature as _matches_existing_signature,
+    merge_optional_text as _merge_optional_text,
+    normalized_source_signature as _normalized_source_signature,
+    representative_excerpt as _representative_excerpt,
+    select_representative_evidence as _select_representative_evidence,
+    shorten_section_path as _shorten_section_path,
+)
 from agent_compliance.knowledge.references_index import ReferenceRecord, find_references
 from agent_compliance.pipelines.review_strategy import (
     build_overall_summary,
@@ -429,78 +441,6 @@ def _refine_findings(document: NormalizedDocument, findings: list[Finding]) -> l
     for finding in refined:
         finding.source_text = _representative_excerpt(finding.source_text)
     return refined
-
-
-def _shorten_section_path(section_path: str | None) -> str | None:
-    if not section_path:
-        return None
-    parts = [part.strip() for part in section_path.split("-") if part.strip()]
-    shortened = [_shorten_segment(part) for part in parts]
-    return "-".join(shortened)
-
-
-def _shorten_segment(segment: str) -> str:
-    if len(segment) <= 36:
-        return segment
-    return f"{segment[:30]}..."
-
-
-def _normalized_source_signature(source_text: str) -> str:
-    normalized = "".join(ch for ch in source_text if ch.isalnum())
-    return normalized[:80]
-
-
-def _is_appendix_duplicate_candidate(finding: Finding) -> bool:
-    if not finding.section_path:
-        return False
-    normalized = "".join(finding.section_path.split())
-    return "第四章" in normalized and "投标文件组成要求及格式" in normalized
-
-
-def _matches_existing_signature(
-    candidate: tuple[str, str], primary_signatures: list[tuple[str, str]]
-) -> bool:
-    candidate_issue, candidate_text = candidate
-    for issue_type, primary_text in primary_signatures:
-        if issue_type != candidate_issue:
-            continue
-        if candidate_text == primary_text:
-            return True
-        if candidate_text and primary_text and (candidate_text in primary_text or primary_text in candidate_text):
-            return True
-    return False
-
-
-def _drop_appendix_semantic_duplicates(findings: list[Finding]) -> list[Finding]:
-    primary = [finding for finding in findings if not _is_appendix_duplicate_candidate(finding)]
-    appendix = [finding for finding in findings if _is_appendix_duplicate_candidate(finding)]
-    filtered = list(primary)
-    for finding in appendix:
-        if any(_is_semantic_duplicate_of_primary(finding, existing) for existing in primary):
-            continue
-        filtered.append(finding)
-    filtered.sort(key=lambda item: (item.text_line_start, item.issue_type, item.section_path or ""))
-    return filtered
-
-
-def _is_semantic_duplicate_of_primary(candidate: Finding, primary: Finding) -> bool:
-    if candidate.issue_type != primary.issue_type:
-        return False
-    if candidate.clause_id and primary.clause_id and candidate.clause_id == primary.clause_id:
-        return True
-    if candidate.problem_title == primary.problem_title and _signatures_overlap(candidate.source_text, primary.source_text):
-        return True
-    if _signatures_overlap(candidate.source_text, primary.source_text) and _line_ranges_overlap(candidate, primary, tolerance=3):
-        return True
-    return False
-
-
-def _signatures_overlap(left: str, right: str) -> bool:
-    left_sig = _normalized_source_signature(left)
-    right_sig = _normalized_source_signature(right)
-    if not left_sig or not right_sig:
-        return False
-    return left_sig == right_sig or left_sig in right_sig or right_sig in left_sig
 
 
 def _merge_similar_technical_findings(findings: list[Finding]) -> list[Finding]:
@@ -3389,97 +3329,6 @@ def _apply_theme_splitter_and_summarizer(findings: list[Finding]) -> list[Findin
     return findings
 
 
-def _build_theme_excerpt(source_text: str | None) -> str:
-    if not source_text:
-        return ""
-    parts = [part.strip() for part in source_text.split("；") if part.strip()]
-    unique_parts = list(OrderedDict.fromkeys(parts))
-    if len(unique_parts) <= 2:
-        return "；".join(unique_parts)
-    return "；".join(unique_parts[:2]) + f" 等{len(unique_parts)}项"
-
-
-def _select_representative_evidence(finding: Finding) -> str:
-    source_text = finding.source_text or ""
-    if not source_text:
-        return ""
-    parts = [part.strip() for part in source_text.split("；") if part.strip()]
-    if len(parts) <= 1:
-        return _clip_excerpt(source_text, limit=78)
-
-    title = finding.problem_title
-    keywords = _evidence_keywords_for_title(title)
-    ranked = sorted(
-        OrderedDict.fromkeys(parts),
-        key=lambda part: (
-            -sum(1 for keyword in keywords if keyword in part),
-            len(part),
-        ),
-    )
-    selected = [_clip_excerpt(part, limit=72) for part in ranked[:2]]
-    excerpt = "；".join(selected)
-    if len(ranked) > 2:
-        excerpt = f"{excerpt} 等{len(ranked)}项"
-    return excerpt
-
-
-def _evidence_keywords_for_title(title: str) -> tuple[str, ...]:
-    mapping = {
-        "评分项名称、内容和评分证据之间不一致": (
-            "工程案例",
-            "检测报告",
-            "CMA",
-            "资产总额",
-            "营业收入",
-            "净利润",
-            "标准委员会",
-            "科技型中小企业",
-            "ISO20000",
-        ),
-        "人员与团队评分混入错位证书并过度堆叠条件": (
-            "学位",
-            "博士",
-            "硕士",
-            "职称证书",
-            "高级工程师",
-            "奖项",
-            "项目经验",
-            "特种设备",
-            "高级餐饮业职业经理人",
-            "食品安全管理员",
-            "中式烹调师",
-            "面点师",
-        ),
-        "现场演示分值过高且签到要求形成额外门槛": (
-            "可运行展示系统",
-            "系统原型",
-            "PPT",
-            "视频",
-            "60分钟",
-            "签到",
-            "得 0 分",
-        ),
-        "履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担": (
-            "付款",
-            "验收",
-            "送检",
-            "检测",
-            "第三方质量检测",
-            "专家评审",
-            "24小时",
-            "到场",
-            "解除合同",
-            "售后服务保证金",
-            "满意度评价",
-            "服务费挂钩",
-            "按1%扣减",
-            "按2%扣减",
-            "按3%扣减",
-        ),
-    }
-    return mapping.get(title, ())
-
-
 def _is_scoring_weight_candidate(finding: Finding) -> bool:
     if finding.issue_type != "excessive_scoring_weight":
         return False
@@ -3784,27 +3633,3 @@ def _merged_technical_title(family: str) -> str:
     }
     return titles.get(family, "同类技术参数在多个设备章节重复出现")
 
-
-def _representative_excerpt(source_text: str) -> str:
-    parts = [part.strip() for part in source_text.split("；") if part.strip()]
-    if not parts:
-        return source_text
-    normalized_parts = list(OrderedDict.fromkeys(parts))
-    snippets = [_clip_excerpt(part) for part in normalized_parts[:2]]
-    excerpt = "；".join(snippets)
-    if len(normalized_parts) > 2:
-        excerpt = f"{excerpt} 等{len(normalized_parts)}项"
-    return excerpt
-
-
-def _merge_optional_text(values, separator: str = "；") -> str | None:
-    merged = [value for value in OrderedDict.fromkeys(value for value in values if value)]
-    if not merged:
-        return None
-    return separator.join(merged)
-
-
-def _clip_excerpt(text: str, *, limit: int = 60) -> str:
-    if len(text) <= limit:
-        return text
-    return f"{text[:limit]}..."
