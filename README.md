@@ -12,29 +12,29 @@
 - 质量通过评测样例和反馈产物持续提升
 
 从这里开始：
-1. [ARCHITECTURE.md](/Users/linzeran/code/2026-zn/agent_compliance/ARCHITECTURE.md)
-2. [openai-harness-notes.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/openai-harness-notes.md)
-3. [procurement-compliance-review-workflow.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/procurement-compliance-review-workflow.md)
-4. [initial-harness-bootstrap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/exec-plans/active/initial-harness-bootstrap.md)
-5. [local-offline-runtime-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/exec-plans/active/local-offline-runtime-roadmap.md)
+1. [ARCHITECTURE.md](https://github.com/zeranlin/agent_compliance/blob/main/ARCHITECTURE.md)
+2. [openai-harness-notes.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/openai-harness-notes.md)
+3. [procurement-compliance-review-workflow.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/procurement-compliance-review-workflow.md)
+4. [initial-harness-bootstrap.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/exec-plans/active/initial-harness-bootstrap.md)
+5. [local-offline-runtime-roadmap.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/exec-plans/active/local-offline-runtime-roadmap.md)
 
 能力建设重点文档：
-- [capability-overview.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/capability-overview.md)
-- [full-capability-profile.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/full-capability-profile.md)
-- [code-review-system-technical-description.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-system-technical-description.md)
-- [local-runtime-skeleton.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-runtime-skeleton.md)
-- [local-codeification-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-codeification-roadmap.md)
-- [code-review-to-human-parity-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-to-human-parity-roadmap.md)
-- [code-review-gap-closure-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-gap-closure-roadmap.md)
-- [continuous-human-parity-architecture.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/continuous-human-parity-architecture.md)
-- [legal-authority-system.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/legal-authority-system.md)
-- [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)
-- [continuous-update-mechanism.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/continuous-update-mechanism.md)
-- [consistency-and-caching-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/consistency-and-caching-design.md)
+- [capability-overview.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/capability-overview.md)
+- [full-capability-profile.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/full-capability-profile.md)
+- [code-review-system-technical-description.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-system-technical-description.md)
+- [local-runtime-skeleton.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/local-runtime-skeleton.md)
+- [local-codeification-roadmap.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/local-codeification-roadmap.md)
+- [code-review-to-human-parity-roadmap.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-to-human-parity-roadmap.md)
+- [code-review-gap-closure-roadmap.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-gap-closure-roadmap.md)
+- [continuous-human-parity-architecture.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/continuous-human-parity-architecture.md)
+- [legal-authority-system.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/legal-authority-system.md)
+- [case-library-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/case-library-design.md)
+- [continuous-update-mechanism.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/continuous-update-mechanism.md)
+- [consistency-and-caching-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/consistency-and-caching-design.md)
 
 产品与对接文档：
-- [code-review-product-introduction.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/code-review-product-introduction.md)
-- [code-review-technical-integration.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/code-review-technical-integration.md)
+- [code-review-product-introduction.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/code-review-product-introduction.md)
+- [code-review-technical-integration.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/code-review-technical-integration.md)
 
 本地执行骨架：
 - `setup.py`
@@ -69,16 +69,16 @@
 - 当前已补入规则管理区，可查看正式规则数量、候选规则、benchmark gate 状态，并记录“确认入库 / 暂缓 / 忽略”决策
 
 本地引用资料：
-- [法规依据本地引用库](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/legal-authorities/README.md)
-- [案例口径本地引用库](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/case-sources/README.md)
-- [引用资料索引](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/reference-index.md)
+- [法规依据本地引用库](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/legal-authorities/README.md)
+- [案例口径本地引用库](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/case-sources/README.md)
+- [引用资料索引](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/reference-index.md)
 
 更新输出模板：
-- [月度规则更新摘要模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/monthly-rule-update-template.md)
-- [新增案例候选模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/new-case-candidates-template.md)
-- [能力缺口评测报告模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/eval-gap-report-template.md)
-- [业务方/采购人修改用正式审查意见表模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/business-facing-review-table-template.md)
-- [正式审查意见模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/review-output-template.md)
+- [月度规则更新摘要模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/monthly-rule-update-template.md)
+- [新增案例候选模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/new-case-candidates-template.md)
+- [能力缺口评测报告模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/eval-gap-report-template.md)
+- [业务方/采购人修改用正式审查意见表模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/business-facing-review-table-template.md)
+- [正式审查意见模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/review-output-template.md)
 
 新增评测样本：
-- [LGDL2025000044 人工逼近查点](/Users/linzeran/code/2026-zn/agent_compliance/docs/evals/cases/lgdl2025000044-human-parity-checkpoints.md)
+- [LGDL2025000044 人工逼近查点](https://github.com/zeranlin/agent_compliance/blob/main/docs/evals/cases/lgdl2025000044-human-parity-checkpoints.md)

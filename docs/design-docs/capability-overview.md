@@ -70,8 +70,8 @@
 - `是否需人工复核`
 
 已建立正式模板：
-- [正式审查意见模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/review-output-template.md)
-- [业务方/采购人修改用正式审查意见表模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/business-facing-review-table-template.md)
+- [正式审查意见模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/review-output-template.md)
+- [业务方/采购人修改用正式审查意见表模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/business-facing-review-table-template.md)
 
 当前还具备一类更偏落地修改的交付能力：
 - 可输出“复审结果可直接给业务方/采购人修改”的正式审查意见表
@@ -94,7 +94,7 @@
 - 上述固定标题式输出已作为标准能力要求，适用于正式复审、复核意见、业务改稿和采购人沟通场景
 
 当前也支持一类机器可复用交付：
-- 产出符合 [finding-schema.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/finding-schema.md) 的结构化 JSON 结果
+- 产出符合 [finding-schema.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/finding-schema.md) 的结构化 JSON 结果
 - 支持后续复审直接复用 findings 缓存，而不是重复全量自由推理
 - 对已聚合的相邻命中，生成更接近正式审查意见写法的问题标题和统一改写建议
 
@@ -112,12 +112,12 @@
 这意味着当前体系的目标不是每次都从零自由阅读整份文件，而是尽量把文件先转成可复用、可比对、可续跑的标准输入。
 
 相关设计：
-- [consistency-and-caching-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/consistency-and-caching-design.md)
-- [code-review-system-technical-description.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-system-technical-description.md)
+- [consistency-and-caching-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/consistency-and-caching-design.md)
+- [code-review-system-technical-description.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-system-technical-description.md)
 
 当前也已补齐两类面向不同读者的说明材料：
-- 面向业务和用户的 [code-review-product-introduction.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/code-review-product-introduction.md)
-- 面向技术接入的 [code-review-technical-integration.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/code-review-technical-integration.md)
+- 面向业务和用户的 [code-review-product-introduction.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/code-review-product-introduction.md)
+- 面向技术接入的 [code-review-technical-integration.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/code-review-technical-integration.md)
 
 ## 四、精确定位能力
 
@@ -147,17 +147,17 @@
 - 合同模板
 
 相关规范：
-- [finding-schema.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/finding-schema.md)
-- [location-field-spec.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/location-field-spec.md)
+- [finding-schema.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/finding-schema.md)
+- [location-field-spec.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/location-field-spec.md)
 
 ## 五、法规和案例引用能力
 
 当前已经建立了本地可检索知识库，而不是每次临时查找引用。
 
 已具备：
-- [法规依据本地引用库](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/legal-authorities/README.md)
-- [案例口径本地引用库](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/case-sources/README.md)
-- [引用资料索引](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/reference-index.md)
+- [法规依据本地引用库](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/legal-authorities/README.md)
+- [案例口径本地引用库](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/case-sources/README.md)
+- [引用资料索引](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/reference-index.md)
 
 引用资料已逐步具备统一元数据：
 - `reference_id`
@@ -186,13 +186,13 @@
 - 对财政部规章类资料，已开始引入“中国政府采购网-财政部规章”目录作为权威核验层，用于补充令号、颁布日期和有效性状态
 
 相关设计：
-- [legal-authority-system.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/legal-authority-system.md)
+- [legal-authority-system.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/legal-authority-system.md)
 
 ## 六、规则与案例映射能力
 
 当前已经建立两类结构化资产：
-- [法规依据库样表](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/legal-authority-library-starter.md)
-- [典型案例库样表](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/case-library-starter.md)
+- [法规依据库样表](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/legal-authority-library-starter.md)
+- [典型案例库样表](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/case-library-starter.md)
 
 并且已开始打通以下映射：
 - `rule_id`
@@ -224,7 +224,7 @@
 - findings 缓存
 
 相关设计：
-- [consistency-and-caching-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/consistency-and-caching-design.md)
+- [consistency-and-caching-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/consistency-and-caching-design.md)
 
 ## 八、已沉淀的高频知识主题
 
@@ -310,20 +310,20 @@
 - 当前已继续增强 `technical_necessity_explainer`，在“需论证”类技术问题中开始明确补充必要性、市场可得性、适用标准和建议论证方向，而不只停留在笼统提醒。
 
 相关设计：
-- [case-library-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)
+- [case-library-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/case-library-design.md)
 
 ## 十、持续进化能力
 
 当前已经具备持续更新的结构基础：
-- [法规依据体系](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/legal-authority-system.md)
-- [案例库设计](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/case-library-design.md)
-- [持续更新机制](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/continuous-update-mechanism.md)
-- [更新自动化方案](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/update-automation-spec.md)
+- [法规依据体系](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/legal-authority-system.md)
+- [案例库设计](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/case-library-design.md)
+- [持续更新机制](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/continuous-update-mechanism.md)
+- [更新自动化方案](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/update-automation-spec.md)
 
 当前还具备标准化更新模板：
-- [月度规则更新摘要模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/monthly-rule-update-template.md)
-- [新增案例候选模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/new-case-candidates-template.md)
-- [能力缺口评测报告模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/eval-gap-report-template.md)
+- [月度规则更新摘要模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/monthly-rule-update-template.md)
+- [新增案例候选模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/new-case-candidates-template.md)
+- [能力缺口评测报告模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/eval-gap-report-template.md)
 
 当前更新机制已明确覆盖四类对象：
 - 法律法规和部门规章
@@ -342,7 +342,7 @@
 - 每季度复盘误报漏报、调整问题分类和提示词、输出能力变化报告
 
 相关设计：
-- [continuous-update-mechanism.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/continuous-update-mechanism.md)
+- [continuous-update-mechanism.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/continuous-update-mechanism.md)
 
 ## 十一、更新自动化准备能力
 
@@ -366,7 +366,7 @@
 这意味着当前系统已经不是“人工临时补知识”的状态，而是具备向半自动、自动化更新机制演进的明确路径。
 
 相关设计：
-- [update-automation-spec.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/update-automation-spec.md)
+- [update-automation-spec.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/update-automation-spec.md)
 
 ## 十二、评测与能力回归能力
 
@@ -382,7 +382,7 @@
 这意味着系统不只追求“这次看起来答得不错”，还追求“下一轮是否能稳定复现并改进”。
 
 相关模板：
-- [能力缺口评测报告模板](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/templates/eval-gap-report-template.md)
+- [能力缺口评测报告模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/eval-gap-report-template.md)
 
 ## 十三、工程化协作能力
 
@@ -400,8 +400,8 @@
 - 后续智能体可以直接从仓库状态而不是聊天上下文接力
 
 相关说明：
-- [ARCHITECTURE.md](/Users/linzeran/code/2026-zn/agent_compliance/ARCHITECTURE.md)
-- [openai-harness-notes.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/openai-harness-notes.md)
+- [ARCHITECTURE.md](https://github.com/zeranlin/agent_compliance/blob/main/ARCHITECTURE.md)
+- [openai-harness-notes.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/openai-harness-notes.md)
 
 当前还新增了本地执行骨架能力：
 - 已具备可安装的本地 CLI 入口
@@ -431,8 +431,8 @@
 - 已继续压缩长文档中的本地模型重复输出和错位挂接，改为优先使用 `clause_ref=行号:条款编号`，并按问题类型、行号和摘要签名做去重
 
 相关设计：
-- [local-runtime-skeleton.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/local-runtime-skeleton.md)
-- [human-review-checkpoint-matrix.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/human-review-checkpoint-matrix.md)
+- [local-runtime-skeleton.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/local-runtime-skeleton.md)
+- [human-review-checkpoint-matrix.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/human-review-checkpoint-matrix.md)
 
 ## 十四、结果一致性与可复现能力
 
@@ -450,7 +450,7 @@
 - 后续执行优先采用“标准化输入 + 规则版本 + 引用快照 + findings 缓存 + 增量复审”的方式，减少重复全量大模型推理
 
 相关设计：
-- [consistency-and-caching-design.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/consistency-and-caching-design.md)
+- [consistency-and-caching-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/consistency-and-caching-design.md)
 
 ## 十五、当前能力边界
 

@@ -6,9 +6,9 @@
 
 ## 近期依据
 
-- [2026-03-16-lgcg2025000102-comparison.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/reviews/2026-03-16-lgcg2025000102-comparison.md)
-- [code-review-to-human-parity-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-to-human-parity-roadmap.md)
-- [human-review-checkpoint-matrix.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/human-review-checkpoint-matrix.md)
+- [2026-03-16-lgcg2025000102-comparison.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/reviews/2026-03-16-lgcg2025000102-comparison.md)
+- [code-review-to-human-parity-roadmap.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-to-human-parity-roadmap.md)
+- [human-review-checkpoint-matrix.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/human-review-checkpoint-matrix.md)
 
 ## 当前阶段判断
 
@@ -42,8 +42,8 @@
 
 ## 当前最新触发
 
-- [2026-03-16-szdl2025000495-comparison.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/generated/reviews/2026-03-16-szdl2025000495-comparison.md)
-- [review-orchestrator-upgrade.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/review-orchestrator-upgrade.md)
+- [2026-03-16-szdl2025000495-comparison.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/reviews/2026-03-16-szdl2025000495-comparison.md)
+- [review-orchestrator-upgrade.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/review-orchestrator-upgrade.md)
 
 当前最新差距说明：
 - 代码在柴油发电机样本中仍明显漏掉资格异常、评分内容错位、技术固定年份和商务责任边界问题
@@ -70,8 +70,8 @@
   - 人工仅确认入库
 
 对应设计文档：
-- [continuous-human-parity-architecture.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/continuous-human-parity-architecture.md)
-- [code-review-gap-closure-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-gap-closure-roadmap.md)
+- [continuous-human-parity-architecture.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/continuous-human-parity-architecture.md)
+- [code-review-gap-closure-roadmap.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-gap-closure-roadmap.md)
 
 ## 阶段一：差异驱动的规则增强
 

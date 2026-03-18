@@ -14,6 +14,6 @@
 
 ## 当前已收录
 
-- [政府采购需求管理办法.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/legal-authorities/政府采购需求管理办法.md)
-- [框架协议采购工作问题通知.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/legal-authorities/框架协议采购工作问题通知.md)
-- [财政部规章目录核验说明.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/legal-authorities/财政部规章目录核验说明.md)
+- [政府采购需求管理办法.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/legal-authorities/政府采购需求管理办法.md)
+- [框架协议采购工作问题通知.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/legal-authorities/框架协议采购工作问题通知.md)
+- [财政部规章目录核验说明.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/legal-authorities/财政部规章目录核验说明.md)

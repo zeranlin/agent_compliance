@@ -336,6 +336,6 @@ gate 需要回答：
 - 把后续重点从“继续补散点规则”转向“章节级审查、自动生长、自动验证”
 
 相关文档：
-- [review-orchestrator-upgrade.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/review-orchestrator-upgrade.md)
-- [code-review-to-human-parity-roadmap.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/code-review-to-human-parity-roadmap.md)
-- [human-review-checkpoint-matrix.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/human-review-checkpoint-matrix.md)
+- [review-orchestrator-upgrade.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/review-orchestrator-upgrade.md)
+- [code-review-to-human-parity-roadmap.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-to-human-parity-roadmap.md)
+- [human-review-checkpoint-matrix.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/human-review-checkpoint-matrix.md)

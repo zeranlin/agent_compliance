@@ -107,7 +107,7 @@ flowchart TD
 
 ### 4.2 关键数据结构
 
-核心 schema 定义在 [schemas.py](/Users/linzeran/code/2026-zn/agent_compliance/src/agent_compliance/schemas.py)：
+核心 schema 定义在 [schemas.py](https://github.com/zeranlin/agent_compliance/blob/main/src/agent_compliance/schemas.py)：
 - `NormalizedDocument`
 - `Clause`
 - `RuleHit`
@@ -241,7 +241,7 @@ flowchart TD
 
 ### 6.1 CLI
 
-入口在 [cli.py](/Users/linzeran/code/2026-zn/agent_compliance/src/agent_compliance/cli.py)。
+入口在 [cli.py](https://github.com/zeranlin/agent_compliance/blob/main/src/agent_compliance/cli.py)。
 
 当前命令：
 - `normalize <file>`
@@ -318,7 +318,7 @@ PYTHONPATH=src python3 -m agent_compliance web
 - 改写建议
 - 是否需要人工复核
 
-这套约定与 [finding-schema.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/finding-schema.md) 对齐。
+这套约定与 [finding-schema.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/finding-schema.md) 对齐。
 
 ## 9. 当前边界
 
