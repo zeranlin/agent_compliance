@@ -130,6 +130,7 @@
 - [continuous-human-parity-architecture.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/continuous-human-parity-architecture.md)
 - [code-review-gap-closure-roadmap.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-gap-closure-roadmap.md)
 - [procurement-catalog-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/procurement-catalog-layer-design.md)
+- [code-review-main-pipeline-update.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-main-pipeline-update.md)
 
 ## 阶段一：差异驱动的规则增强
 
@@ -254,6 +255,7 @@
   - 验收程序、复检与最终确认边界不清
   - 评分和技术要求中存在行业适配性不足的错位内容
 - `domain_match_engine` 已继续增强，开始支持“药品 + 自动化设备 + 信息化接口”这类混合采购场景的边界判断。
+- `procurement_catalog_classifier` 和最小可用品目集已落地，但当前仍主要作为摘要和场景提示使用，下一步需要按 [code-review-main-pipeline-update.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-main-pipeline-update.md) 将其正式提升为主链路前置层，用来驱动规则优先级、分析器路由和仲裁收束。
 - `finding_arbiter` 已启动落地，开始在主题级主问题生成后自动压掉被完整覆盖的评分碎点和商务碎点，并已在民生诉求服务平台（二期）项目样本中将代码结果由 29 条收束为 19 条，更接近人工式审查的主问题表达
 - `finding_arbiter` 已继续增强，可进一步压掉正文与投标文件格式附件中的语义重复问题，并优先保留更适合改稿的正文主问题和代表性证据。
 - `document_audit_llm` 现已开始与 `finding_arbiter` 共用同一套结果收尾逻辑，模型补出的新增问题会先进入候选池，再由仲裁层决定是否保留，避免全文辅助扫描把已收束的结果重新打散
