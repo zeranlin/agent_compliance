@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+import unittest
+
+import tests._bootstrap  # noqa: F401
+
+from agent_compliance.knowledge.procurement_catalog import CatalogClassification
+from agent_compliance.knowledge.rule_registry import build_rule_registry, load_rule_priority_profile
+from agent_compliance.pipelines.catalog_sensitive_rule_router import route_rules_for_catalog
+from agent_compliance.parsers.section_splitter import split_into_clauses
+from agent_compliance.pipelines.rule_scan import run_rule_scan
+from agent_compliance.schemas import NormalizedDocument
+
+
+class RuleGovernanceTest(unittest.TestCase):
+    def test_rule_registry_covers_formal_rule_set(self) -> None:
+        registry = build_rule_registry()
+        rule_ids = {item.rule_id for item in registry}
+        self.assertIn("QUAL-001", rule_ids)
+        self.assertIn("SCORE-010", rule_ids)
+        self.assertIn("TECH-003", rule_ids)
+        self.assertIn("CONTRACT-014", rule_ids)
+
+    def test_rule_priority_profile_loads_domain_overrides(self) -> None:
+        profile = load_rule_priority_profile()
+        self.assertEqual(profile.default_family_priorities["scoring"], 90)
+        self.assertEqual(profile.domain_profiles["information_system"]["family_priorities"]["scoring"], 115)
+        self.assertEqual(profile.domain_profiles["property_service"]["family_priorities"]["commercial"], 115)
+
+    def test_catalog_sensitive_router_boosts_information_system_scoring_rules(self) -> None:
+        classification = CatalogClassification(
+            primary_catalog="CAT-INFO",
+            primary_catalog_name="信息化平台及系统运维",
+            primary_domain_key="information_system",
+            secondary_catalogs=(),
+            secondary_catalog_names=(),
+            primary_mapped_catalog_codes=("C16020000",),
+            primary_mapped_catalog_prefixes=("C1602",),
+            secondary_mapped_catalog_codes=(),
+            secondary_mapped_catalog_prefixes=(),
+            category_type="service",
+            catalog_confidence=0.95,
+            is_mixed_scope=False,
+            catalog_evidence=("信息系统集成实施服务",),
+        )
+        routed = route_rules_for_catalog(classification)
+        top_rule_ids = [item.rule.rule_id for item in routed[:8]]
+        self.assertIn("SCORE-010", top_rule_ids)
+
+    def test_rule_scan_keeps_highest_priority_rule_per_merge_key_on_same_clause(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：基础服务体系平台运营项目",
+                "评标信息",
+                "投标人本地服务团队1小时内到达现场得满分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/info.docx",
+            document_name="基础服务体系平台运营项目.docx",
+            file_hash="info-1",
+            normalized_text_path="/tmp/info.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        target_hits = [item for item in hits if item.line_start == clauses[-1].line_start and item.merge_key == "scoring-geographic"]
+        self.assertEqual(len(target_hits), 1)
+        self.assertEqual(target_hits[0].rule_id, "SCORE-010")
+
+
+if __name__ == "__main__":
+    unittest.main()

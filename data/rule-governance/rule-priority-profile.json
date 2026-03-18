@@ -1,0 +1,95 @@
+{
+  "version": "v1",
+  "default": {
+    "family_priorities": {
+      "qualification": 80,
+      "scoring": 90,
+      "technical": 85,
+      "commercial": 85
+    },
+    "issue_type_adjustments": {},
+    "rule_adjustments": {}
+  },
+  "domain_profiles": {
+    "information_system": {
+      "family_priorities": {
+        "scoring": 115,
+        "technical": 105,
+        "commercial": 100,
+        "qualification": 70
+      },
+      "issue_type_adjustments": {
+        "scoring_content_mismatch": 10,
+        "geographic_restriction": 5
+      },
+      "rule_adjustments": {
+        "SCORE-010": 12,
+        "SCORE-009": 8
+      }
+    },
+    "furniture_goods": {
+      "family_priorities": {
+        "scoring": 110,
+        "technical": 100,
+        "commercial": 95,
+        "qualification": 75
+      },
+      "issue_type_adjustments": {
+        "technical_justification_needed": 5,
+        "excessive_scoring_weight": 5
+      },
+      "rule_adjustments": {
+        "SCORE-007": 10,
+        "SCORE-015": 8
+      }
+    },
+    "property_service": {
+      "family_priorities": {
+        "commercial": 115,
+        "scoring": 105,
+        "qualification": 80,
+        "technical": 65
+      },
+      "issue_type_adjustments": {
+        "one_sided_commercial_term": 10,
+        "unclear_acceptance_standard": 8
+      },
+      "rule_adjustments": {
+        "CONTRACT-010": 8,
+        "CONTRACT-014": 6
+      }
+    },
+    "medical_device_goods": {
+      "family_priorities": {
+        "technical": 115,
+        "commercial": 105,
+        "scoring": 95,
+        "qualification": 80
+      },
+      "issue_type_adjustments": {
+        "technical_justification_needed": 10,
+        "payment_acceptance_linkage": 8
+      },
+      "rule_adjustments": {
+        "TECH-003": 8,
+        "CONTRACT-014": 8
+      }
+    },
+    "signage_printing_service": {
+      "family_priorities": {
+        "scoring": 110,
+        "technical": 100,
+        "commercial": 95,
+        "qualification": 75
+      },
+      "issue_type_adjustments": {
+        "scoring_content_mismatch": 12,
+        "qualification_domain_mismatch": 8
+      },
+      "rule_adjustments": {
+        "SCORE-012": 12,
+        "QUAL-013": 10
+      }
+    }
+  }
+}
