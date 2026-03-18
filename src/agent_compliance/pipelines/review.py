@@ -442,7 +442,10 @@ def _build_document_strategy_profile(findings: list[Finding]) -> DocumentStrateg
         )
     )
 
-    if any(token in combined for token in ("中药", "药品", "颗粒", "医院")):
+    if any(token in combined for token in ("血透", "透析", "医疗器械", "设备采购", "HIS", "PACS", "LIS", "碳足迹")):
+        procurement_mode = "货物采购并含安装调试项目"
+        domain_hint = "医用设备供货、院内接口配套与附加合规义务并存"
+    elif any(token in combined for token in ("中药", "药品", "颗粒", "医院")):
         procurement_mode = "医疗药品或医用配套采购项目"
         domain_hint = "药品供货、设备配套与院内接口并存"
     elif any(token in combined for token in ("系统", "平台", "接口", "演示", "驻场运维")):
@@ -793,7 +796,16 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
         )
 
     if "文件中存在与标的域不匹配的模板残留或义务外扩" in title:
-        return finding.issue_type in {"template_mismatch", "other"} and not _is_qualification_like_finding(finding)
+        if "设备采购场景叠加信息化接口和碳足迹义务，边界不清" in finding.problem_title:
+            return False
+        return (
+            finding.issue_type in {"template_mismatch", "other"}
+            and not _is_qualification_like_finding(finding)
+            and not _text_contains_any(
+                finding,
+                ("软件端口", "医院信息系统", "HIS", "PACS", "LIS", "数据交换", "碳足迹", "改进报告"),
+            )
+        )
 
     if "混合采购场景叠加自动化设备和信息化接口义务，边界不清" in title:
         return finding.issue_type in {"template_mismatch", "other", "technical_justification_needed"} and _text_contains_any(
@@ -877,6 +889,12 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
 
     if "评分结构中多类高分因素集中出现" in title:
         return finding.issue_type == "excessive_scoring_weight"
+
+    if "设备采购场景叠加信息化接口和碳足迹义务，边界不清" in title:
+        return finding.issue_type in {"template_mismatch", "other", "technical_justification_needed"} and _text_contains_any(
+            finding,
+            ("软件端口", "医院信息系统", "HIS", "PACS", "LIS", "数据交换", "碳足迹", "改进报告"),
+        )
 
     return False
 
@@ -1311,14 +1329,22 @@ def _add_qualification_industry_appropriateness_finding(
 ) -> list[Finding]:
     if any("资格条件中存在与标的域不匹配的行业资质或专门许可" in finding.problem_title for finding in findings):
         return findings
+    mismatch_markers = (
+        "水运工程监理甲级",
+        "有害生物防制",
+        "SPCA",
+        "特种设备安全管理和作业人员证书",
+        "棉花加工资格",
+        "高空清洗悬吊作业企业安全生产证书",
+        "高新技术企业证书",
+        "企业诚信管理体系认证证书",
+        "《企业诚信管理体系认证证书》",
+    )
     clauses = [
         clause
         for clause in document.clauses
         if _is_qualification_clause(clause)
-        and any(
-            marker in clause.text
-            for marker in ("水运工程监理甲级", "有害生物防制", "SPCA", "特种设备安全管理和作业人员证书", "棉花加工资格")
-        )
+        and any(marker in clause.text for marker in mismatch_markers)
     ]
     if not clauses:
         return findings
@@ -1373,6 +1399,11 @@ def _add_qualification_reasoning_theme_finding(
                 "SPCA",
                 "棉花加工资格",
                 "特种设备安全管理和作业人员证书",
+                "高空清洗悬吊作业企业安全生产证书",
+                "高新技术企业证书",
+                "企业诚信管理体系认证证书",
+                "《企业诚信管理体系认证证书》",
+                "农民专业合作社不具备投标资格",
             )
         )
     ]
@@ -1446,6 +1477,11 @@ def _add_technical_standard_mismatch_theme_finding(
                 "QB/T 4089",
                 "GB 6249",
                 "GB 15605",
+                "EN14175-3",
+                "ISO 20743",
+                "ISO20743",
+                "ISO 10993",
+                "ISO10993",
                 "空气质量检测装置",
                 "菜肴罐头",
                 "聚苯乙烯泡沫包装材料",
@@ -1498,6 +1534,11 @@ def _add_proof_formality_findings(document: NormalizedDocument, findings: list[F
                 "国家级检测中心出具的检验报告",
                 "提供相关检测报告",
                 "提供国家级检测中心出具的检验报告",
+                "全国认证认可信息公共服务平台",
+                "CMA  资质许可（认定）范围内",
+                "CMA资质许可（认定）范围内",
+                "经广告审查机关备案的产品彩页",
+                "专项检测报告",
             )
         )
     ]
@@ -2357,6 +2398,33 @@ def _add_mixed_scope_boundary_theme_finding(document: NormalizedDocument, findin
         impact = "可能将家具供货以外的定位系统、芯片管理和软件配套义务一并压给供应商，抬高履约门槛并增加争议风险。"
         rewrite = "建议将家具供货与资产定位、智能芯片和软件管理系统义务分开表述；确需配套建设的，应单独说明其业务必要性、边界和验收责任。"
         review_reason = "需结合家具采购边界、院内资产管理系统现状和是否属于独立信息化建设内容判断相关配套义务是否应并入本次采购。"
+    elif domain == "medical_device_goods":
+        clauses = [
+            clause
+            for clause in document.clauses
+            if any(
+                marker in clause.text
+                for marker in (
+                    "免费开放软件端口",
+                    "医院信息系统",
+                    "HIS",
+                    "PACS",
+                    "LIS",
+                    "完整的数据交换",
+                    "数据对接产生的费用",
+                    "碳足迹盘查报告",
+                    "碳足迹改进报告",
+                )
+            )
+        ]
+        title = "设备采购场景叠加信息化接口和碳足迹义务，边界不清"
+        rationale = (
+            "文件在设备采购中叠加了软件端口开放、医院信息系统对接、数据交换费用承担以及碳足迹盘查和持续改进等义务。"
+            "当设备供货、接口开发和碳足迹管理被一起写入同一采购范围时，容易导致采购边界不清，并把额外的信息化和 ESG 义务整体转嫁给供应商。"
+        )
+        impact = "可能将设备供货以外的信息系统接口建设和碳足迹管理义务一并压给供应商，抬高履约门槛并增加争议风险。"
+        rewrite = "建议将设备供货、医院信息系统接口配合和碳足迹管理分开表述；与本次设备采购不直接相关的系统开放、持续对接和碳足迹报告义务应删除或单列采购。"
+        review_reason = "需结合设备联网需求、医院现有信息系统接口边界和碳足迹管理职责判断相关义务是否应并入本次设备采购范围。"
     else:
         return findings
     if len(clauses) < 2:
@@ -2494,12 +2562,14 @@ def _add_template_domain_theme_finding(document: NormalizedDocument, findings: l
         return findings
     domain = _document_domain(document)
     mismatch_markers = _domain_mismatch_markers(domain)
+    mixed_scope_markers = ("软件端口", "医院信息系统", "HIS", "PACS", "LIS", "数据交换", "碳足迹", "盘查报告", "改进报告")
     clauses = [
         clause
         for clause in document.clauses
         if not _is_qualification_clause(clause)
         if any(marker in clause.text for marker in mismatch_markers)
         and any(marker in clause.text for marker in ("保洁", "芯片", "系统", "安防", "设施维修", "特种设备", "垃圾", "实际需求为准"))
+        and not (domain == "medical_device_goods" and any(marker in clause.text for marker in mixed_scope_markers))
     ]
     if len(clauses) < 1:
         return findings
@@ -2703,6 +2773,8 @@ def _document_domain(document: NormalizedDocument) -> str:
     clause_text = " ".join(clause.text for clause in document.clauses[:200])
     if any(marker in base_text for marker in ("家具", "办公类家具", "医用家具")):
         return "furniture_goods"
+    if any(marker in base_text for marker in ("血透", "透析", "医疗器械", "三维电生理", "胃肠镜", "设备采购项目")):
+        return "medical_device_goods"
     if any(marker in base_text for marker in ("中药", "配方颗粒", "医院", "药品", "饮片")):
         if any(marker in clause_text for marker in ("自动化调剂", "发药机", "信息化管理系统", "无缝对接", "设备需求参数")):
             return "medical_tcm_mixed"
@@ -2854,6 +2926,18 @@ def _domain_mismatch_markers(domain: str) -> tuple[str, ...]:
             "信息化管理系统",
         ),
         "textile_goods": ("芯片", "系统", "无缝对接", "平台", "软件"),
+        "medical_device_goods": (
+            "高空清洗",
+            "绿色物业管理评价标识",
+            "软件端口",
+            "医院信息系统",
+            "HIS",
+            "PACS",
+            "LIS",
+            "碳足迹",
+            "生活垃圾分类",
+            "企业诚信管理体系",
+        ),
         "equipment_installation": ("有害生物防制", "SPCA", "有机产品认证", "水运机电工程专项监理", "水运工程监理甲级"),
         "general": ("园区保洁", "设施维修", "安防管理", "保洁", "芯片", "系统", "特种设备", "有害生物防制", "SPCA", "高空清洗", "CCRC", "ISO20000", "水运工程监理甲级", "棉花加工"),
         "furniture_goods": ("芯片", "系统", "资产定位", "定位管理标签模块", "蓝牙", "UWB", "碳足迹", "平台", "软件", "无缝对接"),

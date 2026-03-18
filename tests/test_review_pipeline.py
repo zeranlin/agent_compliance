@@ -1370,6 +1370,45 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("软件著作权评分过高且与履约能力评价边界不清", titles)
         self.assertIn("经验评价叠加主观履约评价证明且分值过高", titles)
 
+    def test_review_recognizes_medical_device_qualification_and_mixed_scope_issues(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求：",
+                "11. 农民专业合作社不具备投标资格。",
+                "12. 投标人须具备高空清洗悬吊作业企业安全生产证书。",
+                "13. 投标人须具备高新技术企业证书。",
+                "14. 投标人须具备《企业诚信管理体系认证证书》。",
+                "第三章 用户需求书",
+                "其他",
+                "中标人应免费开放软件端口，无偿派人配合与医院信息系统（包括但不限于HIS、PACS、LIS）的连接工作。",
+                "合同签订后30个日历天内提供碳足迹盘查报告，并持续提交碳足迹改进报告。",
+                "招标技术要求",
+                "依据EN14175-3:2019标准。",
+                "检验检测内容符合ISO 20743抗菌+ISO 10993。",
+                "需提供经广告审查机关备案的产品彩页或带有CMA标志的检验检测报告及全国认证认可信息公共服务平台截图。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="深圳市宝安区中心医院血透类设备采购项目.docx",
+            file_hash="medical-device-domain",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("资格条件中存在与标的域不匹配的行业资质或专门许可", titles)
+        self.assertIn("资格条件整体超出法定准入和履约必需范围", titles)
+        self.assertIn("技术要求引用了与标的不匹配的标准或规范", titles)
+        self.assertIn("技术证明材料形式要求过严且带有地方化限制", titles)
+        self.assertIn("设备采购场景叠加信息化接口和碳足迹义务，边界不清", titles)
+        self.assertNotIn("文件中存在与标的域不匹配的模板残留或义务外扩", titles)
+        self.assertIn("货物采购并含安装调试项目", review.overall_risk_summary)
+
 
 if __name__ == "__main__":
     unittest.main()
