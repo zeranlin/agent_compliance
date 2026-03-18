@@ -399,6 +399,30 @@ class ReviewPipelineTest(unittest.TestCase):
             or "评分内容与评分主题或采购标的不完全匹配（同一评分项已合并）" in titles
         )
 
+    def test_review_adds_demo_theme_for_official_information_catalog_name(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：信息系统集成实施服务项目",
+                "评标信息",
+                "演示答辩",
+                "投标人提供可运行展示系统的得40分，仅提供系统原型、PPT或视频的得10分。",
+                "投标人须在开标后60分钟内完成现场演示签到，迟到或缺席的，演示及答辩相关评分项得0分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/official-info-catalog.txt",
+            document_name="信息系统集成实施服务项目.docx",
+            file_hash="official-info-catalog",
+            normalized_text_path="/tmp/official-info-catalog.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("现场演示分值过高且签到要求形成额外门槛", titles)
+
     def test_review_adds_service_scoring_signal_and_warranty_weight_theme(self) -> None:
         text = "\n".join(
             [
@@ -450,6 +474,31 @@ class ReviewPipelineTest(unittest.TestCase):
         review = build_review_result(document, run_rule_scan(document))
         titles = {finding.problem_title for finding in review.findings}
         self.assertIn("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担", titles)
+
+    def test_review_adds_property_personnel_theme_for_official_catalog_name(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：物业管理服务项目",
+                "评标信息",
+                "拟安排项目负责人情况",
+                "项目负责人具有本科及以上学历、医院物业管理项目经验和特种设备安全管理和作业人员证书的得分。",
+                "拟安排的项目团队成员情况",
+                "团队成员具有保洁管理经验、保安管理经验和医院评审项目经验的得分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/official-property-catalog.txt",
+            document_name="物业管理服务项目.docx",
+            file_hash="official-property-catalog",
+            normalized_text_path="/tmp/official-property-catalog.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("人员与团队评分混入错位证书并过度堆叠条件", titles)
 
     def test_review_commercial_lifecycle_covers_uptime_backup_and_payment_relief(self) -> None:
         text = "\n".join(

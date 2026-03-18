@@ -4,7 +4,11 @@ from collections import OrderedDict
 import re
 from typing import Any, Callable
 
-from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classification_has_domain
+from agent_compliance.knowledge.procurement_catalog import (
+    CatalogClassification,
+    classification_has_catalog_prefix,
+    classification_has_domain,
+)
 from agent_compliance.schemas import Finding, NormalizedDocument
 
 
@@ -44,12 +48,21 @@ def apply_scoring_analyzers(
     findings = _add_subjective_scoring_theme_finding(
         document, findings, build_theme_finding=build_theme_finding, is_scoring_clause=is_scoring_clause
     )
-    findings = _add_demo_mechanism_theme_finding(document, findings, build_theme_finding=build_theme_finding)
+    findings = _add_demo_mechanism_theme_finding(
+        document,
+        findings,
+        build_theme_finding=build_theme_finding,
+        catalog_classification=catalog_classification,
+    )
     findings = _add_sample_submission_barrier_theme_finding(
         document, findings, build_theme_finding=build_theme_finding, is_scoring_clause=is_scoring_clause
     )
     findings = _add_personnel_scoring_theme_finding(
-        document, findings, build_theme_finding=build_theme_finding, is_scoring_clause=is_scoring_clause
+        document,
+        findings,
+        build_theme_finding=build_theme_finding,
+        is_scoring_clause=is_scoring_clause,
+        catalog_classification=catalog_classification,
     )
     findings = _add_business_strength_theme_finding(
         document, findings, build_theme_finding=build_theme_finding, is_scoring_clause=is_scoring_clause
@@ -304,21 +317,52 @@ def _add_demo_mechanism_theme_finding(
     findings: list[Finding],
     *,
     build_theme_finding: ThemeBuilder,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("现场演示分值过高且签到要求形成额外门槛" in finding.problem_title for finding in findings):
         return findings
+    is_information_project = classification_has_domain(catalog_classification, "information_system") or classification_has_catalog_prefix(
+        catalog_classification, "C160"
+    )
     demo_scoring_clauses = [
         clause
         for clause in document.clauses
-        if any(marker in clause.text for marker in ("可运行展示系统", "系统原型", "PPT", "Flash", "视频"))
+        if any(
+            marker in clause.text
+            for marker in (
+                "可运行展示系统",
+                "系统原型",
+                "PPT",
+                "Flash",
+                "视频",
+                "演示答辩",
+                "现场演示",
+                "原型演示",
+                "讲标答辩",
+            )
+        )
     ]
     sign_in_clauses = [
         clause
         for clause in document.clauses
-        if any(marker in clause.text for marker in ("60 分钟内", "60分钟内", "迟到或缺席", "演示及答辩相关评分项得 0 分", "现场演示签到表"))
+        if any(
+            marker in clause.text
+            for marker in (
+                "60 分钟内",
+                "60分钟内",
+                "迟到或缺席",
+                "演示及答辩相关评分项得 0 分",
+                "现场演示签到表",
+                "签到后参加演示",
+                "未签到",
+                "开标后",
+            )
+        )
     ]
     clauses = [*demo_scoring_clauses, *sign_in_clauses]
     if not demo_scoring_clauses or not sign_in_clauses:
+        return findings
+    if not is_information_project and len(demo_scoring_clauses) < 2:
         return findings
     findings.append(
         build_theme_finding(
@@ -410,36 +454,65 @@ def _add_personnel_scoring_theme_finding(
     *,
     build_theme_finding: ThemeBuilder,
     is_scoring_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("人员与团队评分混入错位证书并过度堆叠条件" in finding.problem_title for finding in findings):
         return findings
-    clauses = [
-        clause
-        for clause in document.clauses
-        if is_scoring_clause(clause)
-        and any(
-            marker in clause.text
-            for marker in (
-                "学历",
-                "学位",
+    is_property_service = classification_has_domain(catalog_classification, "property_service") or classification_has_catalog_prefix(
+        catalog_classification, "C210400"
+    )
+    is_catering_service = classification_has_domain(catalog_classification, "catering_service") or classification_has_catalog_prefix(
+        catalog_classification, "C220400"
+    )
+    is_information_project = classification_has_domain(catalog_classification, "information_system") or classification_has_catalog_prefix(
+        catalog_classification, "C160"
+    )
+    is_goods_project = any(
+        (
+            classification_has_domain(catalog_classification, "furniture_goods"),
+            classification_has_domain(catalog_classification, "medical_device_goods"),
+            classification_has_catalog_prefix(catalog_classification, "A0501"),
+            classification_has_catalog_prefix(catalog_classification, "A0232"),
+        )
+    )
+    has_specific_catalog = any((is_property_service, is_catering_service, is_information_project, is_goods_project))
+    markers = [
+        "学历",
+        "学位",
+        "项目经验",
+        "奖项",
+        "荣誉",
+    ]
+    if is_information_project:
+        markers.extend(("职称证书", "高级工程师", "CISE", "PMP", "人工智能应用工程师", "大数据应用工程师", "特种设备"))
+    if is_property_service:
+        markers.extend(("医院物业", "医院评审", "保洁", "保安", "特种设备"))
+    if is_catering_service:
+        markers.extend(("高级餐饮业职业经理人", "食品安全管理员", "中式烹调师", "中式（西式）面点师", "健康证明"))
+    if is_goods_project:
+        markers.extend(("职称证书", "高级工程师", "注册证书"))
+    if not has_specific_catalog:
+        markers.extend(
+            (
                 "职称证书",
                 "高级工程师",
                 "CISE",
                 "PMP",
                 "人工智能应用工程师",
                 "大数据应用工程师",
-                "奖项",
-                "荣誉",
-                "项目经验",
                 "特种设备",
                 "高级餐饮业职业经理人",
                 "食品安全管理员",
                 "中式烹调师",
                 "中式（西式）面点师",
-                "中式烹调师或中式（西式）面点师",
                 "健康证明",
             )
         )
+    clauses = [
+        clause
+        for clause in document.clauses
+        if is_scoring_clause(clause)
+        and any(marker in clause.text for marker in markers)
     ]
     catering_personnel_markers = (
         "高级餐饮业职业经理人",
@@ -449,6 +522,15 @@ def _add_personnel_scoring_theme_finding(
         "中式烹调师或中式（西式）面点师",
     )
     if len(clauses) < 2 and not any(any(marker in clause.text for marker in catering_personnel_markers) for clause in clauses):
+        return findings
+    if is_information_project and not any(
+        any(marker in clause.text for marker in ("PMP", "CISE", "人工智能应用工程师", "大数据应用工程师", "高级工程师", "特种设备"))
+        for clause in clauses
+    ):
+        return findings
+    if is_property_service and not any(any(marker in clause.text for marker in ("医院物业", "保洁", "保安", "特种设备")) for clause in clauses):
+        return findings
+    if is_catering_service and not any(any(marker in clause.text for marker in catering_personnel_markers) for clause in clauses):
         return findings
     findings.append(
         build_theme_finding(
