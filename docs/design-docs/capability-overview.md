@@ -164,17 +164,26 @@
 - `reference_type`
 - `source_org`
 - `source_url`
+- `canonical_registry_url`
+- `doc_no`
+- `promulgation_date`
+- `validity_status`
+- `authority_level`
+- `verification_source`
+- `is_primary_source`
 - `status`
 - `review_topics`
 - `related_rule_ids`
 - `related_case_ids`
 - `last_verified`
+- `last_registry_verified`
 
 当前还具备法规依据分层使用能力：
 - 先引用法律和实施条例等高位阶规则
 - 再补充财政部规章和管理办法
 - 再参考政策解读、官方答复、地方细则和典型案例
 - 对法域差异明显、规则有效性待核实的问题，升级为人工复核而不是强行下结论
+- 对财政部规章类资料，已开始引入“中国政府采购网-财政部规章”目录作为权威核验层，用于补充令号、颁布日期和有效性状态
 
 相关设计：
 - [legal-authority-system.md](/Users/linzeran/code/2026-zn/agent_compliance/docs/product-specs/legal-authority-system.md)

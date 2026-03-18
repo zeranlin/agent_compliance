@@ -43,6 +43,7 @@
 ### 法规依据
 
 - [法规依据本地引用库](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/legal-authorities/README.md)
+- [财政部规章目录核验说明](/Users/linzeran/code/2026-zn/agent_compliance/docs/references/legal-authorities/财政部规章目录核验说明.md)
 
 ### 案例口径
 
