@@ -1,0 +1,117 @@
+{
+  "version": "v1",
+  "mappings": [
+    {
+      "issue_type": "excessive_supplier_qualification",
+      "primary_reference_ids": ["LEGAL-001"],
+      "primary_clause_ids": ["LEGAL-001-ART-018", "LEGAL-001-ART-031"],
+      "secondary_reference_ids": ["LEGAL-001"],
+      "secondary_clause_ids": ["LEGAL-001-ART-014", "LEGAL-001-ART-037"],
+      "authority_priority": ["部门规范性文件"],
+      "reasoning_template": "资格条件应与采购标的功能、质量和供应商履约能力直接相关，且属于履行合同必需条件；超出该范围的一般经营门槛、规模门槛或非必需条件不宜前置为准入要求。",
+      "fallback_review_topics": ["采购需求", "评分标准"],
+      "requires_human_review_when": [
+        "行业许可、医疗安全、保密资质等可能具有特殊法定必要性",
+        "采购人主张该门槛与重大履约风险直接相关但尚未提供论证"
+      ]
+    },
+    {
+      "issue_type": "qualification_domain_mismatch",
+      "primary_reference_ids": ["LEGAL-001"],
+      "primary_clause_ids": ["LEGAL-001-ART-018", "LEGAL-001-ART-031"],
+      "secondary_reference_ids": ["LEGAL-001"],
+      "secondary_clause_ids": ["LEGAL-001-ART-006", "LEGAL-001-ART-014"],
+      "authority_priority": ["部门规范性文件"],
+      "reasoning_template": "资格条件中的资质、许可或登记要求应围绕采购标的和履约能力设置；与当前标的领域明显不匹配的行业资质、认证或登记要求，不宜作为供应商准入条件。",
+      "fallback_review_topics": ["采购需求"],
+      "requires_human_review_when": [
+        "采购项目属于混合采购，且次标的确需相关资质支撑",
+        "条款可能对应法定强制许可但文本表述不完整"
+      ]
+    },
+    {
+      "issue_type": "geographic_restriction",
+      "primary_reference_ids": ["LEGAL-001"],
+      "primary_clause_ids": ["LEGAL-001-ART-018", "LEGAL-001-ART-031"],
+      "secondary_reference_ids": ["LEGAL-001"],
+      "secondary_clause_ids": ["LEGAL-001-ART-015", "LEGAL-001-ART-017"],
+      "authority_priority": ["部门规范性文件"],
+      "reasoning_template": "属地、场所、驻点、短时到场等条件应与项目履约模式直接相关，且应优先通过服务响应机制而非地域身份进行约束；直接或事实上的属地限制存在不合理限制竞争风险。",
+      "fallback_review_topics": ["采购需求", "验收"],
+      "requires_human_review_when": [
+        "项目确有现场连续运行、应急保障等客观场景需要",
+        "采购人已说明为何必须设置本地场地或极短响应时限"
+      ]
+    },
+    {
+      "issue_type": "scoring_content_mismatch",
+      "primary_reference_ids": ["LEGAL-001"],
+      "primary_clause_ids": ["LEGAL-001-ART-021", "LEGAL-001-ART-009"],
+      "secondary_reference_ids": ["LEGAL-001"],
+      "secondary_clause_ids": ["LEGAL-001-ART-008", "LEGAL-001-ART-014"],
+      "authority_priority": ["部门规范性文件"],
+      "reasoning_template": "评分因素应按照采购需求和实现项目目标相关因素确定；评分项名称、评分内容、评分证据与评分目的应保持一致，不宜在方案、商务、认证等评分项中混入与该主题不一致的案例、证明、财务或错位证书。",
+      "fallback_review_topics": ["评分标准", "采购需求"],
+      "requires_human_review_when": [
+        "采购人能够证明相关评分内容对履约质量具有直接影响",
+        "混合采购场景下评分项同时覆盖主标的和次标的能力"
+      ]
+    },
+    {
+      "issue_type": "ambiguous_requirement",
+      "primary_reference_ids": ["LEGAL-001"],
+      "primary_clause_ids": ["LEGAL-001-ART-009", "LEGAL-001-ART-021"],
+      "secondary_reference_ids": ["LEGAL-001"],
+      "secondary_clause_ids": ["LEGAL-001-ART-024"],
+      "authority_priority": ["部门规范性文件"],
+      "reasoning_template": "技术要求、商务要求和评分项应当客观、量化、可核验；以优良中差、综合评价、酌情判断等主观表述作为主要标准，且缺少量化锚点时，容易导致评审与验收标准不清。",
+      "fallback_review_topics": ["评分标准", "验收"],
+      "requires_human_review_when": [
+        "采购标的确难以完全量化，需要保留少量专家判断空间",
+        "主观表述仅作为补充说明，已有充分客观指标支撑"
+      ]
+    },
+    {
+      "issue_type": "one_sided_commercial_term",
+      "primary_reference_ids": ["LEGAL-001"],
+      "primary_clause_ids": ["LEGAL-001-ART-023", "LEGAL-001-ART-025"],
+      "secondary_reference_ids": ["LEGAL-001"],
+      "secondary_clause_ids": ["LEGAL-001-ART-024"],
+      "authority_priority": ["部门规范性文件"],
+      "reasoning_template": "合同权利义务应围绕采购需求和合同履行合理设置；付款、违约、解除、赔偿、到场和责任承担等条款若明显单方偏重供应商、排除采购人应负义务或形成无限责任，应视为高风险商务失衡条款。",
+      "fallback_review_topics": ["验收", "付款"],
+      "requires_human_review_when": [
+        "法律法规对特定行业风险承担另有强制要求",
+        "条款可能属于保险、安全生产或院感管理等法定责任延伸"
+      ]
+    },
+    {
+      "issue_type": "unclear_acceptance_standard",
+      "primary_reference_ids": ["LEGAL-001"],
+      "primary_clause_ids": ["LEGAL-001-ART-024", "LEGAL-001-ART-023"],
+      "secondary_reference_ids": ["LEGAL-001"],
+      "secondary_clause_ids": ["LEGAL-001-ART-009"],
+      "authority_priority": ["部门规范性文件"],
+      "reasoning_template": "履约验收方案应明确验收主体、程序、内容和验收标准，并覆盖所有客观、量化指标；若将验收结果单方交由采购人决定，或复检、送检、整改、最终确认边界不清，容易导致履约责任和付款条件失衡。",
+      "fallback_review_topics": ["验收", "采购需求"],
+      "requires_human_review_when": [
+        "行业主管部门另有法定验收标准或第三方检测强制要求",
+        "项目采取分期实施、分段验收且合同中已有完整配套机制"
+      ]
+    },
+    {
+      "issue_type": "technical_justification_needed",
+      "primary_reference_ids": ["LEGAL-001", "LEGAL-002"],
+      "primary_clause_ids": ["LEGAL-001-ART-007", "LEGAL-001-ART-009", "LEGAL-002-SEC-003"],
+      "secondary_reference_ids": ["LEGAL-001"],
+      "secondary_clause_ids": ["LEGAL-001-ART-010", "LEGAL-001-ART-011"],
+      "authority_priority": ["部门规范性文件", "财政部办公厅文件"],
+      "reasoning_template": "采购需求和技术要求应符合项目特点和实际需要，需求标准应做到客观、细化、可评判、可验证。对于标准引用偏窄、证明材料形式过严、地方化检测要求、兼容性或配套性边界不清的条款，若未充分说明必要性，应视为需论证的技术风险。",
+      "fallback_review_topics": ["采购需求"],
+      "requires_human_review_when": [
+        "技术标准、兼容性、检测方式可能涉及医疗安全、信息安全、院感或法定强制标准",
+        "采购人已提供充分的市场调查、需求调查或技术论证材料"
+      ]
+    }
+  ]
+}
