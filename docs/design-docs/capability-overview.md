@@ -314,6 +314,7 @@
 - 当前 `domain_match_engine` 与高频 `qualification / scoring / technical / commercial` 分析器也已开始按主品目、次品目和混合采购标记做差异化判断，不再只按固定顺序和通用规则做统一分析。
 - 当前已把 2022 版《政府采购品目分类目录》原始 PDF 快照纳入 `data/procurement-catalog/raw/full-catalog-2022/`，为后续生成全量 `catalogs-full.json` 和审查映射层提供本地权威来源。
 - 当前已基于该 PDF 生成第一版 `data/procurement-catalog/catalogs-full.json` 全量目录骨架，可直接用于品目编码、层级、父子关系和主次品目识别增强。
+- 当前已新增 `data/procurement-catalog/review-domain-map.json` 第一版审查领域映射，用官方品目编码和前缀先覆盖家具、被服、物业、信息化、医疗设备、药品配套、标识印制、设备安装、餐饮等高频场景。
 - 当前已补入餐饮托管/食堂运营服务场景识别，可在医院、学校或公共机构食堂项目中优先按“评分标准 -> 商务与验收 -> 技术要求”的路线复核，并避免将“24小时营业及就餐服务”等持续供餐义务误判为属地限制。
 - 当前已补入 `geographic_tendency_analyzer`、`acceptance_boundary_analyzer`、`industry_appropriateness_analyzer` 和 `theme_splitter_and_summarizer`，可进一步识别：
   - 驻场、短时响应或服务场地要求形成事实上的属地倾斜

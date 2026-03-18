@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog, load_procurement_catalogs
+from agent_compliance.knowledge.review_domain_map import load_review_domain_map
 from agent_compliance.parsers.section_splitter import split_into_clauses
 from agent_compliance.pipelines.review_strategy import build_analyzer_execution_order, build_document_strategy_profile
 from agent_compliance.schemas import NormalizedDocument
@@ -85,3 +86,28 @@ class ProcurementCatalogTest(unittest.TestCase):
         self.assertEqual(entries["A"]["catalog_name"], "货物")
         self.assertEqual(entries["A01010100"]["parent_code"], "A01010000")
         self.assertEqual(entries["C20000000"]["category_type"], "service")
+
+    def test_review_domain_map_exists_and_covers_high_frequency_domains(self) -> None:
+        entries = load_review_domain_map()
+        self.assertGreaterEqual(len(entries), 9)
+
+        by_domain = {item.review_domain_key: item for item in entries}
+        self.assertIn("furniture_goods", by_domain)
+        self.assertIn("information_system", by_domain)
+        self.assertIn("medical_device_goods", by_domain)
+        self.assertIn("signage_printing_service", by_domain)
+
+        full_catalog = json.loads(
+            (REPO_ROOT / "data" / "procurement-catalog" / "catalogs-full.json").read_text(encoding="utf-8")
+        )["entries"]
+        full_codes = {item["catalog_code"] for item in full_catalog}
+
+        for entry in entries:
+            for code in entry.mapped_catalog_codes:
+                self.assertIn(code, full_codes)
+            for prefix in entry.mapped_catalog_prefixes:
+                self.assertTrue(any(code.startswith(prefix) for code in full_codes), prefix)
+
+        self.assertIn("C21040000", by_domain["property_service"].mapped_catalog_codes)
+        self.assertIn("C1602", by_domain["information_system"].mapped_catalog_prefixes)
+        self.assertIn("C2309", by_domain["signage_printing_service"].mapped_catalog_prefixes)

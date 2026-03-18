@@ -10,6 +10,7 @@
 当前数据文件：
 - `catalogs.json`
 - `catalogs-full.json`
+- `review-domain-map.json`
 - `raw/full-catalog-2022/source.pdf`
 - `raw/full-catalog-2022/metadata.json`
 
@@ -29,3 +30,17 @@
 - `catalogs-full.json` 已完成第一版全量骨架抽取
 - 当前版本优先保证 `catalog_code / catalog_name / level / parent_code / category_type` 可用
 - `description` 字段暂未做精细抽取，后续会在不破坏层级稳定性的前提下再补全文释义
+
+当前审查映射说明：
+- `review-domain-map.json` 已完成第一版审查领域映射
+- 当前版本先把全量官方品目映射到高频审查领域：
+  - 家具
+  - 窗帘及被服
+  - 物业管理服务
+  - 信息化平台及系统运维
+  - 医疗设备
+  - 药品及医用配套
+  - 标识标牌及宣传印制
+  - 设备供货并安装调试
+  - 餐饮托管及食堂运营
+- 当前映射同时保留官方编码、编码前缀和关键词回退，以便后续分类器逐步从“最小品目集”升级到“全量官方目录 + 审查领域映射”的两层结构
