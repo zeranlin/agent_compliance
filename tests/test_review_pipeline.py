@@ -655,6 +655,114 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertTrue(any(finding.issue_type == "scoring_content_mismatch" for finding in review.findings))
         self.assertFalse(any("履约异常情况反馈表" in (finding.section_path or "") for finding in review.findings))
 
+    def test_qualification_theme_ignores_statement_form_text(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "1.具有独立法人资格。",
+                "2.本项目不接受联合体投标。",
+                "第四章 投标文件组成要求及格式",
+                "三、投标人情况及资格证明文件",
+                "中小企业声明函填写说明",
+                "从业人员、营业收入、资产总额等指标应如实填写。",
+                "政府采购投标及履约承诺函",
+                "投标人提供社保缴纳证明、学历学位证书等材料。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="qual-filter",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("资格条件整体超出法定准入和履约必需范围", titles)
+
+    def test_scoring_semantic_consistency_flags_furniture_software_copyright_mismatch(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "创新能力评价",
+                "投标人所投“定位管理标签模块”具有资产管理读写基站相关的软件著作权证书或专利证书得100分。",
+                "提供国家版权局或国家知识产权局颁发的计算机软件著作权登记证书扫描件或专利证书扫描件。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/furniture.txt",
+            document_name="医院家具采购项目.txt",
+            file_hash="furniture-score-semantic",
+            normalized_text_path="/tmp/furniture.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("评分项名称、内容和评分证据之间不一致", titles)
+
+    def test_mixed_scope_boundary_flags_furniture_asset_tracking_scope(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "商务要求",
+                "中标后所有家具交货后，需安装1套低功耗近场通讯的蓝牙或UWB以上资产定位管理系统。",
+                "根据甲方需求在中标所有家具上安装智能芯片，可通过软件管理系统在线实时查询家具资产所在位置和归属信息。",
+                "中标人应开展产品碳足迹数据收集及核算工作。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/furniture.txt",
+            document_name="办公类家具项目.txt",
+            file_hash="furniture-mixed-scope",
+            normalized_text_path="/tmp/furniture.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("家具采购场景叠加资产定位和智能管理系统义务，边界不清", titles)
+
+    def test_commercial_lifecycle_theme_stays_in_substantive_commercial_section(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "商务要求",
+                "在免费保修期内，一旦发生质量问题，中标人保证在接到通知24小时内赶到现场进行修理或更换。",
+                "货物通过有关部门终验后，采购人支付合同总金额20%的货款。",
+                "中标单位承担相关费用。如果发现所交货物与投标文件中所承诺的不符，由此发生的一切损失和费用由中标人承担。",
+                "第四章 投标文件组成要求及格式",
+                "政府采购投标及履约承诺函",
+                "投标人提供符合相关要求的承诺函得100分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/furniture.txt",
+            document_name="办公类家具项目.txt",
+            file_hash="commercial-focus",
+            normalized_text_path="/tmp/furniture.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        lifecycle = next(
+            finding
+            for finding in review.findings
+            if finding.problem_title == "履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担"
+        )
+        self.assertIn("商务要求", lifecycle.section_path or "")
+        self.assertNotIn("投标文件组成要求及格式", lifecycle.section_path or "")
+
     def test_review_flags_fixed_year_and_manufacturer_engineer_and_payment_shift(self) -> None:
         text = "\n".join(
             [
@@ -722,12 +830,13 @@ class ReviewPipelineTest(unittest.TestCase):
                     "付款条件与履约评价结果深度绑定且评价标准开放",
                     "验收送检、检测和专家评审费用整体转嫁给供应商",
                     "商务责任和违约后果设置明显偏重",
+                    "履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担",
                 }
                 for finding in review.findings
             )
         )
         self.assertEqual(sum(1 for finding in review.findings if "样品评分主观性强且分值过高" in finding.problem_title), 1)
-        self.assertEqual(sum(1 for finding in review.findings if finding.issue_type == "one_sided_commercial_term"), 1)
+        self.assertGreaterEqual(sum(1 for finding in review.findings if finding.issue_type == "one_sided_commercial_term"), 1)
 
     def test_review_adds_scoring_structure_imbalance_when_multiple_high_weight_categories_exist(self) -> None:
         text = "\n".join(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
+import re
 
 from agent_compliance.knowledge.references_index import ReferenceRecord, find_references
 from agent_compliance.schemas import Finding, NormalizedDocument, ReviewResult, RuleHit, utc_now_iso
@@ -1506,6 +1507,7 @@ def _add_commercial_financing_burden_theme_finding(
     clauses = [
         clause
         for clause in document.clauses
+        if _is_substantive_commercial_clause(clause)
         if any(
             marker in clause.text
             for marker in (
@@ -1594,6 +1596,7 @@ def _add_commercial_acceptance_fee_shift_theme_finding(
     clauses = [
         clause
         for clause in document.clauses
+        if _is_substantive_commercial_clause(clause)
         if any(
             marker in clause.text
             for marker in ("报验", "送检", "检测报告出具", "专家评审", "自行消化", "空气检测", "监理", "整改费用", "复验费用", "抽检费用")
@@ -1634,6 +1637,7 @@ def _add_liability_imbalance_theme_finding(
     clauses = [
         clause
         for clause in document.clauses
+        if _is_substantive_commercial_clause(clause)
         if any(
             marker in clause.text
             for marker in (
@@ -1924,6 +1928,10 @@ def _add_scoring_semantic_consistency_theme_finding(
                 "ISO20000",
                 "有机产品认证",
                 "生活垃圾分类",
+                "定位管理标签模块",
+                "软件著作权",
+                "专利证书",
+                "资产管理读写基站",
             )
         )
     ]
@@ -1962,6 +1970,7 @@ def _add_payment_evaluation_chain_finding(
     clauses = [
         clause
         for clause in document.clauses
+        if _is_substantive_commercial_clause(clause)
         if any(
             marker in clause.text
             for marker in (
@@ -1978,7 +1987,12 @@ def _add_payment_evaluation_chain_finding(
             )
         )
     ]
-    if len(clauses) < 3:
+    evaluation_clauses = [
+        clause
+        for clause in clauses
+        if any(marker in clause.text for marker in ("履约评价", "评价标准", "评价指标", "项目负责人可根据项目要求自行设定"))
+    ]
+    if len(clauses) < 3 or not evaluation_clauses:
         return findings
     findings.append(
         _build_theme_finding(
@@ -2013,6 +2027,7 @@ def _add_commercial_lifecycle_theme_finding(
     clauses = [
         clause
         for clause in document.clauses
+        if _is_substantive_commercial_clause(clause)
         if any(
             marker in clause.text
             for marker in (
@@ -2029,10 +2044,15 @@ def _add_commercial_lifecycle_theme_finding(
                 "售后服务保证金",
                 "复检",
                 "最终验收结果",
+                "损失",
+                "承担",
             )
         )
     ]
-    if len(clauses) < 4:
+    payment_clauses = [clause for clause in clauses if any(marker in clause.text for marker in ("付款", "支付", "终验款", "进度款", "预付款"))]
+    responsibility_clauses = [clause for clause in clauses if any(marker in clause.text for marker in ("24小时", "1 小时", "48小时", "解除合同", "损失", "承担", "无关", "碳足迹", "智能芯片", "资产定位", "蓝牙", "UWB"))]
+    acceptance_clauses = [clause for clause in clauses if any(marker in clause.text for marker in ("验收", "送检", "检测", "监理", "复检", "终验", "专家评审"))]
+    if len(clauses) < 3 or not responsibility_clauses or not acceptance_clauses:
         return findings
     findings.append(
         _build_theme_finding(
@@ -2045,12 +2065,12 @@ def _add_commercial_lifecycle_theme_finding(
             confidence="high",
             compliance_judgment="likely_non_compliant",
             why_it_is_risky=(
-                "商务与验收条款将付款节点、验收判定、送检复检费用、售后到场时限、解除合同和兜底责任串联在一起，形成对供应商整体偏重的履约后果链。"
-                "当这些后果叠加出现时，供应商不仅承担较高的履约成本，也难以预判回款、整改和责任边界。"
+                "商务与验收条款将付款节点、验收判定、送检复检费用、售后到场时限以及附加管理义务串联在一起，形成对供应商整体偏重的履约后果链。"
+                "当这些后果叠加出现时，供应商不仅承担较高的履约成本，也难以预判回款、整改、到场响应和附加义务边界。"
             ),
             impact_on_competition_or_performance="可能提高报价不确定性和合同争议风险，并通过整体偏重的履约后果抬高投标门槛。",
             legal_or_policy_basis="中华人民共和国民法典；政府采购需求管理办法（财政部）；履约验收规范要点（中国政府采购网）",
-            rewrite_suggestion="建议按交付、验收、复检、售后和责任承担分别设置条款，删除开放式义务和单方后果，确保回款条件、到场要求和责任边界可预见、可执行。",
+            rewrite_suggestion="建议按付款、验收、复检、售后响应和附加管理义务分别设置条款，删除开放式义务和单方后果，确保回款条件、到场要求和责任边界可预见、可执行。",
             needs_human_review=True,
             human_review_reason="需结合财政支付节点、验收流程和售后服务模式判断全链路责任配置是否超过项目实际履约需要。",
             finding_origin="analyzer",
@@ -2134,28 +2154,67 @@ def _add_scoring_domain_theme_finding(document: NormalizedDocument, findings: li
 
 
 def _add_mixed_scope_boundary_theme_finding(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
-    if any("混合采购场景叠加自动化设备和信息化接口义务，边界不清" in finding.problem_title for finding in findings):
+    existing_titles = {finding.problem_title for finding in findings}
+    if (
+        "混合采购场景叠加自动化设备和信息化接口义务，边界不清" in existing_titles
+        or "家具采购场景叠加资产定位和智能管理系统义务，边界不清" in existing_titles
+    ):
         return findings
     domain = _document_domain(document)
-    if domain != "medical_tcm_mixed":
-        return findings
-    clauses = [
-        clause
-        for clause in document.clauses
-        if any(
-            marker in clause.text
-            for marker in (
-                "信息化管理系统",
-                "系统端口",
-                "无缝对接",
-                "综合业务协同平台",
-                "自动化调剂",
-                "发药机",
-                "药瓶清洁",
-                "系统进行管理维护",
+    if domain == "medical_tcm_mixed":
+        clauses = [
+            clause
+            for clause in document.clauses
+            if any(
+                marker in clause.text
+                for marker in (
+                    "信息化管理系统",
+                    "系统端口",
+                    "无缝对接",
+                    "综合业务协同平台",
+                    "自动化调剂",
+                    "发药机",
+                    "药瓶清洁",
+                    "系统进行管理维护",
+                )
             )
+        ]
+        title = "混合采购场景叠加自动化设备和信息化接口义务，边界不清"
+        rationale = (
+            "文件在中药配方颗粒采购中叠加了自动化设备配套、信息化系统端口无缝对接、系统维护和药瓶清洁等多类义务。"
+            "当药品供货、自动化设备配套和信息化接口开发被混合写入同一采购范围时，容易导致采购边界不清、履约责任外扩和供应商范围被不当收窄。"
         )
-    ]
+        impact = "可能将药品供货以外的自动化设备和信息化接口义务一并转嫁给供应商，抬高履约门槛并增加争议风险。"
+        rewrite = "建议将中药配方颗粒供货、自动化设备配套和信息化接口开发分开表述；与本次药品采购不直接相关的系统维护、药瓶清洁和扩展服务内容应删除或另行采购。"
+        review_reason = "需结合本次采购边界、现有自动化设备建设情况和信息化接口职责分工判断相关配套义务是否应并入当前采购范围。"
+    elif domain == "furniture_goods":
+        clauses = [
+            clause
+            for clause in document.clauses
+            if any(
+                marker in clause.text
+                for marker in (
+                    "定位管理标签模块",
+                    "资产管理读写基站",
+                    "蓝牙",
+                    "UWB",
+                    "资产定位管理系统",
+                    "智能芯片",
+                    "软件管理系统",
+                    "碳足迹数据",
+                )
+            )
+        ]
+        title = "家具采购场景叠加资产定位和智能管理系统义务，边界不清"
+        rationale = (
+            "文件在家具采购中叠加了资产定位标签模块、蓝牙或UWB定位系统、智能芯片和在线管理系统等信息化义务。"
+            "当家具供货、定位管理和在线系统功能被混合写入同一采购范围时，容易导致采购边界不清，并把额外的信息化建设责任一并转嫁给供应商。"
+        )
+        impact = "可能将家具供货以外的定位系统、芯片管理和软件配套义务一并压给供应商，抬高履约门槛并增加争议风险。"
+        rewrite = "建议将家具供货与资产定位、智能芯片和软件管理系统义务分开表述；确需配套建设的，应单独说明其业务必要性、边界和验收责任。"
+        review_reason = "需结合家具采购边界、院内资产管理系统现状和是否属于独立信息化建设内容判断相关配套义务是否应并入本次采购。"
+    else:
+        return findings
     if len(clauses) < 2:
         return findings
     findings.append(
@@ -2163,20 +2222,17 @@ def _add_mixed_scope_boundary_theme_finding(document: NormalizedDocument, findin
             document=document,
             clauses=clauses,
             issue_type="template_mismatch",
-            problem_title="混合采购场景叠加自动化设备和信息化接口义务，边界不清",
+            problem_title=title,
             risk_level="high",
             severity_score=3,
             confidence="high",
             compliance_judgment="potentially_problematic",
-            why_it_is_risky=(
-                "文件在中药配方颗粒采购中叠加了自动化设备配套、信息化系统端口无缝对接、系统维护和药瓶清洁等多类义务。"
-                "当药品供货、自动化设备配套和信息化接口开发被混合写入同一采购范围时，容易导致采购边界不清、履约责任外扩和供应商范围被不当收窄。"
-            ),
-            impact_on_competition_or_performance="可能将药品供货以外的自动化设备和信息化接口义务一并转嫁给供应商，抬高履约门槛并增加争议风险。",
+            why_it_is_risky=rationale,
+            impact_on_competition_or_performance=impact,
             legal_or_policy_basis="政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）",
-            rewrite_suggestion="建议将中药配方颗粒供货、自动化设备配套和信息化接口开发分开表述；与本次药品采购不直接相关的系统维护、药瓶清洁和扩展服务内容应删除或另行采购。",
+            rewrite_suggestion=rewrite,
             needs_human_review=True,
-            human_review_reason="需结合本次采购边界、现有自动化设备建设情况和信息化接口职责分工判断相关配套义务是否应并入当前采购范围。",
+            human_review_reason=review_reason,
             finding_origin="analyzer",
         )
     )
@@ -2186,14 +2242,13 @@ def _add_mixed_scope_boundary_theme_finding(document: NormalizedDocument, findin
 def _add_brand_scoring_theme_finding(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
     if any("评分项直接按品牌档次赋分" in finding.problem_title for finding in findings):
         return findings
+    if not _has_explicit_brand_scoring_clause(document):
+        return findings
     clauses = [
         clause
         for clause in document.clauses
         if _is_scoring_clause(clause)
-        and any(
-            marker in clause.text
-            for marker in ("一线品牌", "国际知名品牌", "格力", "美的", "海尔", "大金", "日立", "其他国产品牌", "中国驰名商标", "广东省著名商标", "名牌产品")
-        )
+        and _contains_explicit_brand_marker(clause.text)
     ]
     if not clauses:
         return findings
@@ -2220,6 +2275,22 @@ def _add_brand_scoring_theme_finding(document: NormalizedDocument, findings: lis
         )
     )
     return findings
+
+
+def _has_explicit_brand_scoring_clause(document: NormalizedDocument) -> bool:
+    return any(_is_scoring_clause(clause) and _contains_explicit_brand_marker(clause.text) for clause in document.clauses)
+
+
+def _contains_explicit_brand_marker(text: str) -> bool:
+    if any(marker in text for marker in ("一线品牌", "国际知名品牌", "其他国产品牌")):
+        return True
+    patterns = (
+        r"(品牌|厂商|制造商).{0,6}(格力|美的|海尔|大金|日立)",
+        r"(格力|美的|海尔|大金|日立)(品牌|厂商|制造商|产品|设备|系列|得分|得\d+分)",
+        r"(?<![\u4e00-\u9fff])(格力|海尔|大金|日立)[、，,/\s]",
+        r"(?<![\u4e00-\u9fff])美的[、，,/\s）)]",
+    )
+    return any(re.search(pattern, text) for pattern in patterns)
 
 
 def _add_certification_scoring_theme_finding(
@@ -2485,6 +2556,8 @@ def _add_industry_appropriateness_findings(document: NormalizedDocument, finding
 def _document_domain(document: NormalizedDocument) -> str:
     base_text = f"{document.document_name} {document.source_path}"
     clause_text = " ".join(clause.text for clause in document.clauses[:200])
+    if any(marker in base_text for marker in ("家具", "办公类家具", "医用家具")):
+        return "furniture_goods"
     if any(marker in base_text for marker in ("中药", "配方颗粒", "医院", "药品", "饮片")):
         if any(marker in clause_text for marker in ("自动化调剂", "发药机", "信息化管理系统", "无缝对接", "设备需求参数")):
             return "medical_tcm_mixed"
@@ -2499,6 +2572,8 @@ def _document_domain(document: NormalizedDocument) -> str:
 
 
 def _is_qualification_clause(clause) -> bool:
+    if _is_template_instruction_clause(clause):
+        return False
     text = " ".join(part for part in (clause.section_path or "", clause.source_section or "") if part)
     return "资格" in text or "申请人的资格要求" in text or "招标公告" in text
 
@@ -2509,8 +2584,110 @@ def _is_technical_clause(clause) -> bool:
 
 
 def _is_commercial_clause(clause) -> bool:
-    text = " ".join(part for part in (clause.section_path or "", clause.source_section or "") if part)
-    return any(marker in text for marker in ("商务要求", "合同条款", "履约担保", "交货期限", "违约责任", "付款方式"))
+    if _is_template_instruction_clause(clause):
+        return False
+    if _is_scoring_clause(clause):
+        return False
+    location_text = " ".join(part for part in (clause.section_path or "", clause.source_section or "") if part)
+    text = " ".join(part for part in (location_text, clause.text or "") if part)
+    strong_commercial_markers = ("付款", "支付", "验收", "履约评价", "评价标准", "评价指标", "扣款", "解除合同", "违约", "终验")
+    if (
+        _is_technical_clause(clause)
+        and not any(marker in location_text for marker in ("商务要求", "合同条款", "违约责任", "付款方式", "验收条件"))
+        and not any(marker in text for marker in strong_commercial_markers)
+    ):
+        return False
+    return any(
+        marker in text
+        for marker in (
+            "商务要求",
+            "合同条款",
+            "履约担保",
+            "交货期限",
+            "违约责任",
+            "付款方式",
+            "付款",
+            "支付",
+            "验收",
+            "维修响应",
+            "售后服务",
+            "运输、安装",
+            "评价标准",
+            "评价指标",
+            "解除合同",
+            "扣款",
+        )
+    )
+
+
+def _is_substantive_commercial_clause(clause) -> bool:
+    if not _is_commercial_clause(clause):
+        return False
+    location_text = " ".join(part for part in (clause.section_path or "", clause.source_section or "", clause.table_or_item_label or "") if part)
+    text = clause.text or ""
+    if any(marker in location_text for marker in ("商务要求", "合同条款", "违约责任", "付款方式", "验收条件", "运输、安装")):
+        return True
+    if any(
+        marker in text
+        for marker in (
+            "履约担保",
+            "履约保证金",
+            "售后服务保证金",
+            "诚信履约备用金",
+            "交货期限",
+            "付款方式",
+            "验收条件",
+            "违约责任",
+            "售后服务要求",
+            "招标商务要求",
+        )
+    ):
+        return True
+    if any(marker in text for marker in ("履约评价", "评价标准", "评价指标")):
+        return True
+    if any(marker in text for marker in ("报验", "送检", "检测报告出具", "专家评审", "空气检测", "监理", "整改费用", "复验费用", "抽检费用")) and any(
+        marker in text for marker in ("费用", "自行消化", "承担", "计入投标单价")
+    ):
+        return True
+    marker_groups = (
+        ("付款", "支付", "终验", "进度款", "预付款"),
+        ("验收", "送检", "检测", "复检", "监理", "专家评审"),
+        ("24小时", "1 小时", "48小时", "解除合同", "终止合同", "扣款金额", "损失", "承担", "违约金", "到场"),
+    )
+    matched_groups = sum(1 for group in marker_groups if any(marker in text for marker in group))
+    return matched_groups >= 2
+
+
+def _is_template_instruction_clause(clause) -> bool:
+    text = " ".join(
+        part
+        for part in (
+            clause.section_path or "",
+            clause.source_section or "",
+            clause.table_or_item_label or "",
+            clause.text or "",
+        )
+        if part
+    )
+    return any(
+        marker in text
+        for marker in (
+            "投标文件组成要求及格式",
+            "中小企业声明函",
+            "残疾人福利性单位声明函",
+            "监狱企业声明函",
+            "政府采购投标及履约承诺函",
+            "投标及履约承诺函",
+            "编制指引",
+            "填写说明",
+            "格式自定",
+            "声明函",
+            "承诺函",
+            "政府采购违法行为风险知悉确认书",
+            "特别警示条款",
+            "投标书编制软件",
+        )
+    )
 
 
 def _domain_mismatch_markers(domain: str) -> tuple[str, ...]:
@@ -2534,6 +2711,7 @@ def _domain_mismatch_markers(domain: str) -> tuple[str, ...]:
         "textile_goods": ("芯片", "系统", "无缝对接", "平台", "软件"),
         "equipment_installation": ("有害生物防制", "SPCA", "有机产品认证", "水运机电工程专项监理", "水运工程监理甲级"),
         "general": ("园区保洁", "设施维修", "安防管理", "保洁", "芯片", "系统", "特种设备", "有害生物防制", "SPCA", "高空清洗", "CCRC", "ISO20000", "水运工程监理甲级", "棉花加工"),
+        "furniture_goods": ("芯片", "系统", "资产定位", "定位管理标签模块", "蓝牙", "UWB", "碳足迹", "平台", "软件", "无缝对接"),
     }
     return mapping.get(domain, mapping["general"])
 
