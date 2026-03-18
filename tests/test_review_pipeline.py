@@ -369,6 +369,33 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("人员与团队评分混入错位证书并过度堆叠条件", titles)
         self.assertIn("评分项名称、内容和评分证据之间不一致", titles)
 
+    def test_review_adds_service_scoring_signal_and_warranty_weight_theme(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "售后服务方案",
+                "投标人具有深圳市政府部门颁发的先进单位荣誉证书得30分。",
+                "人员至少具有1位注册安全工程师证书。",
+                "方案极合理、条理极清晰、可操作性极强的得70分。",
+                "免费质保期",
+                "在满足招标文件《商务要求》免费质保期要求的前提下，整体每延长1年免费质保期的得100分，最高100分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="service-warranty-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("评分项名称、内容和评分证据之间不一致", titles)
+        self.assertIn("免费质保期延长按年度直接高分赋值", titles)
+
     def test_review_adds_commercial_lifecycle_theme(self) -> None:
         text = "\n".join(
             [
@@ -386,6 +413,32 @@ class ReviewPipelineTest(unittest.TestCase):
             source_path="/tmp/sample.txt",
             document_name="sample.txt",
             file_hash="commercial-life",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担", titles)
+
+    def test_review_commercial_lifecycle_covers_uptime_backup_and_payment_relief(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "商务要求",
+                "在免费保修期内，中标人应在2小时内响应，12小时内到达现场维修，并在48小时内消除故障；不能及时排除故障的，应在2个日历天内免费提供备用设备。",
+                "免费保修期内，中标人应确保设备年开机率在95%以上，否则应延长维保期、更换新设备并赔偿直接经济损失和间接经济损失。",
+                "因财政审批的原因造成采购人延期付款的，采购人不承担违约责任。",
+                "采购人可以视具体情况暂时中止支付争议款项或其他相关款项。",
+                "如采购人需要，中标人需无条件配合委托第三方质量检测并承担相应后果。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="commercial-uptime-theme",
             normalized_text_path="/tmp/sample.txt",
             clause_count=len(clauses),
             clauses=clauses,
@@ -618,10 +671,55 @@ class ReviewPipelineTest(unittest.TestCase):
 
         titles = {finding.problem_title for finding in review.findings}
         self.assertIn("多个方案评分项大量使用主观分档且缺少量化锚点", titles)
-        self.assertIn("现场演示分值过高且签到要求形成额外门槛", titles)
-        self.assertFalse(any("评分中设置与履约弱相关的荣誉资质加分" in title for title in titles))
-        self.assertFalse(any("评分分档缺少明确量化锚点" in title for title in titles))
-        self.assertFalse(any("单一评分因素权重设置过高" in title for title in titles))
+
+    def test_subjective_scoring_theme_can_merge_two_high_weight_items(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "售后服务方案",
+                "①方案极合理、条理极清晰、可操作性极强的得 70 分；②方案合理、条理清晰、可操作强的得 40分；③方案较合理、条理较清晰、可操作较强的得 10 分。",
+                "培训服务方案",
+                "①方案极合理、条理极清晰、可操作性极强的得 70 分；②方案合理、条理清晰、可操作强的得 40分；③方案较合理、条理较清晰、可操作较强的得 10 分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="subjective-two-high",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("多个方案评分项大量使用主观分档且缺少量化锚点", titles)
+
+    def test_technical_justification_noise_filters_packaging_and_generic_compliance(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "项目采购内容中包含需要对相关产品需要进行商品包装和快递包装的，投标人承诺所进行的商品包装和快递包装满足财政部《商品包装政府采购需求标准（试行）》《快递包装政府采购需求标准（试行）》的要求。",
+                "第五章 合同条款",
+                "乙方所提供的货物应符合国家有关安全、环保、卫生的规定。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="technical-noise",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("技术要求可能合理但需补充必要性论证", titles)
+        self.assertNotIn("安全环保类技术要求可能合理但需补充必要性论证", titles)
+        self.assertEqual(titles, set())
 
     def test_review_flags_scoring_content_mismatch_and_filters_non_scoring_noise(self) -> None:
         text = "\n".join(

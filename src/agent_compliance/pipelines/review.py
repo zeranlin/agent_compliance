@@ -677,7 +677,26 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "irrelevant_certification_or_award",
         } and _text_contains_any(
             finding,
-            ("工程案例", "CMA", "检测报告", "资产总额", "营业收入", "净利润", "标准委员会", "科技型中小企业", "ISO20000"),
+            ("工程案例", "CMA", "检测报告", "资产总额", "营业收入", "净利润", "标准委员会", "科技型中小企业", "ISO20000", "先进单位", "注册安全工程师"),
+        )
+
+    if "售后服务评分混入荣誉证书且主观分值偏高" in title:
+        return finding.issue_type in {
+            "scoring_content_mismatch",
+            "irrelevant_certification_or_award",
+            "ambiguous_requirement",
+        } and _text_contains_any(
+            finding,
+            ("先进单位", "注册安全工程师", "售后服务方案", "方案极合理", "产品升级", "配品配件"),
+        )
+
+    if "免费质保期延长按年度直接高分赋值" in title:
+        return finding.issue_type in {
+            "excessive_scoring_weight",
+            "ambiguous_requirement",
+        } and _text_contains_any(
+            finding,
+            ("免费质保期", "延长1年", "延长 1 年", "得100分", "最高100分"),
         )
 
     if "软件著作权评分过高且与履约能力评价边界不清" in title:
@@ -718,7 +737,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "other",
         } and _text_contains_any(
             finding,
-            ("付款", "验收", "送检", "检测", "专家评审", "24小时", "到场", "解除合同", "实际需求", "质保期", "售后服务保证金"),
+            ("付款", "验收", "送检", "检测", "专家评审", "24小时", "2小时", "12小时", "48小时", "到场", "解除合同", "实际需求", "质保期", "售后服务保证金", "开机率", "备用设备", "财政审批", "暂停支付"),
         )
 
     if "资格条件中存在与标的域不匹配的资质或登记要求" in title:
@@ -1044,8 +1063,12 @@ def _filter_technical_justification_noise(findings: list[Finding]) -> list[Findi
                 "监狱企业",
                 "残疾人福利性单位",
                 "乡村产业振兴",
+                "商品包装政府采购需求标准",
+                "快递包装政府采购需求标准",
             )
         ):
+            continue
+        if "国家有关安全、环保、卫生的规定" in normalized or "国家有关安全环保卫生的规定" in normalized:
             continue
         if normalized in {"抗菌抗病毒卷帘", "阻燃抑菌抗病毒隔帘", "燃抑菌抗病毒"}:
             continue
@@ -1197,6 +1220,8 @@ def _add_scoring_structure_findings(document: NormalizedDocument, findings: list
     findings = _add_personnel_scoring_theme_finding(document, findings)
     findings = _add_business_strength_theme_finding(document, findings)
     findings = _add_scoring_semantic_consistency_theme_finding(document, findings)
+    findings = _add_service_scoring_mismatch_theme_finding(document, findings)
+    findings = _add_warranty_extension_scoring_theme_finding(document, findings)
     findings = _add_software_copyright_scoring_theme_finding(document, findings)
     findings = _add_experience_evaluation_theme_finding(document, findings)
     return findings
@@ -1804,9 +1829,14 @@ def _add_subjective_scoring_theme_finding(
         clause
         for clause in document.clauses
         if _is_scoring_clause(clause)
-        and any(marker in clause.text for marker in ("评审为优", "评审为良", "评审为中", "评审为差"))
+        and any(marker in clause.text for marker in ("评审为优", "评审为良", "评审为中", "评审为差", "方案极合理", "条理极清晰", "可操作性极强"))
     ]
-    if len(candidates) < 3:
+    high_weight_candidates = [
+        clause
+        for clause in candidates
+        if any(marker in clause.text for marker in ("70 分", "70分", "60 分", "60分", "40 分", "40分"))
+    ]
+    if len(candidates) < 3 and not (len(candidates) >= 2 and len(high_weight_candidates) >= 2):
         return findings
     findings.append(
         _build_theme_finding(
@@ -2002,6 +2032,8 @@ def _add_scoring_semantic_consistency_theme_finding(
                 "软件著作权",
                 "专利证书",
                 "资产管理读写基站",
+                "先进单位",
+                "注册安全工程师",
             )
         )
     ]
@@ -2026,6 +2058,84 @@ def _add_scoring_semantic_consistency_theme_finding(
             rewrite_suggestion="建议逐项校正评分项名称、评分内容与评分证据之间的对应关系，删除与评分主题不一致的案例、证明形式、企业经营指标和跨领域证书。",
             needs_human_review=True,
             human_review_reason="需结合每个评分项的评审目标、取证方式和项目履约重点判断其名称、内容和证据是否保持一致。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_service_scoring_mismatch_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("售后服务评分混入荣誉证书且主观分值偏高" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(marker in f"{clause.section_path or ''} {clause.text}" for marker in ("售后服务方案", "产品升级", "配品配件", "服务保障"))
+        and any(marker in clause.text for marker in ("先进单位", "注册安全工程师", "方案极合理", "70 分", "70分"))
+    ]
+    if not clauses:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="scoring_content_mismatch",
+            problem_title="售后服务评分混入荣誉证书且主观分值偏高",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "售后服务评分一方面考察服务保障、升级维护和配件方案，另一方面又叠加“先进单位”荣誉和注册安全工程师证书，并辅以较高分值的主观分档。"
+                "这会把与售后履约主题关联不足的荣誉和证书直接转化为高分优势。"
+            ),
+            impact_on_competition_or_performance="可能将售后服务方案评分从履约保障能力评价偏移到荣誉和证书堆叠，放大非关键材料的竞争影响。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；奖项荣誉信用等级评分问题（中国政府采购网）",
+            rewrite_suggestion="建议删除售后服务评分中与服务主题不一致的荣誉和证书要求，压降主观分档权重，仅围绕响应机制、升级维护、备件保障和服务组织评分。",
+            needs_human_review=True,
+            human_review_reason="需结合设备售后服务组织方式判断注册安全工程师和先进单位荣誉是否与本项目售后履约能力直接相关。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_warranty_extension_scoring_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("免费质保期延长按年度直接高分赋值" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and "免费质保期" in clause.text
+        and any(marker in clause.text for marker in ("每延长1年", "每延长 1 年", "得100分", "最高100分", "最高得100分"))
+    ]
+    if not clauses:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="excessive_scoring_weight",
+            problem_title="免费质保期延长按年度直接高分赋值",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "评分项在满足基础商务要求的前提下，又按免费质保期每延长 1 年直接给予 100 分。"
+                "这类设计会把单一售后承诺放大为决定性高分因素，导致评分结构明显失衡。"
+            ),
+            impact_on_competition_or_performance="可能显著放大质保期承诺对中标结果的影响，使其他与履约同样重要的技术和服务因素被弱化。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；综合评分法边界分析（中国政府采购网）",
+            rewrite_suggestion="建议显著压降质保期延长的分值，改为围绕基础质保满足、备件保障、维修响应和维保组织等因素综合评价。",
+            needs_human_review=False,
+            human_review_reason=None,
             finding_origin="analyzer",
         )
     )
@@ -2186,6 +2296,8 @@ def _add_commercial_lifecycle_theme_finding(
                 "检测",
                 "专家评审",
                 "24小时",
+                "2小时",
+                "12小时",
                 "到场",
                 "解除合同",
                 "实际需求为准",
@@ -2194,6 +2306,10 @@ def _add_commercial_lifecycle_theme_finding(
                 "最终验收结果",
                 "损失",
                 "承担",
+                "开机率",
+                "备用设备",
+                "财政审批",
+                "暂停支付",
             )
         )
     ]
@@ -2212,6 +2328,8 @@ def _add_commercial_lifecycle_theme_finding(
                 "违约金",
                 "解除合同",
                 "24小时",
+                "2 小时",
+                "12 小时",
                 "1 小时",
                 "48小时",
                 "到场",
@@ -2220,6 +2338,10 @@ def _add_commercial_lifecycle_theme_finding(
                 "送检",
                 "检测",
                 "专家评审",
+                "开机率",
+                "备用设备",
+                "财政审批",
+                "暂停支付",
             )
         )
     ]
@@ -2660,6 +2782,7 @@ def _add_acceptance_boundary_findings(document: NormalizedDocument, findings: li
     clauses = [
         clause
         for clause in document.clauses
+        if _is_substantive_commercial_clause(clause)
         if any(
             marker in clause.text
             for marker in ("验收报告", "最终验收结果", "复检", "技术验收", "商务验收", "开箱检验")
