@@ -320,7 +320,19 @@ def _drop_false_positive_findings(findings: list[Finding]) -> list[Finding]:
             )
         ):
             continue
-        if finding.issue_type == "qualification_domain_mismatch" and ("评分" in section_path or "评分" in source_section):
+        if finding.issue_type == "qualification_domain_mismatch":
+            if "评分" in section_path or "评分" in source_section:
+                continue
+            source_text = finding.source_text or ""
+            if any(marker in source_text for marker in ("上岗", "人员持有", "防制员证", "防治员证")) and not _looks_like_supplier_level_qualification_clause(source_text):
+                continue
+            if not _is_qualification_like_finding(finding) and not _looks_like_supplier_level_qualification_clause(source_text):
+                continue
+        if (
+            finding.issue_type == "irrelevant_certification_or_award"
+            and "其他重要条款" in section_path
+            and any(marker in (finding.source_text or "") for marker in ("企业荣誉", "供应商认证情况", "同类型项目业绩及履约评价"))
+        ):
             continue
         filtered.append(finding)
     return filtered
@@ -459,15 +471,15 @@ def _build_document_strategy_profile(
     elif domain == "catering_service":
         procurement_mode = "餐饮托管或食堂运营服务项目"
         domain_hint = "医院、学校或公共机构食堂托管、供餐保障与后勤餐饮服务类"
+    elif domain == "property_service":
+        procurement_mode = "物业管理或综合后勤服务项目"
+        domain_hint = "校园、医院或公共机构物业服务及驻场保障类"
     elif any(token in combined for token in ("血透", "透析", "医疗器械", "设备采购", "HIS", "PACS", "LIS", "碳足迹")) or domain == "medical_device_goods":
         procurement_mode = "货物采购并含安装调试项目"
         domain_hint = "医用设备供货、院内接口配套与附加合规义务并存"
     elif any(token in combined for token in ("中药", "药品", "颗粒", "医院")) or domain in {"medical_tcm", "medical_tcm_mixed"}:
         procurement_mode = "医疗药品或医用配套采购项目"
         domain_hint = "药品供货、设备配套与院内接口并存" if domain == "medical_tcm_mixed" else "药品供货与医用配套服务类"
-    elif domain == "property_service":
-        procurement_mode = "物业管理或综合后勤服务项目"
-        domain_hint = "校园、医院或公共机构物业服务及驻场保障类"
     elif any(token in combined for token in ("系统", "平台", "接口", "演示", "驻场运维")) or domain == "information_system":
         procurement_mode = "信息化或数字化服务项目"
         domain_hint = "平台建设、系统对接或持续运维类"
@@ -598,7 +610,7 @@ def _refine_findings(document: NormalizedDocument, findings: list[Finding]) -> l
     refined = _add_industry_appropriateness_findings(document, refined)
     refined = _apply_finding_arbiter(refined)
     refined = _merge_technical_justification_findings(refined)
-    refined = _filter_technical_justification_noise(refined)
+    refined = _filter_technical_justification_noise(document, refined)
     refined = _merge_similar_technical_findings(refined)
     refined = _merge_nearby_liability_findings(refined)
     refined = _apply_theme_splitter_and_summarizer(refined)
@@ -746,7 +758,16 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "scoring_content_mismatch",
         } and _text_contains_any(
             finding,
-            ("履约评价为满意", "履约评价为优秀", "其他同等评价", "国家机关或事业单位委托", "项目经验"),
+            ("履约评价为满意", "履约评价为优秀", "其他同等评价", "国家机关或事业单位委托", "项目经验", "医院物业", "三甲医院", "评审创建", "复审经验"),
+        )
+
+    if "医院物业经验和医院评审经验评分高权重且叠加履约评价证明" in title:
+        return finding.issue_type in {
+            "excessive_scoring_weight",
+            "scoring_content_mismatch",
+        } and _text_contains_any(
+            finding,
+            ("医院物业", "三甲医院", "评审创建", "复审经验", "履约评价为满意", "履约评价为优秀", "总体履约评价结果"),
         )
 
     if "付款条件与履约评价结果深度绑定且评价标准开放" in title:
@@ -756,7 +777,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "other",
         } and _text_contains_any(
             finding,
-            ("履约评价", "阶段款", "支付", "评价标准", "评价指标", "解除合同", "扣款"),
+            ("履约评价", "阶段款", "支付", "评价标准", "评价指标", "解除合同", "扣款", "管理费直接挂钩", "并非最终版本", "无条件服从", "满意度调查"),
         )
 
     if "履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担" in title:
@@ -979,7 +1000,7 @@ def _is_qualification_like_finding(finding: Finding) -> bool:
     haystack = " ".join(
         part for part in (finding.section_path or "", finding.source_section or "", finding.source_text or "") if part
     )
-    return any(marker in haystack for marker in ("申请人的资格要求", "招标公告", "资格条件", "生活垃圾分类服务认证证书", "公司治理评级证书", "合规管理体系认证证书"))
+    return any(marker in haystack for marker in ("申请人的资格要求", "资格条件", "生活垃圾分类服务认证证书", "公司治理评级证书", "合规管理体系认证证书"))
 
 
 def _shorten_section_path(section_path: str | None) -> str | None:
@@ -1077,8 +1098,9 @@ def _merge_similar_technical_findings(findings: list[Finding]) -> list[Finding]:
     return merged
 
 
-def _filter_technical_justification_noise(findings: list[Finding]) -> list[Finding]:
+def _filter_technical_justification_noise(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
     filtered: list[Finding] = []
+    domain = _document_domain(document)
     for finding in findings:
         if finding.issue_type != "technical_justification_needed":
             filtered.append(finding)
@@ -1103,6 +1125,32 @@ def _filter_technical_justification_noise(findings: list[Finding]) -> list[Findi
             continue
         if normalized in {"抗菌抗病毒卷帘", "阻燃抑菌抗病毒隔帘", "燃抑菌抗病毒"}:
             continue
+        if domain == "property_service":
+            section_text = " ".join(
+                part for part in (finding.section_path, finding.source_section, finding.table_or_item_label) if part
+            )
+            if any(marker in section_text for marker in ("商务要求", "合同条款", "违约责任", "付款方式", "验收条件")):
+                continue
+            if any(
+                marker in normalized
+                for marker in (
+                    "医院评审",
+                    "环保相关要求",
+                    "作业符合环保要求",
+                    "热水供应系统24小时运作",
+                    "高低压供配电值班24小时值班",
+                    "政府部门检查",
+                    "反恐",
+                    "消防",
+                    "生活垃圾分类",
+                    "绿化垃圾",
+                    "化粪池压榨清掏",
+                    "污水井",
+                    "雨水井",
+                    "医院内电池",
+                )
+            ):
+                continue
         filtered.append(finding)
     return filtered
 
@@ -1256,6 +1304,7 @@ def _add_scoring_structure_findings(document: NormalizedDocument, findings: list
     findings = _add_warranty_extension_scoring_theme_finding(document, findings)
     findings = _add_software_copyright_scoring_theme_finding(document, findings)
     findings = _add_experience_evaluation_theme_finding(document, findings)
+    findings = _add_property_service_experience_theme_finding(document, findings)
     return findings
 
 
@@ -1474,6 +1523,7 @@ def _add_qualification_industry_appropriateness_finding(
         clause
         for clause in document.clauses
         if _is_qualification_clause(clause)
+        and _looks_like_supplier_level_qualification_clause(clause.text or "")
         and any(marker in clause.text for marker in mismatch_markers)
     ]
     if not clauses:
@@ -1512,6 +1562,7 @@ def _add_qualification_reasoning_theme_finding(
         clause
         for clause in document.clauses
         if _is_qualification_clause(clause)
+        and _looks_like_supplier_level_qualification_clause(clause.text or "")
         and any(
             marker in clause.text
             for marker in (
@@ -1572,6 +1623,29 @@ def _add_qualification_reasoning_theme_finding(
         )
     )
     return findings
+
+
+def _looks_like_supplier_level_qualification_clause(text: str) -> bool:
+    return any(
+        marker in text
+        for marker in (
+            "投标人",
+            "投标单位",
+            "供应商",
+            "企业",
+            "公司",
+            "经营场所",
+            "营业收入",
+            "资产总额",
+            "参保人数",
+            "纳税总额",
+            "经营年限",
+            "注册资本",
+            "单项合同金额",
+            "具备以下资质",
+            "具有以下资质",
+        )
+    )
 
 
 def _add_brand_and_certification_scoring_findings(
@@ -2409,6 +2483,10 @@ def _add_experience_evaluation_theme_finding(
                 "总体履约评价结果",
                 "优”或“优秀",
                 "优或优秀",
+                "医院物业",
+                "三甲医院",
+                "评审创建",
+                "复审经验",
             )
         )
         and any(marker in clause.text for marker in ("10 分", "100分", "最高得 100 分", "最高得100分"))
@@ -2440,6 +2518,47 @@ def _add_experience_evaluation_theme_finding(
     return findings
 
 
+def _add_property_service_experience_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if _document_domain(document) != "property_service":
+        return findings
+    if any("医院物业经验和医院评审经验评分高权重且叠加履约评价证明" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if _is_scoring_clause(clause)
+        and any(marker in clause.text for marker in ("医院物业", "三甲医院", "评审创建", "复审经验", "履约评价为满意", "履约评价为优秀", "总体履约评价结果"))
+        and any(marker in clause.text for marker in ("10 分", "20分", "40分", "60分", "100分", "最高得 100 分", "最高得100分"))
+    ]
+    if len(clauses) < 2:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="excessive_scoring_weight",
+            problem_title="医院物业经验和医院评审经验评分高权重且叠加履约评价证明",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "评分项对医院物业经验、三甲医院评审创建或复审经验以及满意、优秀等履约评价证明给予较高分值。"
+                "这会把既有医院项目沉淀和主观评价证明一起放大为高分优势，明显偏向少数既有供应商。"
+            ),
+            impact_on_competition_or_performance="可能抬高新进入供应商的竞争门槛，使既有医院项目履约证明被过度放大。",
+            legal_or_policy_basis="政府采购需求管理办法（财政部）；同类项目业绩案例解析（中国政府采购网）",
+            rewrite_suggestion="建议压降医院物业经验及医院评审经验权重，删除满意或优秀等主观履约评价前提，改以服务内容匹配度、项目规模和履约完成证明作为辅助评价因素。",
+            needs_human_review=True,
+            human_review_reason="需结合医院物业项目特点和类似项目经验必要性判断医院物业经验及医院评审经验是否被不当放大为决定性高分因素。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
 def _add_payment_evaluation_chain_finding(
     document: NormalizedDocument, findings: list[Finding]
 ) -> list[Finding]:
@@ -2463,12 +2582,16 @@ def _add_payment_evaluation_chain_finding(
                 "累计扣款金额达到合同金额的 30%",
                 "甲方有权解除合同",
                 "每月服务费与考核结果挂钩",
+                "管理费直接挂钩",
                 "满意度评价结果与服务费挂钩",
                 "满意度评价在",
                 "按1%扣减",
                 "按2%扣减",
                 "按3%扣减",
                 "提前告知",
+                "并非最终版本",
+                "及时修正《标准》",
+                "无条件服从",
             )
         )
     ]
@@ -2483,9 +2606,13 @@ def _add_payment_evaluation_chain_finding(
                 "评价指标",
                 "项目负责人可根据项目要求自行设定",
                 "每月服务费与考核结果挂钩",
+                "管理费直接挂钩",
                 "满意度评价结果与服务费挂钩",
                 "满意度评价在",
                 "提前告知",
+                "并非最终版本",
+                "及时修正《标准》",
+                "无条件服从",
             )
         )
     ]
@@ -3022,16 +3149,28 @@ def _add_template_domain_theme_finding(document: NormalizedDocument, findings: l
     domain = _document_domain(document)
     mismatch_markers = _domain_mismatch_markers(domain)
     mixed_scope_markers = ("软件端口", "医院信息系统", "HIS", "PACS", "LIS", "数据交换", "碳足迹", "盘查报告", "改进报告")
-    clauses = [
-        clause
-        for clause in document.clauses
-        if not _is_template_instruction_clause(clause)
-        if not _is_qualification_clause(clause)
-        if any(marker in clause.text for marker in mismatch_markers)
-        and any(marker in clause.text for marker in ("保洁", "芯片", "系统", "安防", "设施维修", "特种设备", "垃圾", "实际需求为准"))
-        and not (domain == "medical_device_goods" and any(marker in clause.text for marker in mixed_scope_markers))
-        and not (domain == "furniture_goods" and not any(marker in clause.text for marker in ("资产定位", "定位管理标签模块", "蓝牙", "UWB", "资产管理读写基站", "智能芯片", "碳足迹", "无缝对接")))
-    ]
+    clauses = []
+    for clause in document.clauses:
+        if _is_template_instruction_clause(clause):
+            continue
+        if _is_qualification_clause(clause):
+            continue
+        if not any(marker in clause.text for marker in mismatch_markers):
+            continue
+        if not any(marker in clause.text for marker in ("保洁", "芯片", "系统", "安防", "设施维修", "特种设备", "垃圾", "实际需求为准", "平台", "接口", "软件")):
+            continue
+        if domain == "medical_device_goods" and any(marker in clause.text for marker in mixed_scope_markers):
+            continue
+        if domain == "furniture_goods" and not any(
+            marker in clause.text for marker in ("资产定位", "定位管理标签模块", "蓝牙", "UWB", "资产管理读写基站", "智能芯片", "碳足迹", "无缝对接")
+        ):
+            continue
+        if domain == "property_service":
+            if _is_scoring_clause(clause):
+                continue
+            if not any(marker in clause.text for marker in ("芯片", "HIS", "PACS", "LIS", "数据交换", "软件著作权", "著作权登记证书", "实际需求为准")):
+                continue
+        clauses.append(clause)
     if len(clauses) < 1:
         return findings
     findings.append(
@@ -3259,14 +3398,14 @@ def _document_domain(document: NormalizedDocument) -> str:
         return "textile_goods"
     if any(marker in base_text for marker in ("家具", "办公类家具", "医用家具")):
         return "furniture_goods"
+    if any(marker in base_text for marker in ("物业管理", "物业服务", "保安", "保洁", "后勤服务")):
+        return "property_service"
     if any(marker in base_text for marker in ("血透", "透析", "医疗器械", "三维电生理", "胃肠镜", "设备采购项目")):
         return "medical_device_goods"
     if any(marker in base_text for marker in ("中药", "配方颗粒", "医院", "药品", "饮片")):
         if any(marker in clause_text for marker in ("自动化调剂", "发药机", "信息化管理系统", "无缝对接", "设备需求参数")):
             return "medical_tcm_mixed"
         return "medical_tcm"
-    if any(marker in base_text for marker in ("物业管理", "物业服务", "保安", "保洁", "后勤服务")):
-        return "property_service"
     if any(marker in base_text for marker in ("平台", "信息", "软件", "系统", "数据")):
         return "information_system"
     if any(marker in base_text for marker in ("发电机", "机电", "安装", "设备")):
@@ -3277,8 +3416,10 @@ def _document_domain(document: NormalizedDocument) -> str:
 def _is_qualification_clause(clause) -> bool:
     if _is_template_instruction_clause(clause):
         return False
-    text = " ".join(part for part in (clause.section_path or "", clause.source_section or "") if part)
-    return "资格" in text or "申请人的资格要求" in text or "招标公告" in text
+    text = " ".join(part for part in (clause.section_path or "", clause.source_section or "", clause.table_or_item_label or "") if part)
+    if _is_scoring_clause(clause):
+        return False
+    return "资格" in text or "申请人的资格要求" in text
 
 
 def _is_technical_clause(clause) -> bool:
@@ -3389,6 +3530,14 @@ def _is_template_instruction_clause(clause) -> bool:
             "政府采购违法行为风险知悉确认书",
             "特别警示条款",
             "投标书编制软件",
+            "深圳政府采购智慧平台",
+            "投标文件制作工具",
+            "文件创建标识码",
+            "信息公开部分的内容到此为止",
+            "投标文件附件（信息不公开部分）",
+            "投标人情况及资格证明文件",
+            "投标文件组成：",
+            "投标文件正文（信息公开部分）",
             "如有方案表述中有出现类似可实现、实现、可支持、支持等描述",
         )
     )
@@ -3397,6 +3546,7 @@ def _is_template_instruction_clause(clause) -> bool:
 def _domain_mismatch_markers(domain: str) -> tuple[str, ...]:
     mapping = {
         "information_system": ("园区保洁", "设施维修", "安防管理", "保洁", "垃圾", "特种设备", "高空清洗", "CCRC", "ISO20000"),
+        "property_service": ("芯片", "系统", "软件", "平台", "接口", "HIS", "PACS", "LIS", "数据交换", "棉花加工", "水运工程监理甲级"),
         "medical_tcm": ("IT服务管理", "生活垃圾分类", "SPCA", "有害生物防制", "棉花加工", "高空清洗", "CCRC", "ISO20000"),
         "medical_tcm_mixed": (
             "IT服务管理",

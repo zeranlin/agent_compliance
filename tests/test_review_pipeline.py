@@ -1640,6 +1640,175 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("物业管理或综合后勤服务项目", review.overall_risk_summary)
         self.assertIn("校园、医院或公共机构物业服务及驻场保障类", review.overall_risk_summary)
 
+    def test_review_prefers_property_service_strategy_even_for_hospital_property_project(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：深圳市龙岗区人民医院物业管理服务",
+                "评分因素",
+                "投标人具有以下认证证书，且认证范围包含物业管理内容，每提供一项有效认证的得20分，最高得100分。",
+                "物业服务人员须24小时值守并完成医院后勤保障。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/医院物业管理服务.docx",
+            document_name="医院物业管理服务.docx",
+            file_hash="hospital-property-strategy",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        self.assertIn("物业管理或综合后勤服务项目", review.overall_risk_summary)
+        self.assertNotIn("医疗药品或医用配套采购项目", review.overall_risk_summary)
+
+    def test_review_filters_property_service_environmental_contract_noise_from_technical_justification(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：深圳市龙岗区人民医院物业管理服务",
+                "五、技术要求",
+                "4)负责回收医院内电池，按照深圳市环保相关要求进行处理。",
+                "污水井、雨水井及时疏通清理，每月至少进行一次化粪池压榨清掏并消毒处理，作业符合环保要求。",
+                "★六、商务要求",
+                "因中标单位的过错，造成政府部门检查（包括但不限于环保、反恐、消防、医院评审检查等）不合格，对采购人造成重大影响的。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/医院物业管理服务.docx",
+            document_name="医院物业管理服务.docx",
+            file_hash="hospital-property-technical-noise",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("安全环保类技术要求可能合理但需补充必要性论证", titles)
+
+    def test_review_does_not_treat_property_core_service_terms_as_template_mismatch(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：深圳市龙岗区人民医院物业管理服务",
+                "评分因素",
+                "保洁管理服务",
+                "安保管理服务",
+                "设施维修服务",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/医院物业管理服务.docx",
+            document_name="医院物业管理服务.docx",
+            file_hash="hospital-property-template-noise",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("文件中存在与标的域不匹配的模板残留或义务外扩", titles)
+
+    def test_review_requires_supplier_level_markers_for_qualification_umbrella(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：深圳市龙岗区人民医院物业管理服务",
+                "技术要求",
+                "★所有上岗消杀人员持有有害生物防制员证或防治员证。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/医院物业管理服务.docx",
+            document_name="医院物业管理服务.docx",
+            file_hash="hospital-property-qualification-noise",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("资格条件中存在与标的域不匹配的行业资质或专门许可", titles)
+        self.assertNotIn("资格条件整体超出法定准入和履约必需范围", titles)
+
+    def test_review_ignores_submission_appendix_financial_fields_for_qualification_themes(self) -> None:
+        text = "\n".join(
+            [
+                "第一章 招标公告",
+                "三、投标人情况及资格证明文件",
+                "中小企业声明函（服务）",
+                "从业人员、营业收入、资产总额按上年度数据填写。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/物业管理服务.docx",
+            document_name="物业管理服务.docx",
+            file_hash="property-appendix-qualification-noise",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("资格条件设置一般财务和规模门槛", titles)
+        self.assertNotIn("资格条件整体超出法定准入和履约必需范围", titles)
+
+    def test_review_skips_property_template_theme_for_scoring_side_software_items(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：深圳市龙岗区人民医院物业管理服务",
+                "评标信息",
+                "评分因素",
+                "物业垃圾分类自动化分拣类系统软件著作权，每提供一个得20分，最高得100分。",
+                "物业能源管理类软件著作权，每提供一个得20分，最高得100分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/医院物业管理服务.docx",
+            document_name="医院物业管理服务.docx",
+            file_hash="hospital-property-template-scoring-noise",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("物业服务场景叠加自动化系统和软件著作权评分，边界不清", titles)
+        self.assertNotIn("文件中存在与标的域不匹配的模板残留或义务外扩", titles)
+
+    def test_review_adds_property_service_experience_high_weight_theme(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：深圳市龙岗区人民医院物业管理服务",
+                "评标信息",
+                "评分因素",
+                "同类型项目业绩及履约评价",
+                "医院物业管理项目履约评价为满意或优秀的，每提供1个得20分，最高得60分。",
+                "具有三甲医院评审创建或复审经验的，每提供1个得20分，最高得40分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/医院物业管理服务.docx",
+            document_name="医院物业管理服务.docx",
+            file_hash="hospital-property-experience-weight",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("医院物业经验和医院评审经验评分高权重且叠加履约评价证明", titles)
+
     def test_review_drops_qualification_domain_mismatch_when_it_only_appears_in_scoring(self) -> None:
         finding = Finding(
             finding_id="F-001",
@@ -1653,6 +1822,36 @@ class ReviewPipelineTest(unittest.TestCase):
             text_line_start=1,
             text_line_end=1,
             source_text="具有相关机构颁发的有害生物防制员证书得5分",
+            issue_type="qualification_domain_mismatch",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky="",
+            impact_on_competition_or_performance="",
+            legal_or_policy_basis=None,
+            rewrite_suggestion="",
+            needs_human_review=True,
+            human_review_reason="",
+            finding_origin="rule",
+        )
+
+        filtered = _drop_false_positive_findings([finding])
+        self.assertEqual([], filtered)
+
+    def test_review_drops_property_service_post_certificate_single_point_from_qualification_mismatch(self) -> None:
+        finding = Finding(
+            finding_id="F-001",
+            document_name="物业管理服务.docx",
+            problem_title="资格条件中出现与采购标的不匹配的资质要求",
+            page_hint=None,
+            clause_id="★所有上岗消杀人员持有有害生物防制员证或防治员证",
+            source_section="五、技术要求",
+            section_path="第一章 招标公告-五、技术要求",
+            table_or_item_label=None,
+            text_line_start=2342,
+            text_line_end=2342,
+            source_text="★所有上岗消杀人员持有有害生物防制员证或防治员证。",
             issue_type="qualification_domain_mismatch",
             risk_level="high",
             severity_score=3,
