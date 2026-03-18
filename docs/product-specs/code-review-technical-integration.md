@@ -190,7 +190,32 @@ PYTHONPATH=src python3 -m agent_compliance web
 - 尽量复用标准化输入、规则命中和 findings
 - 避免对同一文件反复整篇自由推理
 
-## 8. 规则候选与 benchmark gate
+## 8. 离线法规资料层
+
+当前代码审查离线引用的主要资料是：
+- `docs/references/legal-authorities/*.md`
+
+这意味着当前已经支持：
+- 基于本地法规摘要和元数据进行离线引用
+
+当前尚未支持：
+- 从本地权威原文快照中直接检索条文
+- 从本地标准化法规文本中做更细粒度摘录
+
+后续建议新增：
+- `data/legal-authorities/raw/`
+- `data/legal-authorities/normalized/`
+- `data/legal-authorities/index/`
+
+设计原则：
+- 摘要层继续用于人工维护和主题说明
+- 原文快照层用于断网访问权威来源
+- 标准化文本层用于代码离线检索和摘录
+
+详细方案见：
+- [法规原文本地存储方案](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/legal-authority-local-storage-spec.md)
+
+## 9. 规则候选与 benchmark gate
 
 当前已支持自动生成：
 - `rule candidates`
@@ -203,22 +228,22 @@ PYTHONPATH=src python3 -m agent_compliance web
 - 让模型新增问题沉淀为候选规则
 - 通过 gate 决定是否具备转正式规则的基础
 
-## 9. 对接建议
+## 10. 对接建议
 
-### 9.1 适合直接对接的场景
+### 10.1 适合直接对接的场景
 
 - 内部采购审查工作台
 - 文件上传与审查结果展示页面
 - 规则管理和优化后台
 - 批量审查脚本
 
-### 9.2 不建议直接依赖的场景
+### 10.2 不建议直接依赖的场景
 
 - 要求强实时外部联网法规检索
 - 要求 Word 原生精确页码级跳转
 - 要求完全替代人工终审
 
-### 9.3 推荐接入模式
+### 10.3 推荐接入模式
 
 推荐先接：
 - `POST /api/review`
@@ -231,7 +256,7 @@ PYTHONPATH=src python3 -m agent_compliance web
 - benchmark 展示
 - 差异样本回归
 
-## 10. 版本与扩展建议
+## 11. 版本与扩展建议
 
 建议将系统按以下边界扩展：
 - 文档标准化层
@@ -244,14 +269,14 @@ PYTHONPATH=src python3 -m agent_compliance web
 
 这样可以避免后续把新能力直接堆到单一函数中。
 
-## 11. 对接时需要知道的边界
+## 12. 对接时需要知道的边界
 
 - 当前页面和 API 主要服务本地部署场景
 - 当前 `review-next` 更适合人工复核，不是对外公开门户
 - 当前规则管理页用于“候选规则确认入库”，不是完整运维后台
 - 当前长文档 LLM 稳定性仍在持续优化中
 
-## 12. 一句话给技术团队
+## 13. 一句话给技术团队
 
 如果只用一句话向技术团队描述：
 
