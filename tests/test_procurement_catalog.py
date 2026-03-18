@@ -4,7 +4,11 @@ import json
 import unittest
 from pathlib import Path
 
-from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog, load_procurement_catalogs
+from agent_compliance.knowledge.procurement_catalog import (
+    classify_procurement_catalog,
+    full_catalog_names_by_code_or_prefix,
+    load_procurement_catalogs,
+)
 from agent_compliance.knowledge.review_domain_map import load_review_domain_map
 from agent_compliance.parsers.section_splitter import split_into_clauses
 from agent_compliance.pipelines.review_strategy import build_analyzer_execution_order, build_document_strategy_profile
@@ -29,6 +33,8 @@ class ProcurementCatalogTest(unittest.TestCase):
         catalogs = load_procurement_catalogs()
         self.assertGreaterEqual(len(catalogs), 8)
         self.assertTrue(any(item.domain_key == "information_system" for item in catalogs))
+        info_catalog = next(item for item in catalogs if item.domain_key == "information_system")
+        self.assertIn("信息系统集成实施服务", info_catalog.domain_keywords)
 
     def test_classify_information_system_project(self) -> None:
         document = self._document(
@@ -40,6 +46,16 @@ class ProcurementCatalogTest(unittest.TestCase):
         self.assertEqual(classification.primary_domain_key, "information_system")
         self.assertEqual(classification.primary_catalog_name, "信息化平台及系统运维")
         self.assertFalse(classification.is_mixed_scope)
+
+    def test_classify_by_official_catalog_name(self) -> None:
+        document = self._document(
+            "信息系统集成实施服务项目.docx",
+            ["信息系统集成实施服务", "运行维护服务", "应用软件开发服务"],
+        )
+        classification = classify_procurement_catalog(document)
+
+        self.assertEqual(classification.primary_domain_key, "information_system")
+        self.assertEqual(classification.primary_catalog_name, "信息化平台及系统运维")
 
     def test_classify_medical_tcm_mixed_project(self) -> None:
         document = self._document(
@@ -111,3 +127,9 @@ class ProcurementCatalogTest(unittest.TestCase):
         self.assertIn("C21040000", by_domain["property_service"].mapped_catalog_codes)
         self.assertIn("C1602", by_domain["information_system"].mapped_catalog_prefixes)
         self.assertIn("C2309", by_domain["signage_printing_service"].mapped_catalog_prefixes)
+
+    def test_full_catalog_names_are_resolved_for_review_domains(self) -> None:
+        mapping = full_catalog_names_by_code_or_prefix()
+        self.assertIn("家具", mapping["CAT-FURNITURE"])
+        self.assertIn("物业管理服务", mapping["CAT-PROPERTY"])
+        self.assertIn("信息系统集成实施服务", mapping["CAT-INFO"])

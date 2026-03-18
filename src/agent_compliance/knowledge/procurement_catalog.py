@@ -6,10 +6,12 @@ from functools import lru_cache
 from pathlib import Path
 
 from agent_compliance.schemas import NormalizedDocument
+from agent_compliance.knowledge.review_domain_map import load_review_domain_map
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CATALOG_FILE = REPO_ROOT / "data" / "procurement-catalog" / "catalogs.json"
+FULL_CATALOG_FILE = REPO_ROOT / "data" / "procurement-catalog" / "catalogs-full.json"
 
 
 @dataclass(frozen=True)
@@ -23,6 +25,25 @@ class ProcurementCatalog:
     high_risk_patterns: tuple[str, ...]
     related_issue_types: tuple[str, ...]
     preferred_analyzers: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class FullCatalogEntry:
+    catalog_code: str
+    catalog_name: str
+    category_type: str
+    level: int
+    parent_code: str
+
+
+def _clean_catalog_name(name: str) -> str:
+    cleaned = name.strip()
+    for marker in (" ——", "  ", "\t"):
+        if marker in cleaned:
+            cleaned = cleaned.split(marker, 1)[0].strip()
+    if " " in cleaned:
+        cleaned = cleaned.split(" ", 1)[0].strip()
+    return cleaned
 
 
 @dataclass(frozen=True)
@@ -41,13 +62,27 @@ class CatalogClassification:
 @lru_cache(maxsize=1)
 def load_procurement_catalogs() -> tuple[ProcurementCatalog, ...]:
     payload = json.loads(CATALOG_FILE.read_text(encoding="utf-8"))
+    review_domain_map = {entry.catalog_id: entry for entry in load_review_domain_map()}
+    full_catalog_names = full_catalog_names_by_code_or_prefix()
     return tuple(
         ProcurementCatalog(
             catalog_id=item["catalog_id"],
             catalog_name=item["catalog_name"],
             domain_key=item["domain_key"],
             category_type=item["category_type"],
-            domain_keywords=tuple(item.get("domain_keywords", [])),
+            domain_keywords=tuple(
+                dict.fromkeys(
+                    [
+                        *item.get("domain_keywords", []),
+                        *(
+                            review_domain_map.get(item["catalog_id"]).keyword_fallbacks
+                            if review_domain_map.get(item["catalog_id"]) is not None
+                            else ()
+                        ),
+                        *full_catalog_names.get(item["catalog_id"], ()),
+                    ]
+                )
+            ),
             reasonable_requirements=tuple(item.get("reasonable_requirements", [])),
             high_risk_patterns=tuple(item.get("high_risk_patterns", [])),
             related_issue_types=tuple(item.get("related_issue_types", [])),
@@ -55,6 +90,41 @@ def load_procurement_catalogs() -> tuple[ProcurementCatalog, ...]:
         )
         for item in payload
     )
+
+
+@lru_cache(maxsize=1)
+def load_full_catalog_entries() -> tuple[FullCatalogEntry, ...]:
+    payload = json.loads(FULL_CATALOG_FILE.read_text(encoding="utf-8"))
+    return tuple(
+        FullCatalogEntry(
+            catalog_code=item["catalog_code"],
+            catalog_name=item["catalog_name"],
+            category_type=item["category_type"],
+            level=int(item["level"]),
+            parent_code=item["parent_code"],
+        )
+        for item in payload.get("entries", [])
+    )
+
+
+@lru_cache(maxsize=1)
+def full_catalog_names_by_code_or_prefix() -> dict[str, tuple[str, ...]]:
+    full_entries = load_full_catalog_entries()
+    review_map = load_review_domain_map()
+    resolved: dict[str, tuple[str, ...]] = {}
+    for entry in review_map:
+        names: list[str] = []
+        exact_codes = set(entry.mapped_catalog_codes)
+        prefixes = tuple(entry.mapped_catalog_prefixes)
+        for full_entry in full_entries:
+            if full_entry.catalog_code in exact_codes:
+                names.append(_clean_catalog_name(full_entry.catalog_name))
+                continue
+            if prefixes and any(full_entry.catalog_code.startswith(prefix) for prefix in prefixes):
+                if full_entry.level <= 4:
+                    names.append(_clean_catalog_name(full_entry.catalog_name))
+        resolved[entry.catalog_id] = tuple(dict.fromkeys(names))[:24]
+    return resolved
 
 
 def _catalog_by_domain_key(domain_key: str) -> ProcurementCatalog | None:
