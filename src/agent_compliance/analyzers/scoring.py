@@ -4,6 +4,7 @@ from collections import OrderedDict
 import re
 from typing import Any, Callable
 
+from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classification_has_domain
 from agent_compliance.schemas import Finding, NormalizedDocument
 
 
@@ -21,13 +22,24 @@ def apply_scoring_analyzers(
     is_scoring_clause: ClausePredicate,
     document_domain: DomainResolver,
     merge_optional_text: TextMerger,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     findings = _add_scoring_structure_imbalance_finding(findings, merge_optional_text=merge_optional_text)
     findings = _add_goods_capacity_scoring_theme_finding(
-        document, findings, build_theme_finding=build_theme_finding, is_scoring_clause=is_scoring_clause, document_domain=document_domain
+        document,
+        findings,
+        build_theme_finding=build_theme_finding,
+        is_scoring_clause=is_scoring_clause,
+        document_domain=document_domain,
+        catalog_classification=catalog_classification,
     )
     findings = _add_furniture_production_capacity_scoring_theme_finding(
-        document, findings, build_theme_finding=build_theme_finding, is_scoring_clause=is_scoring_clause, document_domain=document_domain
+        document,
+        findings,
+        build_theme_finding=build_theme_finding,
+        is_scoring_clause=is_scoring_clause,
+        document_domain=document_domain,
+        catalog_classification=catalog_classification,
     )
     findings = _add_subjective_scoring_theme_finding(
         document, findings, build_theme_finding=build_theme_finding, is_scoring_clause=is_scoring_clause
@@ -63,6 +75,7 @@ def apply_scoring_analyzers(
         build_theme_finding=build_theme_finding,
         is_scoring_clause=is_scoring_clause,
         document_domain=document_domain,
+        catalog_classification=catalog_classification,
     )
     findings = _add_brand_and_certification_scoring_findings(
         document,
@@ -70,6 +83,7 @@ def apply_scoring_analyzers(
         build_theme_finding=build_theme_finding,
         is_scoring_clause=is_scoring_clause,
         document_domain=document_domain,
+        catalog_classification=catalog_classification,
     )
     return findings
 
@@ -81,10 +95,11 @@ def _add_goods_capacity_scoring_theme_finding(
     build_theme_finding: ThemeBuilder,
     is_scoring_clause: ClausePredicate,
     document_domain: DomainResolver,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("经验评价、生产设备和认证因素高分集中并偏离核心供货能力" in finding.problem_title for finding in findings):
         return findings
-    if document_domain(document) != "furniture_goods":
+    if not _matches_catalog_domain(document, document_domain, catalog_classification, "furniture_goods"):
         return findings
     scoring_clauses = [clause for clause in document.clauses if is_scoring_clause(clause)]
     category_clauses = [
@@ -149,10 +164,11 @@ def _add_furniture_production_capacity_scoring_theme_finding(
     build_theme_finding: ThemeBuilder,
     is_scoring_clause: ClausePredicate,
     document_domain: DomainResolver,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("生产设备和制造能力直接高分赋值且与核心履约评价边界不清" in finding.problem_title for finding in findings):
         return findings
-    if document_domain(document) != "furniture_goods":
+    if not _matches_catalog_domain(document, document_domain, catalog_classification, "furniture_goods"):
         return findings
     clauses = [
         clause
@@ -845,8 +861,9 @@ def _add_property_service_experience_theme_finding(
     build_theme_finding: ThemeBuilder,
     is_scoring_clause: ClausePredicate,
     document_domain: DomainResolver,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
-    if document_domain(document) != "property_service":
+    if not _matches_catalog_domain(document, document_domain, catalog_classification, "property_service"):
         return findings
     if any("医院物业经验和医院评审经验评分高权重且叠加履约评价证明" in finding.problem_title for finding in findings):
         return findings
@@ -891,6 +908,7 @@ def _add_brand_and_certification_scoring_findings(
     build_theme_finding: ThemeBuilder,
     is_scoring_clause: ClausePredicate,
     document_domain: DomainResolver,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     findings = _add_brand_scoring_theme_finding(
         document, findings, build_theme_finding=build_theme_finding, is_scoring_clause=is_scoring_clause
@@ -901,6 +919,7 @@ def _add_brand_and_certification_scoring_findings(
         build_theme_finding=build_theme_finding,
         is_scoring_clause=is_scoring_clause,
         document_domain=document_domain,
+        catalog_classification=catalog_classification,
     )
     return findings
 
@@ -976,6 +995,7 @@ def _add_certification_scoring_theme_finding(
     build_theme_finding: ThemeBuilder,
     is_scoring_clause: ClausePredicate,
     document_domain: DomainResolver,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any(
         finding.problem_title in {"认证评分混入错位证书且高分值结构失衡", "认证评分项目过密且高分值集中"}
@@ -1027,7 +1047,12 @@ def _add_certification_scoring_theme_finding(
         "注册安全工程师",
     )
     has_domain_mismatch = any(any(marker in clause.text for marker in mismatch_markers) for clause in clauses)
-    if not has_domain_mismatch and document_domain(document) == "furniture_goods":
+    if not has_domain_mismatch and _matches_catalog_domain(
+        document,
+        document_domain,
+        catalog_classification,
+        "furniture_goods",
+    ):
         findings.append(
             build_theme_finding(
                 document=document,
@@ -1074,6 +1099,15 @@ def _add_certification_scoring_theme_finding(
         )
     )
     return findings
+
+
+def _matches_catalog_domain(
+    document: NormalizedDocument,
+    document_domain: DomainResolver,
+    catalog_classification: CatalogClassification | None,
+    domain_key: str,
+) -> bool:
+    return classification_has_domain(catalog_classification, domain_key) or document_domain(document) == domain_key
 
 
 def _is_scoring_weight_candidate(finding: Finding) -> bool:

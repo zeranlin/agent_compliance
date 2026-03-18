@@ -32,7 +32,11 @@ from agent_compliance.pipelines.review_evidence import (
     shorten_section_path as _shorten_section_path,
 )
 from agent_compliance.knowledge.references_index import ReferenceRecord, find_references
-from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classify_procurement_catalog
+from agent_compliance.knowledge.procurement_catalog import (
+    CatalogClassification,
+    classification_has_domain,
+    classify_procurement_catalog,
+)
 from agent_compliance.pipelines.review_strategy import (
     build_analyzer_execution_order,
     build_overall_summary,
@@ -453,6 +457,7 @@ def _refine_findings(
                 is_scoring_clause=_is_scoring_clause,
                 document_domain=_document_domain,
                 merge_optional_text=_merge_optional_text,
+                catalog_classification=classification,
             )
             continue
         if analyzer_group == "commercial":
@@ -461,6 +466,7 @@ def _refine_findings(
                 refined,
                 build_theme_finding=_build_theme_finding,
                 is_substantive_commercial_clause=_is_substantive_commercial_clause,
+                catalog_classification=classification,
             )
             continue
         if analyzer_group == "qualification":
@@ -469,6 +475,7 @@ def _refine_findings(
                 refined,
                 build_theme_finding=_build_theme_finding,
                 is_qualification_clause=_is_qualification_clause,
+                catalog_classification=classification,
             )
             continue
         if analyzer_group == "technical":
@@ -477,9 +484,10 @@ def _refine_findings(
                 refined,
                 build_theme_finding=_build_theme_finding,
                 is_technical_clause=_is_technical_clause,
+                catalog_classification=classification,
             )
             continue
-    refined = _add_domain_match_findings(document, refined)
+    refined = _add_domain_match_findings(document, refined, classification=classification)
     refined = _add_industry_appropriateness_findings(document, refined)
     refined = apply_finding_arbiter(refined)
     refined = _merge_technical_justification_findings(refined)
@@ -712,16 +720,21 @@ def _technical_justification_human_review_reason(family: str) -> str:
     )
 
 
-def _add_domain_match_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
-    findings = _add_qualification_domain_theme_finding(document, findings)
-    findings = _add_scoring_domain_theme_finding(document, findings)
-    findings = _add_mixed_scope_boundary_theme_finding(document, findings)
-    findings = _add_template_domain_theme_finding(document, findings)
+def _add_domain_match_findings(
+    document: NormalizedDocument,
+    findings: list[Finding],
+    classification: CatalogClassification | None = None,
+) -> list[Finding]:
+    findings = _add_qualification_domain_theme_finding(document, findings, classification=classification)
+    findings = _add_scoring_domain_theme_finding(document, findings, classification=classification)
+    findings = _add_mixed_scope_boundary_theme_finding(document, findings, classification=classification)
+    findings = _add_template_domain_theme_finding(document, findings, classification=classification)
     findings = _qualification_industry_appropriateness_finding(
         document,
         findings,
         build_theme_finding=_build_theme_finding,
         is_qualification_clause=_is_qualification_clause,
+        catalog_classification=classification,
     )
     return findings
 
@@ -1056,7 +1069,9 @@ def _add_commercial_lifecycle_theme_finding(
 
 
 def _add_qualification_domain_theme_finding(
-    document: NormalizedDocument, findings: list[Finding]
+    document: NormalizedDocument,
+    findings: list[Finding],
+    classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("资格条件中存在与标的域不匹配的资质或登记要求" in finding.problem_title for finding in findings):
         return findings
@@ -1078,6 +1093,8 @@ def _add_qualification_domain_theme_finding(
             )
         )
     ]
+    if classification_has_domain(classification, "property_service"):
+        clauses = [clause for clause in clauses if "特种设备安全管理和作业人员证书" not in clause.text]
     if not clauses:
         return findings
     findings.append(
@@ -1105,10 +1122,14 @@ def _add_qualification_domain_theme_finding(
     return findings
 
 
-def _add_scoring_domain_theme_finding(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+def _add_scoring_domain_theme_finding(
+    document: NormalizedDocument,
+    findings: list[Finding],
+    classification: CatalogClassification | None = None,
+) -> list[Finding]:
     if any("评分项中存在与标的域不匹配的证书认证或模板内容" in finding.problem_title for finding in findings):
         return findings
-    domain = _document_domain(document)
+    domain = _effective_domain_key(document, classification)
     mismatch_markers = _domain_mismatch_markers(domain)
     clauses = [
         clause
@@ -1144,7 +1165,11 @@ def _add_scoring_domain_theme_finding(document: NormalizedDocument, findings: li
     return findings
 
 
-def _add_mixed_scope_boundary_theme_finding(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+def _add_mixed_scope_boundary_theme_finding(
+    document: NormalizedDocument,
+    findings: list[Finding],
+    classification: CatalogClassification | None = None,
+) -> list[Finding]:
     existing_titles = {finding.problem_title for finding in findings}
     if (
         "混合采购场景叠加自动化设备和信息化接口义务，边界不清" in existing_titles
@@ -1153,7 +1178,7 @@ def _add_mixed_scope_boundary_theme_finding(document: NormalizedDocument, findin
         or "标识标牌及宣传印制服务叠加设备保障和信息化支撑内容，边界不清" in existing_titles
     ):
         return findings
-    domain = _document_domain(document)
+    domain = _effective_domain_key(document, classification)
     if domain == "medical_tcm_mixed":
         clauses = [
             clause
@@ -1331,10 +1356,14 @@ def _top_level_section_key(section_path: str | None) -> str:
     return section_path.split("-")[0].strip()
 
 
-def _add_template_domain_theme_finding(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+def _add_template_domain_theme_finding(
+    document: NormalizedDocument,
+    findings: list[Finding],
+    classification: CatalogClassification | None = None,
+) -> list[Finding]:
     if any("文件中存在与标的域不匹配的模板残留或义务外扩" in finding.problem_title for finding in findings):
         return findings
-    domain = _document_domain(document)
+    domain = _effective_domain_key(document, classification)
     mismatch_markers = _domain_mismatch_markers(domain)
     mixed_scope_markers = ("软件端口", "医院信息系统", "HIS", "PACS", "LIS", "数据交换", "碳足迹", "盘查报告", "改进报告")
     clauses = []
@@ -1392,6 +1421,15 @@ def _add_template_domain_theme_finding(document: NormalizedDocument, findings: l
         )
     )
     return findings
+
+
+def _effective_domain_key(
+    document: NormalizedDocument,
+    classification: CatalogClassification | None,
+) -> str:
+    if classification is not None and classification.primary_domain_key:
+        return classification.primary_domain_key
+    return _document_domain(document)
 
 
 def _add_geographic_tendency_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:

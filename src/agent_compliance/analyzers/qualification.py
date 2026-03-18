@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classification_has_domain
 from agent_compliance.schemas import Finding, NormalizedDocument
 
 
@@ -15,30 +16,35 @@ def apply_qualification_analyzers(
     *,
     build_theme_finding: ThemeBuilder,
     is_qualification_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     findings = _add_qualification_financial_scale_theme_finding(
         document,
         findings,
         build_theme_finding=build_theme_finding,
         is_qualification_clause=is_qualification_clause,
+        catalog_classification=catalog_classification,
     )
     findings = _add_qualification_operating_scope_theme_finding(
         document,
         findings,
         build_theme_finding=build_theme_finding,
         is_qualification_clause=is_qualification_clause,
+        catalog_classification=catalog_classification,
     )
     findings = _add_qualification_industry_appropriateness_finding(
         document,
         findings,
         build_theme_finding=build_theme_finding,
         is_qualification_clause=is_qualification_clause,
+        catalog_classification=catalog_classification,
     )
     findings = _add_qualification_reasoning_theme_finding(
         document,
         findings,
         build_theme_finding=build_theme_finding,
         is_qualification_clause=is_qualification_clause,
+        catalog_classification=catalog_classification,
     )
     return findings
 
@@ -72,6 +78,7 @@ def _add_qualification_financial_scale_theme_finding(
     *,
     build_theme_finding: ThemeBuilder,
     is_qualification_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("资格条件设置一般财务和规模门槛" in finding.problem_title for finding in findings):
         return findings
@@ -135,6 +142,7 @@ def _add_qualification_operating_scope_theme_finding(
     *,
     build_theme_finding: ThemeBuilder,
     is_qualification_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("资格条件设置经营年限、属地场所或单项业绩门槛" in finding.problem_title for finding in findings):
         return findings
@@ -193,6 +201,7 @@ def _add_qualification_industry_appropriateness_finding(
     *,
     build_theme_finding: ThemeBuilder,
     is_qualification_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("资格条件中存在与标的域不匹配的行业资质或专门许可" in finding.problem_title for finding in findings):
         return findings
@@ -208,6 +217,10 @@ def _add_qualification_industry_appropriateness_finding(
         "企业诚信管理体系认证证书",
         "《企业诚信管理体系认证证书》",
     )
+    if classification_has_domain(catalog_classification, "property_service"):
+        mismatch_markers = tuple(marker for marker in mismatch_markers if marker not in ("特种设备安全管理和作业人员证书",))
+    if classification_has_domain(catalog_classification, "signage_printing_service"):
+        mismatch_markers = (*mismatch_markers, "IT服务管理体系认证证书", "保安服务认证证书", "信息安全管理体系认证证书")
     clauses = [
         clause
         for clause in document.clauses
@@ -248,6 +261,7 @@ def _add_qualification_reasoning_theme_finding(
     *,
     build_theme_finding: ThemeBuilder,
     is_qualification_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("资格条件整体超出法定准入和履约必需范围" in finding.problem_title for finding in findings):
         return findings
@@ -298,6 +312,11 @@ def _add_qualification_reasoning_theme_finding(
     ]
     if len(clauses) < 3:
         return findings
+    if classification_has_domain(catalog_classification, "property_service") and not any(
+        marker in " ".join(clause.text for clause in clauses)
+        for marker in ("纳税总额", "参保人数", "员工总数", "资产总额", "净资产", "成立时间", "固定的售后服务场所")
+    ):
+        return findings
     findings.append(
         build_theme_finding(
             document=document,
@@ -321,4 +340,3 @@ def _add_qualification_reasoning_theme_finding(
         )
     )
     return findings
-

@@ -2302,6 +2302,52 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertNotIn("评分项名称、内容和评分证据之间不一致", titles)
         self.assertNotIn("技术要求可能合理但需补充必要性论证", titles)
 
+    def test_catalog_routing_avoids_property_certificate_overreporting(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医院物业管理服务项目",
+                "申请人的资格要求",
+                "项目负责人须持有特种设备安全管理和作业人员证书。",
+                "服务内容包括医院物业、保洁、运送和驻场保障。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/property.docx",
+            document_name="医院物业管理服务项目.docx",
+            file_hash="property123",
+            normalized_text_path="/tmp/property.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("资格条件中存在与标的域不匹配的资质或登记要求", titles)
+
+    def test_catalog_routing_flags_signage_it_certification_mismatch(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医院标识标牌及宣传印制服务项目",
+                "评标信息",
+                "供应商具有IT服务管理体系认证证书、保安服务认证证书、信息安全管理体系认证证书的，每项得10分。",
+                "供应商具有标识导视设计制作安装能力。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/signage-cert.docx",
+            document_name="医院标识标牌及宣传印制服务项目.docx",
+            file_hash="signage-cert",
+            normalized_text_path="/tmp/signage-cert.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("评分项中存在与标的域不匹配的证书认证或模板内容", titles)
+
 
 if __name__ == "__main__":
     unittest.main()

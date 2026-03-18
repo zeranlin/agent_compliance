@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Any, Callable
 
+from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classification_has_domain
 from agent_compliance.schemas import Finding, NormalizedDocument
 
 
@@ -16,18 +17,21 @@ def apply_commercial_analyzers(
     *,
     build_theme_finding: ThemeBuilder,
     is_substantive_commercial_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     findings = _add_payment_evaluation_chain_finding(
         document,
         findings,
         build_theme_finding=build_theme_finding,
         is_substantive_commercial_clause=is_substantive_commercial_clause,
+        catalog_classification=catalog_classification,
     )
     findings = _add_commercial_lifecycle_theme_finding(
         document,
         findings,
         build_theme_finding=build_theme_finding,
         is_substantive_commercial_clause=is_substantive_commercial_clause,
+        catalog_classification=catalog_classification,
     )
     findings = _add_commercial_financing_burden_theme_finding(
         document,
@@ -272,6 +276,7 @@ def _add_payment_evaluation_chain_finding(
     *,
     build_theme_finding: ThemeBuilder,
     is_substantive_commercial_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("付款条件与履约评价结果深度绑定且评价标准开放" in finding.problem_title for finding in findings):
         return findings
@@ -327,6 +332,8 @@ def _add_payment_evaluation_chain_finding(
             )
         )
     ]
+    if not evaluation_clauses and classification_has_domain(catalog_classification, "property_service"):
+        return findings
     if len(clauses) < 3 or not evaluation_clauses:
         return findings
     findings.append(
@@ -360,6 +367,7 @@ def _add_commercial_lifecycle_theme_finding(
     *,
     build_theme_finding: ThemeBuilder,
     is_substantive_commercial_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担" in finding.problem_title for finding in findings):
         return findings
@@ -485,6 +493,21 @@ def _add_commercial_lifecycle_theme_finding(
         )
     ]
     acceptance_clauses = [clause for clause in focused_clauses if any(marker in clause.text for marker in ("验收", "送检", "检测", "监理", "复检", "终验", "专家评审"))]
+    if classification_has_domain(catalog_classification, "property_service"):
+        responsibility_clauses = [
+            clause
+            for clause in focused_clauses
+            if any(
+                marker in clause.text
+                for marker in ("24小时", "2 小时", "到场", "备用设备", "扣除当月物业服务费", "月得分", "满意度评价")
+            )
+        ]
+    if classification_has_domain(catalog_classification, "equipment_installation"):
+        acceptance_clauses = [
+            clause
+            for clause in focused_clauses
+            if any(marker in clause.text for marker in ("安装", "调试", "验收", "终验", "开机率", "备用设备", "送检"))
+        ]
     if len(focused_clauses) < 3 or not responsibility_clauses or not acceptance_clauses:
         return findings
     findings.append(

@@ -153,3 +153,19 @@ def classify_procurement_catalog(document: NormalizedDocument) -> CatalogClassif
         is_mixed_scope=is_mixed_scope,
         catalog_evidence=evidence,
     )
+
+
+def classification_has_domain(classification: CatalogClassification | None, domain_key: str) -> bool:
+    if classification is None:
+        return False
+    if classification.primary_domain_key == domain_key:
+        return True
+    if classification.primary_domain_key == "medical_tcm_mixed" and domain_key in {
+        "medical_tcm",
+        "medical_device_goods",
+        "information_system",
+        "equipment_installation",
+    }:
+        return True
+    catalogs = {catalog.catalog_id: catalog for catalog in load_procurement_catalogs()}
+    return any(catalogs.get(catalog_id) and catalogs[catalog_id].domain_key == domain_key for catalog_id in classification.secondary_catalogs)

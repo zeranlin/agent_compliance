@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classification_has_domain
 from agent_compliance.schemas import Finding, NormalizedDocument
 
 
@@ -15,18 +16,21 @@ def apply_technical_analyzers(
     *,
     build_theme_finding: ThemeBuilder,
     is_technical_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     findings = _add_technical_standard_mismatch_theme_finding(
         document,
         findings,
         build_theme_finding=build_theme_finding,
         is_technical_clause=is_technical_clause,
+        catalog_classification=catalog_classification,
     )
     findings = _add_proof_formality_findings(
         document,
         findings,
         build_theme_finding=build_theme_finding,
         is_technical_clause=is_technical_clause,
+        catalog_classification=catalog_classification,
     )
     return findings
 
@@ -37,6 +41,7 @@ def _add_technical_standard_mismatch_theme_finding(
     *,
     build_theme_finding: ThemeBuilder,
     is_technical_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("技术要求引用了与标的不匹配的标准或规范" in finding.problem_title for finding in findings):
         return findings
@@ -73,6 +78,20 @@ def _add_technical_standard_mismatch_theme_finding(
             )
         )
     ]
+    if classification_has_domain(catalog_classification, "information_system"):
+        clauses.extend(
+            clause
+            for clause in document.clauses
+            if is_technical_clause(clause)
+            and any(marker in clause.text for marker in ("特种设备", "高空清洗", "有害生物防制", "保洁服务"))
+        )
+    if classification_has_domain(catalog_classification, "medical_device_goods"):
+        clauses.extend(
+            clause
+            for clause in document.clauses
+            if is_technical_clause(clause)
+            and any(marker in clause.text for marker in ("软件接口", "系统平台", "生活垃圾分类"))
+        )
     if not clauses:
         return findings
     findings.append(
@@ -106,6 +125,7 @@ def _add_proof_formality_findings(
     *,
     build_theme_finding: ThemeBuilder,
     is_technical_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     if any("技术证明材料形式要求过严且带有地方化限制" in finding.problem_title for finding in findings):
         return findings
@@ -133,6 +153,21 @@ def _add_proof_formality_findings(
             )
         )
     ]
+    if classification_has_domain(catalog_classification, "medical_device_goods"):
+        clauses.extend(
+            clause
+            for clause in document.clauses
+            if is_technical_clause(clause)
+            and any(marker in clause.text for marker in ("国家级检测中心", "专项检测报告", "经广告审查机关备案的产品彩页"))
+        )
+    if classification_has_domain(catalog_classification, "signage_printing_service"):
+        clauses.extend(
+            clause
+            for clause in document.clauses
+            if is_technical_clause(clause)
+            and any(marker in clause.text for marker in ("彩页", "备案", "本市具有检验检测机构"))
+        )
+    clauses = list({(clause.line_start, clause.text): clause for clause in clauses}.values())
     if not clauses:
         return findings
     findings.append(
