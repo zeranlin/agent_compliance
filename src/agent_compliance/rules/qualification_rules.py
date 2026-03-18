@@ -151,6 +151,18 @@ RULES = [
         merge_key="qualification-financial-threshold",
     ),
     RuleDefinition(
+        rule_id="QUAL-014",
+        issue_type="excessive_supplier_qualification",
+        pattern=re.compile(r"员工总数不得少于\d+人|在册员工总数不得少于\d+人|参保人数不得少于\d+人|月均参保人数.*不少于\d+人|资产总额不低于\d+万元|平均资产总额不低于\d+万元"),
+        rationale="将员工人数、参保人数或资产规模直接设置为资格门槛，通常超出法定准入和履约必需能力范围。",
+        severity_score=3,
+        related_rule_ids=("RULE-003", "RULE-015"),
+        related_reference_ids=("LEGAL-001", "CASESRC-007", "CASESRC-002"),
+        source_section="申请人的资格要求",
+        rewrite_hint="删除员工人数、参保人数和资产规模门槛，仅保留与项目履约直接相关的法定资质和能力证明。",
+        merge_key="qualification-financial-threshold",
+    ),
+    RuleDefinition(
         rule_id="QUAL-013",
         issue_type="qualification_domain_mismatch",
         pattern=re.compile(r"有害生物防制|SPCA登记证书|SPCA"),

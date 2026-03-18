@@ -660,9 +660,10 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "excessive_supplier_qualification",
             "excessive_scoring_weight",
             "scoring_content_mismatch",
+            "irrelevant_certification_or_award",
         } and _text_contains_any(
             finding,
-            ("注册资本", "营业收入", "净利润", "标准", "标准委员会"),
+            ("注册资本", "营业收入", "净利润", "标准", "标准委员会", "驰名商标", "著名商标", "名牌产品", "品牌价值"),
         )
 
     if "评分项名称、内容和评分证据之间不一致" in title:
@@ -747,7 +748,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "scoring_structure_imbalance",
         } and _text_contains_any(
             finding,
-            ("科技型中小企业", "高空清洗", "CCRC", "ISO20000", "认证证书", "体系认证"),
+            ("科技型中小企业", "高空清洗", "CCRC", "ISO20000", "认证证书", "体系认证", "生活垃圾分类", "售后服务认证", "五星售后", "商品售后服务评价"),
         )
 
     if "评分项中存在与标的域不匹配的证书认证或模板内容" in title:
@@ -798,7 +799,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "other",
         } and _text_contains_any(
             finding,
-            ("履约担保", "备用金", "售后服务保证金", "质保期结束", "现金形式", "5%", "36个月"),
+            ("履约担保", "备用金", "售后服务保证金", "质保期结束", "现金形式", "5%", "36个月", "自动转为质保保证金", "质保期满后无息退还", "履约保证金不予退还"),
         )
 
     if "交货期限设置异常或明显失真" in title:
@@ -814,7 +815,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "other",
         } and _text_contains_any(
             finding,
-            ("报验", "送检", "检测报告", "专家评审", "自行消化"),
+            ("报验", "送检", "检测报告", "专家评审", "自行消化", "空气检测", "监理", "整改费用", "复验费用", "抽检费用"),
         )
 
     if "商务责任和违约后果设置明显偏重" in title:
@@ -824,7 +825,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "other",
         } and _text_contains_any(
             finding,
-            ("一切损失", "违约金", "30%", "百分之三十", "负全责", "全部负责"),
+            ("一切损失", "违约金", "30%", "百分之三十", "负全责", "全部负责", "不承担任何责任", "扣除全部履约保证金", "直接扣减合同价款"),
         )
 
     if "验收程序、复检与最终确认边界不清" in title:
@@ -840,7 +841,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
     if "驻场、短时响应或服务场地要求形成事实上的属地倾斜" in title:
         return finding.issue_type in {"geographic_restriction", "personnel_restriction"} and _text_contains_any(
             finding,
-            ("1小时", "1 小时", "60分钟", "60 分钟", "高新区内", "固定的售后服务场所", "驻场", "现场服务"),
+            ("1小时", "1 小时", "60分钟", "60 分钟", "2小时", "2 小时", "4小时", "4 小时", "12小时内提供备件", "24小时内到场", "高新区内", "固定的售后服务场所", "驻场", "现场服务", "本地售后网点", "驻点服务站", "本地备件库"),
         )
 
     if "评分和技术要求中存在行业适配性不足的错位内容" in title:
@@ -1392,6 +1393,7 @@ def _add_commercial_burden_findings(document: NormalizedDocument, findings: list
     findings = _add_commercial_financing_burden_theme_finding(document, findings)
     findings = _add_delivery_deadline_anomaly_theme_finding(document, findings)
     findings = _add_commercial_acceptance_fee_shift_theme_finding(document, findings)
+    findings = _add_liability_imbalance_theme_finding(document, findings)
     return findings
 
 
@@ -1594,7 +1596,7 @@ def _add_commercial_acceptance_fee_shift_theme_finding(
         for clause in document.clauses
         if any(
             marker in clause.text
-            for marker in ("报验", "送检", "检测报告出具", "专家评审", "自行消化")
+            for marker in ("报验", "送检", "检测报告出具", "专家评审", "自行消化", "空气检测", "监理", "整改费用", "复验费用", "抽检费用")
         )
     ]
     if not clauses:
@@ -1618,6 +1620,55 @@ def _add_commercial_acceptance_fee_shift_theme_finding(
             rewrite_suggestion="建议区分法定抽检、常规验收、复检和专家评审等费用承担边界，不宜笼统要求所有相关费用均由供应商承担。",
             needs_human_review=True,
             human_review_reason="需结合验收流程、送检触发条件和责任分担规则判断相关费用转嫁安排是否合理。",
+            finding_origin="analyzer",
+        )
+    )
+    return findings
+
+
+def _add_liability_imbalance_theme_finding(
+    document: NormalizedDocument, findings: list[Finding]
+) -> list[Finding]:
+    if any("商务责任和违约后果设置明显偏重" in finding.problem_title for finding in findings):
+        return findings
+    clauses = [
+        clause
+        for clause in document.clauses
+        if any(
+            marker in clause.text
+            for marker in (
+                "采购人不承担任何责任",
+                "相关损失及责任均与采购人无关",
+                "一切事故",
+                "负全责",
+                "违约金按合同总价",
+                "扣除全部履约保证金",
+                "从应付货款中直接扣除",
+                "直接扣减合同价款",
+            )
+        )
+    ]
+    if not clauses:
+        return findings
+    findings.append(
+        _build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="one_sided_commercial_term",
+            problem_title="商务责任和违约后果设置明显偏重",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "商务条款通过采购人绝对免责、供应商兜底承担全部责任以及较重违约金和扣款后果，形成了明显偏重的责任配置。"
+                "当责任承担和违约后果都集中压向供应商时，合同权利义务容易失衡。"
+            ),
+            impact_on_competition_or_performance="可能显著提高报价不确定性和合同争议风险，并抬高供应商整体履约风险成本。",
+            legal_or_policy_basis="中华人民共和国民法典；政府采购需求管理办法（财政部）",
+            rewrite_suggestion="建议按过错、责任来源和实际损失划分责任，删除绝对免责、当然扣款和过重违约后果设计。",
+            needs_human_review=True,
+            human_review_reason="需结合合同责任分配、违约情形和损失承担规则判断相关后果设置是否与项目实际履约风险相匹配。",
             finding_origin="analyzer",
         )
     )
@@ -2141,7 +2192,7 @@ def _add_brand_scoring_theme_finding(document: NormalizedDocument, findings: lis
         if _is_scoring_clause(clause)
         and any(
             marker in clause.text
-            for marker in ("一线品牌", "国际知名品牌", "格力", "美的", "海尔", "大金", "日立", "其他国产品牌")
+            for marker in ("一线品牌", "国际知名品牌", "格力", "美的", "海尔", "大金", "日立", "其他国产品牌", "中国驰名商标", "广东省著名商标", "名牌产品")
         )
     ]
     if not clauses:
@@ -2182,7 +2233,18 @@ def _add_certification_scoring_theme_finding(
         if _is_scoring_clause(clause)
         and any(
             marker in clause.text
-            for marker in ("科技型中小企业", "高空清洗", "CCRC", "ISO20000", "认证证书")
+            for marker in (
+                "科技型中小企业",
+                "高空清洗",
+                "CCRC",
+                "ISO20000",
+                "认证证书",
+                "生活垃圾分类",
+                "商品售后服务评价",
+                "售后服务认证",
+                "五星售后",
+                "品牌价值",
+            )
         )
     ]
     if len(clauses) < 2:
@@ -2258,7 +2320,25 @@ def _add_geographic_tendency_findings(document: NormalizedDocument, findings: li
         for clause in document.clauses
         if any(
             marker in clause.text
-            for marker in ("1小时", "1 小时", "60分钟", "60 分钟", "高新区内", "固定的售后服务场所", "驻场", "现场服务")
+            for marker in (
+                "1小时",
+                "1 小时",
+                "60分钟",
+                "60 分钟",
+                "2小时",
+                "2 小时",
+                "4小时",
+                "4 小时",
+                "12小时内提供备件",
+                "24小时内到场",
+                "高新区内",
+                "固定的售后服务场所",
+                "驻场",
+                "现场服务",
+                "本地售后网点",
+                "驻点服务站",
+                "本地备件库",
+            )
         )
     ]
     if not clauses:

@@ -80,7 +80,7 @@ class LLMIntegrationTest(unittest.TestCase):
 
         config = detect_llm_config()
         self.assertEqual(config.base_url, "http://112.111.54.86:10011/v1")
-        self.assertEqual(config.model, "qwen3.5-35b-a3b")
+        self.assertEqual(config.model, "qwen3.5-27b")
         self.assertEqual(config.api_key, "local-dev-placeholder")
 
     def test_web_llm_switch_overrides_disabled_env_default(self) -> None:

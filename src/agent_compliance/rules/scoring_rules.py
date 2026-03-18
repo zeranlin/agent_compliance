@@ -21,7 +21,7 @@ RULES = [
     RuleDefinition(
         rule_id="SCORE-002",
         issue_type="irrelevant_certification_or_award",
-        pattern=re.compile(r"全国科技型中小企业证明|守合同重信用企业|奖项|荣誉|信用等级"),
+        pattern=re.compile(r"全国科技型中小企业证明|守合同重信用企业|奖项|荣誉|信用等级|驰名商标|著名商标|名牌产品|品牌价值|五星售后|商品售后服务评价"),
         rationale="与履约无明显关系的荣誉或企业属性不宜作为高分项。",
         severity_score=2,
         related_rule_ids=("RULE-010", "RULE-014", "RULE-004"),
@@ -93,7 +93,7 @@ RULES = [
     RuleDefinition(
         rule_id="SCORE-008",
         issue_type="geographic_restriction",
-        pattern=re.compile(r"本地项目业绩.*得\d+分|省内、本地存在相关项目的业绩|在项目所在地设有服务机构.*得\d+分|本地服务团队.*得\d+分"),
+        pattern=re.compile(r"本地项目业绩.*得\d+分|省内、本地存在相关项目的业绩|在项目所在地设有服务机构.*得\d+分|本地服务团队.*得\d+分|驻点服务机构.*得\d+分|本地售后网点.*得\d+分|本地备件库.*得\d+分"),
         rationale="在评分项中对本地业绩、本地服务机构或本地团队给予加分，可能形成变相属地倾斜。",
         severity_score=3,
         related_rule_ids=("RULE-002", "RULE-004"),
@@ -117,7 +117,7 @@ RULES = [
     RuleDefinition(
         rule_id="SCORE-010",
         issue_type="geographic_restriction",
-        pattern=re.compile(r"1小时(?:（60分钟）)?内?.*到达现场.*得(?:100|满)分|1\.5小时(?:（90分钟）)?内?.*到达现场.*得(?:50|半)分|1小时内到达现场处理问题|60分钟内到达现场.*得分"),
+        pattern=re.compile(r"1小时(?:（60分钟）)?内?.*到达现场.*得(?:100|满)分|1\.5小时(?:（90分钟）)?内?.*到达现场.*得(?:50|半)分|1小时内到达现场处理问题|60分钟内到达现场.*得分|2小时内到达现场.*得分|4小时内到达现场.*得分|12小时内提供备品备件.*得分|驻场服务.*得分"),
         rationale="对极短到场时限给予高分，容易对本地驻点或既有服务网络形成事实上的属地倾斜。",
         severity_score=3,
         related_rule_ids=("RULE-002", "RULE-004"),
@@ -141,7 +141,7 @@ RULES = [
     RuleDefinition(
         rule_id="SCORE-012",
         issue_type="scoring_content_mismatch",
-        pattern=re.compile(r"有机产品认证证书|水运机电工程专项监理企业资质认定|采用国际标准产品确认证书|采用国际标准产品标志证书"),
+        pattern=re.compile(r"有机产品认证证书|水运机电工程专项监理企业资质认定|采用国际标准产品确认证书|采用国际标准产品标志证书|生活垃圾分类服务能力认证|商品售后服务评价体系认证|售后服务认证证书"),
         rationale="评分项中出现与当前采购标的关联不足或领域明显错位的证书、资质或认证，疑似模板错贴或内容错位。",
         severity_score=3,
         related_rule_ids=("RULE-004", "RULE-010", "RULE-014"),
@@ -149,5 +149,17 @@ RULES = [
         source_section="评标信息",
         rewrite_hint="删除与采购标的不相称的认证和资质评分内容，仅保留与发电机组供货安装直接相关的辅助性证明。",
         merge_key="scoring-domain-mismatch",
+    ),
+    RuleDefinition(
+        rule_id="SCORE-013",
+        issue_type="irrelevant_certification_or_award",
+        pattern=re.compile(r"中国驰名商标|广东省著名商标|国家级质量奖|品牌价值评价|五星级售后服务认证"),
+        rationale="将品牌荣誉、质量奖或售后星级认证作为高分项，可能把与履约关联有限的品牌形象因素转化为竞争优势。",
+        severity_score=2,
+        related_rule_ids=("RULE-010", "RULE-014", "RULE-004"),
+        related_reference_ids=("CASESRC-001", "CASESRC-006"),
+        source_section="评标信息",
+        rewrite_hint="删除品牌荣誉、质量奖和售后星级认证加分，改为与项目履约直接相关的客观服务能力指标。",
+        merge_key="scoring-award",
     ),
 ]
