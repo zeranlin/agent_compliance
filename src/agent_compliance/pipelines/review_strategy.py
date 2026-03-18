@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from dataclasses import dataclass
 
+from agent_compliance.knowledge.catalog_knowledge_profile import catalog_knowledge_profiles_for_classification
 from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classify_procurement_catalog, load_procurement_catalogs
 from agent_compliance.schemas import Finding, NormalizedDocument
 
@@ -31,6 +32,9 @@ class DocumentStrategyProfile:
     catalog_confidence: float = 0.0
     catalog_evidence: tuple[str, ...] = ()
     preferred_analyzer_groups: tuple[str, ...] = ()
+    catalog_reasonable_requirements: tuple[str, ...] = ()
+    catalog_high_risk_patterns: tuple[str, ...] = ()
+    catalog_boundary_notes: tuple[str, ...] = ()
 
 
 def build_overall_summary(
@@ -58,6 +62,8 @@ def build_overall_summary(
         summary += f" 次品目映射编码包括{join_labels(strategy.secondary_mapped_catalog_codes[:4])}。"
     if strategy.is_mixed_scope:
         summary += " 当前识别为混合采购场景，需重点复核边界不清、义务外扩和错位要求。"
+    if strategy.catalog_high_risk_patterns:
+        summary += f" 按当前品目画像，需重点留意{join_labels(strategy.catalog_high_risk_patterns[:3])}。"
     if profile.dominant_sections:
         summary += f" 该文件的主风险重心集中在{join_labels(profile.dominant_sections)}。"
     if profile.dominant_theme_titles:
@@ -135,6 +141,9 @@ def build_document_strategy_profile(
             catalog_confidence=classification.catalog_confidence if classification else 0.0,
             catalog_evidence=classification.catalog_evidence if classification else (),
             preferred_analyzer_groups=preferred_analyzer_groups_for_classification(classification),
+            catalog_reasonable_requirements=_catalog_reasonable_requirements_for_classification(classification),
+            catalog_high_risk_patterns=_catalog_high_risk_patterns_for_classification(classification),
+            catalog_boundary_notes=_catalog_boundary_notes_for_classification(classification),
         )
 
     section_scores: dict[str, int] = {}
@@ -210,6 +219,9 @@ def build_document_strategy_profile(
         catalog_confidence=classification.catalog_confidence if classification else 0.0,
         catalog_evidence=classification.catalog_evidence if classification else (),
         preferred_analyzer_groups=preferred_analyzer_groups_for_classification(classification),
+        catalog_reasonable_requirements=_catalog_reasonable_requirements_for_classification(classification),
+        catalog_high_risk_patterns=_catalog_high_risk_patterns_for_classification(classification),
+        catalog_boundary_notes=_catalog_boundary_notes_for_classification(classification),
     )
 
 
@@ -306,15 +318,18 @@ def build_analyzer_execution_order(
 def preferred_analyzer_groups_for_classification(classification: CatalogClassification | None) -> tuple[str, ...]:
     if classification is None or not classification.primary_catalog:
         return ()
-    catalogs = {catalog.catalog_id: catalog for catalog in load_procurement_catalogs()}
     analyzer_names: list[str] = []
-    primary = catalogs.get(classification.primary_catalog)
-    if primary is not None:
-        analyzer_names.extend(primary.preferred_analyzers)
-    for catalog_id in classification.secondary_catalogs:
-        catalog = catalogs.get(catalog_id)
-        if catalog is not None:
-            analyzer_names.extend(catalog.preferred_analyzers)
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        analyzer_names.extend(profile.preferred_analyzers)
+    if not analyzer_names:
+        catalogs = {catalog.catalog_id: catalog for catalog in load_procurement_catalogs()}
+        primary = catalogs.get(classification.primary_catalog)
+        if primary is not None:
+            analyzer_names.extend(primary.preferred_analyzers)
+        for catalog_id in classification.secondary_catalogs:
+            catalog = catalogs.get(catalog_id)
+            if catalog is not None:
+                analyzer_names.extend(catalog.preferred_analyzers)
 
     mapped_groups: list[str] = []
     for analyzer_name in analyzer_names:
@@ -334,3 +349,25 @@ def analyzer_group_for_name(analyzer_name: str) -> str | None:
     if analyzer_name.startswith(("commercial_", "geographic_", "acceptance_", "liability_", "proof_")):
         return "commercial"
     return None
+
+
+def _catalog_reasonable_requirements_for_classification(classification: CatalogClassification | None) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.reasonable_requirements)
+    return tuple(dict.fromkeys(values))
+
+
+def _catalog_high_risk_patterns_for_classification(classification: CatalogClassification | None) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.high_risk_patterns)
+    return tuple(dict.fromkeys(values))
+
+
+def _catalog_boundary_notes_for_classification(classification: CatalogClassification | None) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        if profile.boundary_notes:
+            values.append(profile.boundary_notes)
+    return tuple(dict.fromkeys(values))

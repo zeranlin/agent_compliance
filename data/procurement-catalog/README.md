@@ -10,6 +10,7 @@
 当前数据文件：
 - `catalogs.json`
 - `catalogs-full.json`
+- `catalog-knowledge-profiles.json`
 - `review-domain-map.json`
 - `raw/full-catalog-2022/source.pdf`
 - `raw/full-catalog-2022/metadata.json`
@@ -44,3 +45,14 @@
   - 设备供货并安装调试
   - 餐饮托管及食堂运营
 - 当前映射同时保留官方编码、编码前缀和关键词回退，以便后续分类器逐步从“最小品目集”升级到“全量官方目录 + 审查领域映射”的两层结构
+
+当前品目知识画像说明：
+- `catalog-knowledge-profiles.json` 已完成第一版
+- 当前版本把高频场景的：
+  - 常见合理要求
+  - 高风险画像
+  - 常见错位线索
+  - 边界说明
+  - 建议优先 analyzer
+  抽成独立知识层
+- 这层不负责“分类”，而是负责回答“这种品目通常怎么审、哪些问题最常见”
