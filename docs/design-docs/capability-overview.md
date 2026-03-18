@@ -69,6 +69,12 @@
 - `建议替代表述`
 - `是否需人工复核`
 
+并已形成第一版结果导出设计：
+- 统一支持 `Markdown / Excel / JSON`
+- 区分 `主问题版 / 完整明细版`
+- 计划由 `review-next` 承接导出入口
+- 导出字段直接复用 `Finding`、法规语义层、品目层和证据层结果，不另起旁路数据结构
+
 已建立正式模板：
 - [正式审查意见模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/review-output-template.md)
 - [业务方/采购人修改用正式审查意见表模板](https://github.com/zeranlin/agent_compliance/blob/main/docs/generated/templates/business-facing-review-table-template.md)
@@ -123,6 +129,7 @@
 - 面向下一阶段架构排查的 [architecture-gap-priorities.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/architecture-gap-priorities.md)，用于明确当前真正缺失的架构层与补强优先级，而不是继续零散补规则
 - 面向当前持续调优阶段的 [engine-tuning-checklist.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/engine-tuning-checklist.md)，用于明确哪些 engine 是当前高优先级校准项、误判高发点和跨层联动问题
 - 面向法规条文级语义增强的 [legal-semantic-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/legal-semantic-layer-design.md)，用于正式设计 `legal_clause_index`、`issue_type_authority_map` 和 `legal_authority_reasoner`
+- 面向审查结果交付增强的 [review-export-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/review-export-design.md)，用于统一 `Markdown / Excel / JSON` 三种导出格式，以及 `主问题版 / 完整明细版` 两种导出模式
 - 面向规则治理增强的 [rule-governance-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/rule-governance-layer-design.md)，用于定义 `rule_registry`、`rule_priority_profile` 和 `catalog_sensitive_rule_router`
 
 ## 四、精确定位能力
