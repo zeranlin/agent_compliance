@@ -1661,6 +1661,55 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("资格条件设置经营年限、属地场所或单项业绩门槛", titles)
         self.assertIn("资格条件整体超出法定准入和履约必需范围", titles)
 
+    def test_review_does_not_raise_property_special_equipment_certificate_to_qualification_total(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医院物业管理服务",
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "投标人须配备取得特种设备安全管理和作业人员证书的项目人员。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/医院物业管理服务.docx",
+            document_name="医院物业管理服务.docx",
+            file_hash="property-qualification-prefix",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("资格条件中存在与标的域不匹配的行业资质或专门许可", titles)
+        self.assertNotIn("资格条件整体超出法定准入和履约必需范围", titles)
+
+    def test_review_adds_signage_it_security_certificates_as_qualification_domain_mismatch(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医院导视标识和宣传印刷服务",
+                "第一章 招标公告",
+                "申请人的资格要求",
+                "投标人须具备IT服务管理体系认证证书、保安服务认证证书和信息安全管理体系认证证书。",
+                "投标人注册地址须位于项目所在地并设有固定服务场所。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/医院导视标识和宣传印刷服务.docx",
+            document_name="医院导视标识和宣传印刷服务.docx",
+            file_hash="signage-qualification-prefix",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("资格条件中存在与标的域不匹配的行业资质或专门许可", titles)
+        self.assertIn("资格条件整体超出法定准入和履约必需范围", titles)
+
     def test_review_uses_furniture_strategy_profile_for_furniture_project(self) -> None:
         text = "\n".join(
             [

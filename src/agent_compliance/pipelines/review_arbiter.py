@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from agent_compliance.knowledge.procurement_catalog import (
+    CatalogClassification,
+    classification_has_catalog_prefix,
+    classification_has_domain,
+)
 from agent_compliance.schemas import Finding
 
 
@@ -23,7 +28,11 @@ def sort_findings(findings: list[Finding]) -> list[Finding]:
     )
 
 
-def apply_finding_arbiter(findings: list[Finding]) -> list[Finding]:
+def apply_finding_arbiter(
+    findings: list[Finding],
+    *,
+    classification: CatalogClassification | None = None,
+) -> list[Finding]:
     theme_findings = [finding for finding in findings if finding.finding_origin == "analyzer"]
     if not theme_findings:
         return findings
@@ -33,20 +42,28 @@ def apply_finding_arbiter(findings: list[Finding]) -> list[Finding]:
         if finding.finding_origin == "analyzer":
             filtered.append(finding)
             continue
-        if is_finding_covered_by_theme(finding, theme_findings):
+        if is_finding_covered_by_theme(finding, theme_findings, classification=classification):
             continue
         filtered.append(finding)
     return filtered
 
 
-def is_finding_covered_by_theme(finding: Finding, themes: list[Finding]) -> bool:
+def is_finding_covered_by_theme(
+    finding: Finding,
+    themes: list[Finding],
+    classification: CatalogClassification | None = None,
+) -> bool:
     for theme in themes:
-        if theme_covers_finding(theme, finding):
+        if theme_covers_finding(theme, finding, classification=classification):
             return True
     return False
 
 
-def theme_covers_finding(theme: Finding, finding: Finding) -> bool:
+def theme_covers_finding(
+    theme: Finding,
+    finding: Finding,
+    classification: CatalogClassification | None = None,
+) -> bool:
     if not line_ranges_overlap(theme, finding, tolerance=4):
         return False
 
@@ -222,9 +239,18 @@ def theme_covers_finding(theme: Finding, finding: Finding) -> bool:
         return finding.issue_type == "qualification_domain_mismatch"
 
     if "资格条件中存在与标的域不匹配的行业资质或专门许可" in title:
+        markers = ["水运工程监理", "有害生物防制", "SPCA", "特种设备"]
+        if classification_has_domain(classification, "property_service") or classification_has_catalog_prefix(
+            classification, "C210400"
+        ):
+            markers = [marker for marker in markers if marker != "特种设备"]
+        if classification_has_domain(classification, "signage_printing_service") or any(
+            classification_has_catalog_prefix(classification, prefix) for prefix in ("C2307", "C2309", "C2315")
+        ):
+            markers.extend(("IT服务管理体系认证证书", "保安服务认证证书", "信息安全管理体系认证证书"))
         return finding.issue_type in {"qualification_domain_mismatch", "excessive_supplier_qualification"} and text_contains_any(
             finding,
-            ("水运工程监理", "有害生物防制", "SPCA", "特种设备"),
+            tuple(markers),
         )
 
     if "资格条件设置一般财务和规模门槛" in title:
@@ -246,14 +272,43 @@ def theme_covers_finding(theme: Finding, finding: Finding) -> bool:
         )
 
     if "资格条件整体超出法定准入和履约必需范围" in title:
+        markers = [
+            "纳税",
+            "参保人数",
+            "员工总数",
+            "资产总额",
+            "成立日期",
+            "固定的售后服务场所",
+            "经营地址",
+            "单项合同金额",
+            "有害生物防制",
+            "SPCA",
+            "棉花加工资格",
+            "水运工程监理",
+            "注册资本",
+            "年收入",
+            "净利润",
+            "股权结构",
+            "经营年限",
+            "高新技术企业",
+            "外商投资及民营企业",
+            "上级主管单位",
+            "审计报告",
+            "国家级特色企业",
+        ]
+        if classification_has_domain(classification, "property_service") or classification_has_catalog_prefix(
+            classification, "C210400"
+        ):
+            markers = [marker for marker in markers if marker != "特种设备"]
+        if classification_has_domain(classification, "signage_printing_service") or any(
+            classification_has_catalog_prefix(classification, prefix) for prefix in ("C2307", "C2309", "C2315")
+        ):
+            markers.extend(("IT服务管理体系认证证书", "保安服务认证证书", "信息安全管理体系认证证书"))
         return finding.issue_type in {
             "excessive_supplier_qualification",
             "qualification_domain_mismatch",
             "geographic_restriction",
-        } and text_contains_any(
-            finding,
-            ("纳税", "参保人数", "员工总数", "资产总额", "成立日期", "固定的售后服务场所", "经营地址", "单项合同金额", "有害生物防制", "SPCA", "棉花加工资格", "水运工程监理", "注册资本", "年收入", "净利润", "股权结构", "经营年限", "高新技术企业", "外商投资及民营企业", "上级主管单位", "审计报告", "国家级特色企业"),
-        )
+        } and text_contains_any(finding, tuple(markers))
 
     if "评分项直接按品牌档次赋分" in title:
         return finding.issue_type in {"brand_or_model_designation", "scoring_content_mismatch"} and text_contains_any(

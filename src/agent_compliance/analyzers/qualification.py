@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classification_has_domain
+from agent_compliance.knowledge.procurement_catalog import (
+    CatalogClassification,
+    classification_has_catalog_prefix,
+    classification_has_domain,
+)
 from agent_compliance.schemas import Finding, NormalizedDocument
 
 
@@ -217,9 +221,13 @@ def _add_qualification_industry_appropriateness_finding(
         "企业诚信管理体系认证证书",
         "《企业诚信管理体系认证证书》",
     )
-    if classification_has_domain(catalog_classification, "property_service"):
+    if classification_has_domain(catalog_classification, "property_service") or classification_has_catalog_prefix(
+        catalog_classification, "C210400"
+    ):
         mismatch_markers = tuple(marker for marker in mismatch_markers if marker not in ("特种设备安全管理和作业人员证书",))
-    if classification_has_domain(catalog_classification, "signage_printing_service"):
+    if classification_has_domain(catalog_classification, "signage_printing_service") or any(
+        classification_has_catalog_prefix(catalog_classification, prefix) for prefix in ("C2307", "C2309", "C2315")
+    ):
         mismatch_markers = (*mismatch_markers, "IT服务管理体系认证证书", "保安服务认证证书", "信息安全管理体系认证证书")
     clauses = [
         clause
@@ -265,6 +273,11 @@ def _add_qualification_reasoning_theme_finding(
 ) -> list[Finding]:
     if any("资格条件整体超出法定准入和履约必需范围" in finding.problem_title for finding in findings):
         return findings
+    has_financial_scale_theme = any("资格条件设置一般财务和规模门槛" in finding.problem_title for finding in findings)
+    has_operating_scope_theme = any("资格条件设置经营年限、属地场所或单项业绩门槛" in finding.problem_title for finding in findings)
+    has_industry_mismatch_theme = any(
+        "资格条件中存在与标的域不匹配的行业资质或专门许可" in finding.problem_title for finding in findings
+    )
     clauses = [
         clause
         for clause in document.clauses
@@ -284,6 +297,7 @@ def _add_qualification_reasoning_theme_finding(
                 "成立时间",
                 "固定的售后服务场所",
                 "营业执照注册地址必须位于",
+                "投标人注册地址须位于",
                 "主要经营地址",
                 "单项合同金额",
                 "水运工程监理甲级",
@@ -300,6 +314,9 @@ def _add_qualification_reasoning_theme_finding(
                 "国家级特色企业",
                 "企业诚信管理体系认证证书",
                 "《企业诚信管理体系认证证书》",
+                "IT服务管理体系认证证书",
+                "保安服务认证证书",
+                "信息安全管理体系认证证书",
                 "农民专业合作社不具备投标资格",
                 "外商投资及民营企业",
                 "注册资本不低于",
@@ -310,11 +327,79 @@ def _add_qualification_reasoning_theme_finding(
             )
         )
     ]
-    if len(clauses) < 3:
-        return findings
-    if classification_has_domain(catalog_classification, "property_service") and not any(
-        marker in " ".join(clause.text for clause in clauses)
+    theme_count = sum((has_financial_scale_theme, has_operating_scope_theme, has_industry_mismatch_theme))
+    financial_or_scale_markers = (
+        "纳税总额",
+        "年均纳税",
+        "实际缴纳的增值税及企业所得税",
+        "参保人数",
+        "员工总数",
+        "资产总额",
+        "净资产",
+        "注册资本不低于",
+        "年收入不低于",
+        "净利润不低于",
+    )
+    operating_scope_markers = (
+        "成立日期",
+        "成立时间",
+        "固定的售后服务场所",
+        "营业执照注册地址必须位于",
+        "投标人注册地址须位于",
+        "主要经营地址",
+        "单项合同金额",
+        "上级主管单位",
+        "股权结构",
+        "经营年限不低于",
+        "外商投资及民营企业",
+        "审计报告",
+        "国家级特色企业",
+    )
+    mismatch_markers = (
+        "水运工程监理甲级",
+        "有害生物防制",
+        "SPCA",
+        "学生饮用奶定点生产企业资格",
+        "棉花加工资格",
+        "特种设备安全管理和作业人员证书",
+        "高空清洗悬吊作业企业安全生产证书",
+        "高新技术企业证书",
+        "国家级高新技术企业",
+        "企业诚信管理体系认证证书",
+        "《企业诚信管理体系认证证书》",
+        "IT服务管理体系认证证书",
+        "保安服务认证证书",
+        "信息安全管理体系认证证书",
+    )
+    if theme_count < 2:
+        joined_for_category = " ".join(clause.text for clause in clauses)
+        matched_category_count = sum(
+            (
+                any(marker in joined_for_category for marker in financial_or_scale_markers),
+                any(marker in joined_for_category for marker in operating_scope_markers),
+                any(marker in joined_for_category for marker in mismatch_markers),
+            )
+        )
+        if len(clauses) < 2 or (matched_category_count < 2 and len(clauses) < 3):
+            return findings
+    joined_text = " ".join(clause.text for clause in clauses)
+    if (
+        classification_has_domain(catalog_classification, "property_service")
+        or classification_has_catalog_prefix(catalog_classification, "C210400")
+    ) and not any(
+        marker in joined_text
         for marker in ("纳税总额", "参保人数", "员工总数", "资产总额", "净资产", "成立时间", "固定的售后服务场所")
+    ):
+        return findings
+    if (
+        classification_has_domain(catalog_classification, "signage_printing_service")
+        or any(classification_has_catalog_prefix(catalog_classification, prefix) for prefix in ("C2307", "C2309", "C2315"))
+    ) and not any(
+        marker in joined_text
+        for marker in ("纳税总额", "参保人数", "员工总数", "资产总额", "净资产", "成立时间", "注册地址", "经营地址", "固定的售后服务场所")
+    ) and not any(
+        marker in joined_text
+        for marker in ("IT服务管理体系认证证书", "保安服务认证证书", "信息安全管理体系认证证书")
     ):
         return findings
     findings.append(

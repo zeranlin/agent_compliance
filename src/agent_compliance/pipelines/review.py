@@ -112,7 +112,7 @@ def reconcile_review_result(
     document: NormalizedDocument | None = None,
     classification: CatalogClassification | None = None,
 ) -> ReviewResult:
-    review.findings = apply_finding_arbiter(review.findings)
+    review.findings = apply_finding_arbiter(review.findings, classification=classification)
     review.findings = sort_findings(review.findings)
     review.findings = renumber_findings(review.findings)
     review.overall_risk_summary = build_overall_summary(
@@ -490,7 +490,7 @@ def _refine_findings(
             continue
     refined = _add_domain_match_findings(document, refined, classification=classification)
     refined = _add_industry_appropriateness_findings(document, refined)
-    refined = apply_finding_arbiter(refined)
+    refined = apply_finding_arbiter(refined, classification=classification)
     refined = _merge_technical_justification_findings(refined)
     refined = _filter_technical_justification_noise(document, refined)
     refined = _merge_similar_technical_findings(refined)
