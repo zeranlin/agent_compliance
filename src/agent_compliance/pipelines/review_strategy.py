@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog
+from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classify_procurement_catalog, load_procurement_catalogs
 from agent_compliance.schemas import Finding, NormalizedDocument
 
 
@@ -22,15 +22,22 @@ class DocumentStrategyProfile:
     domain_hint: str
     primary_focus: tuple[str, ...]
     review_route: tuple[str, ...]
+    primary_catalog_id: str = ""
     primary_catalog_name: str = ""
     secondary_catalog_names: tuple[str, ...] = ()
     is_mixed_scope: bool = False
     catalog_confidence: float = 0.0
+    catalog_evidence: tuple[str, ...] = ()
+    preferred_analyzer_groups: tuple[str, ...] = ()
 
 
-def build_overall_summary(findings: list[Finding], document: NormalizedDocument | None = None) -> str:
+def build_overall_summary(
+    findings: list[Finding],
+    document: NormalizedDocument | None = None,
+    classification: CatalogClassification | None = None,
+) -> str:
     profile = build_document_risk_profile(findings)
-    strategy = build_document_strategy_profile(findings, document=document)
+    strategy = build_document_strategy_profile(findings, document=document, classification=classification)
     high = sum(1 for finding in findings if finding.risk_level == "high")
     medium = sum(1 for finding in findings if finding.risk_level == "medium")
     summary = (
@@ -90,10 +97,12 @@ def build_document_risk_profile(findings: list[Finding]) -> DocumentRiskProfile:
 
 
 def build_document_strategy_profile(
-    findings: list[Finding], document: NormalizedDocument | None = None
+    findings: list[Finding],
+    document: NormalizedDocument | None = None,
+    classification: CatalogClassification | None = None,
 ) -> DocumentStrategyProfile:
+    classification = classification or (classify_procurement_catalog(document) if document is not None else None)
     if not findings:
-        classification = classify_procurement_catalog(document) if document is not None else None
         domain = classification.primary_domain_key if classification is not None else "general"
         procurement_mode = "综合型政府采购项目"
         domain_hint = "需结合全部章节综合判断"
@@ -111,10 +120,13 @@ def build_document_strategy_profile(
             domain_hint,
             ("综合条款",),
             ("综合条款", "文件级风险画像"),
+            primary_catalog_id=classification.primary_catalog if classification else "",
             primary_catalog_name=classification.primary_catalog_name if classification else "",
             secondary_catalog_names=classification.secondary_catalog_names if classification else (),
             is_mixed_scope=classification.is_mixed_scope if classification else False,
             catalog_confidence=classification.catalog_confidence if classification else 0.0,
+            catalog_evidence=classification.catalog_evidence if classification else (),
+            preferred_analyzer_groups=preferred_analyzer_groups_for_classification(classification),
         )
 
     section_scores: dict[str, int] = {}
@@ -124,7 +136,6 @@ def build_document_strategy_profile(
         section_scores[section] = section_scores.get(section, 0) + weight
     ordered_sections = [section for section, _ in sorted(section_scores.items(), key=lambda item: (-item[1], item[0]))]
 
-    classification = classify_procurement_catalog(document) if document is not None else None
     domain = classification.primary_domain_key if classification is not None else "general"
     combined = " ".join(
         filter(
@@ -182,10 +193,13 @@ def build_document_strategy_profile(
         domain_hint=domain_hint,
         primary_focus=primary_focus,
         review_route=review_route,
+        primary_catalog_id=classification.primary_catalog if classification else "",
         primary_catalog_name=classification.primary_catalog_name if classification else "",
         secondary_catalog_names=classification.secondary_catalog_names if classification else (),
         is_mixed_scope=classification.is_mixed_scope if classification else False,
         catalog_confidence=classification.catalog_confidence if classification else 0.0,
+        catalog_evidence=classification.catalog_evidence if classification else (),
+        preferred_analyzer_groups=preferred_analyzer_groups_for_classification(classification),
     )
 
 
@@ -250,3 +264,63 @@ def section_label_from_key(section_key: str) -> str:
 
 def document_domain(document: NormalizedDocument) -> str:
     return classify_procurement_catalog(document).primary_domain_key
+
+
+def build_analyzer_execution_order(
+    findings: list[Finding],
+    document: NormalizedDocument | None = None,
+    classification: CatalogClassification | None = None,
+) -> tuple[str, ...]:
+    strategy = build_document_strategy_profile(findings, document=document, classification=classification)
+    focus_to_group = {
+        "资格条件": "qualification",
+        "评分标准": "scoring",
+        "技术要求": "technical",
+        "商务与验收": "commercial",
+        "综合条款": "commercial",
+    }
+    ordered_groups: list[str] = []
+    for group in strategy.preferred_analyzer_groups:
+        if group not in ordered_groups:
+            ordered_groups.append(group)
+    for focus in strategy.primary_focus:
+        group = focus_to_group.get(focus)
+        if group and group not in ordered_groups:
+            ordered_groups.append(group)
+    for group in ("qualification", "scoring", "technical", "commercial"):
+        if group not in ordered_groups:
+            ordered_groups.append(group)
+    return tuple(ordered_groups)
+
+
+def preferred_analyzer_groups_for_classification(classification: CatalogClassification | None) -> tuple[str, ...]:
+    if classification is None or not classification.primary_catalog:
+        return ()
+    catalogs = {catalog.catalog_id: catalog for catalog in load_procurement_catalogs()}
+    analyzer_names: list[str] = []
+    primary = catalogs.get(classification.primary_catalog)
+    if primary is not None:
+        analyzer_names.extend(primary.preferred_analyzers)
+    for catalog_id in classification.secondary_catalogs:
+        catalog = catalogs.get(catalog_id)
+        if catalog is not None:
+            analyzer_names.extend(catalog.preferred_analyzers)
+
+    mapped_groups: list[str] = []
+    for analyzer_name in analyzer_names:
+        group = analyzer_group_for_name(analyzer_name)
+        if group and group not in mapped_groups:
+            mapped_groups.append(group)
+    return tuple(mapped_groups)
+
+
+def analyzer_group_for_name(analyzer_name: str) -> str | None:
+    if analyzer_name.startswith("qualification_"):
+        return "qualification"
+    if analyzer_name.startswith(("brand_", "scoring_", "demo_", "personnel_")):
+        return "scoring"
+    if analyzer_name.startswith(("technical_", "mixed_scope_")):
+        return "technical"
+    if analyzer_name.startswith(("commercial_", "geographic_", "acceptance_", "liability_", "proof_")):
+        return "commercial"
+    return None

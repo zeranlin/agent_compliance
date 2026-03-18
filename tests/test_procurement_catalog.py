@@ -4,6 +4,7 @@ import unittest
 
 from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog, load_procurement_catalogs
 from agent_compliance.parsers.section_splitter import split_into_clauses
+from agent_compliance.pipelines.review_strategy import build_analyzer_execution_order, build_document_strategy_profile
 from agent_compliance.schemas import NormalizedDocument
 
 
@@ -58,3 +59,16 @@ class ProcurementCatalogTest(unittest.TestCase):
         self.assertTrue(classification.is_mixed_scope)
         self.assertIn("家具", classification.primary_catalog_name)
 
+    def test_catalog_drives_strategy_and_analyzer_order(self) -> None:
+        document = self._document(
+            "基础服务体系平台运营项目.docx",
+            ["基础服务体系平台运营", "系统运维", "软件著作权", "驻场服务", "演示答辩"],
+        )
+        classification = classify_procurement_catalog(document)
+        strategy = build_document_strategy_profile([], document=document, classification=classification)
+        analyzer_order = build_analyzer_execution_order([], document=document, classification=classification)
+
+        self.assertEqual(strategy.primary_catalog_name, "信息化平台及系统运维")
+        self.assertIn("scoring", strategy.preferred_analyzer_groups)
+        self.assertIn("commercial", strategy.preferred_analyzer_groups)
+        self.assertEqual(analyzer_order[0], "scoring")

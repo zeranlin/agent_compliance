@@ -32,7 +32,9 @@ from agent_compliance.pipelines.review_evidence import (
     shorten_section_path as _shorten_section_path,
 )
 from agent_compliance.knowledge.references_index import ReferenceRecord, find_references
+from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classify_procurement_catalog
 from agent_compliance.pipelines.review_strategy import (
+    build_analyzer_execution_order,
     build_overall_summary,
     document_domain as _document_domain,
 )
@@ -40,6 +42,7 @@ from agent_compliance.schemas import Finding, NormalizedDocument, ReviewResult, 
 
 
 def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> ReviewResult:
+    classification = classify_procurement_catalog(document)
     grouped_hits = _group_hits(document, _dedupe_hits(hits))
     findings: list[Finding] = []
     for index, group in enumerate(grouped_hits, start=1):
@@ -77,7 +80,7 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
         findings.append(finding)
 
     findings = _drop_false_positive_findings(findings)
-    findings = _refine_findings(document, findings)
+    findings = _refine_findings(document, findings, classification=classification)
 
     return reconcile_review_result(
         ReviewResult(
@@ -95,14 +98,23 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
             ],
         ),
         document=document,
+        classification=classification,
     )
 
 
-def reconcile_review_result(review: ReviewResult, document: NormalizedDocument | None = None) -> ReviewResult:
+def reconcile_review_result(
+    review: ReviewResult,
+    document: NormalizedDocument | None = None,
+    classification: CatalogClassification | None = None,
+) -> ReviewResult:
     review.findings = apply_finding_arbiter(review.findings)
     review.findings = sort_findings(review.findings)
     review.findings = renumber_findings(review.findings)
-    review.overall_risk_summary = build_overall_summary(review.findings, document=document)
+    review.overall_risk_summary = build_overall_summary(
+        review.findings,
+        document=document,
+        classification=classification,
+    )
     review.items_for_human_review = _human_review_items(review.findings)
     return review
 
@@ -405,7 +417,11 @@ def _human_review_items(findings: list[Finding]) -> list[str]:
     return items
 
 
-def _refine_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
+def _refine_findings(
+    document: NormalizedDocument,
+    findings: list[Finding],
+    classification: CatalogClassification | None = None,
+) -> list[Finding]:
     refined: list[Finding] = []
     primary_signatures: list[tuple[str, str]] = []
     appendix_findings: list[Finding] = []
@@ -427,33 +443,43 @@ def _refine_findings(document: NormalizedDocument, findings: list[Finding]) -> l
 
     refined = _merge_sample_scoring_findings(refined)
     refined = _merge_scoring_content_findings(refined)
-    refined = apply_scoring_analyzers(
-        document,
-        refined,
-        build_theme_finding=_build_theme_finding,
-        is_scoring_clause=_is_scoring_clause,
-        document_domain=_document_domain,
-        merge_optional_text=_merge_optional_text,
-    )
-    refined = apply_commercial_analyzers(
-        document,
-        refined,
-        build_theme_finding=_build_theme_finding,
-        is_substantive_commercial_clause=_is_substantive_commercial_clause,
-    )
+    analyzer_order = build_analyzer_execution_order(refined, document=document, classification=classification)
+    for analyzer_group in analyzer_order:
+        if analyzer_group == "scoring":
+            refined = apply_scoring_analyzers(
+                document,
+                refined,
+                build_theme_finding=_build_theme_finding,
+                is_scoring_clause=_is_scoring_clause,
+                document_domain=_document_domain,
+                merge_optional_text=_merge_optional_text,
+            )
+            continue
+        if analyzer_group == "commercial":
+            refined = apply_commercial_analyzers(
+                document,
+                refined,
+                build_theme_finding=_build_theme_finding,
+                is_substantive_commercial_clause=_is_substantive_commercial_clause,
+            )
+            continue
+        if analyzer_group == "qualification":
+            refined = apply_qualification_analyzers(
+                document,
+                refined,
+                build_theme_finding=_build_theme_finding,
+                is_qualification_clause=_is_qualification_clause,
+            )
+            continue
+        if analyzer_group == "technical":
+            refined = apply_technical_analyzers(
+                document,
+                refined,
+                build_theme_finding=_build_theme_finding,
+                is_technical_clause=_is_technical_clause,
+            )
+            continue
     refined = _add_domain_match_findings(document, refined)
-    refined = apply_qualification_analyzers(
-        document,
-        refined,
-        build_theme_finding=_build_theme_finding,
-        is_qualification_clause=_is_qualification_clause,
-    )
-    refined = apply_technical_analyzers(
-        document,
-        refined,
-        build_theme_finding=_build_theme_finding,
-        is_technical_clause=_is_technical_clause,
-    )
     refined = _add_industry_appropriateness_findings(document, refined)
     refined = apply_finding_arbiter(refined)
     refined = _merge_technical_justification_findings(refined)
