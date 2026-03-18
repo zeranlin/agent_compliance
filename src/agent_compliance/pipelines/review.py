@@ -453,6 +453,9 @@ def _build_document_strategy_profile(
     if domain == "furniture_goods":
         procurement_mode = "货物采购并含安装调试项目"
         domain_hint = "办公或医用家具供货、安装和售后保障类"
+    elif domain == "textile_goods":
+        procurement_mode = "货物采购并含安装调试项目"
+        domain_hint = "窗帘、隔帘、床品或被服供货、安装和售后保障类"
     elif domain == "catering_service":
         procurement_mode = "餐饮托管或食堂运营服务项目"
         domain_hint = "医院、学校或公共机构食堂托管、供餐保障与后勤餐饮服务类"
@@ -792,7 +795,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "geographic_restriction",
         } and _text_contains_any(
             finding,
-            ("成立日期", "成立时间", "高新区", "固定的售后服务场所", "单项合同金额", "经营地址", "主城四区", "福州市", "经营年限", "外商投资及民营企业"),
+            ("成立日期", "成立时间", "高新区", "固定的售后服务场所", "单项合同金额", "经营地址", "主城四区", "福州市", "经营年限", "外商投资及民营企业", "上级主管单位", "审计报告", "国家级特色企业"),
         )
 
     if "资格条件整体超出法定准入和履约必需范围" in title:
@@ -802,7 +805,7 @@ def _theme_covers_finding(theme: Finding, finding: Finding) -> bool:
             "geographic_restriction",
         } and _text_contains_any(
             finding,
-            ("纳税", "参保人数", "员工总数", "资产总额", "成立日期", "固定的售后服务场所", "经营地址", "单项合同金额", "有害生物防制", "SPCA", "棉花加工资格", "水运工程监理", "注册资本", "年收入", "净利润", "股权结构", "经营年限", "高新技术企业", "外商投资及民营企业"),
+            ("纳税", "参保人数", "员工总数", "资产总额", "成立日期", "固定的售后服务场所", "经营地址", "单项合同金额", "有害生物防制", "SPCA", "棉花加工资格", "水运工程监理", "注册资本", "年收入", "净利润", "股权结构", "经营年限", "高新技术企业", "外商投资及民营企业", "上级主管单位", "审计报告", "国家级特色企业"),
         )
 
     if "评分项直接按品牌档次赋分" in title:
@@ -1529,6 +1532,9 @@ def _add_qualification_reasoning_theme_finding(
                 "高空清洗悬吊作业企业安全生产证书",
                 "高新技术企业证书",
                 "国家级高新技术企业",
+                "上级主管单位",
+                "审计报告",
+                "国家级特色企业",
                 "企业诚信管理体系认证证书",
                 "《企业诚信管理体系认证证书》",
                 "农民专业合作社不具备投标资格",
@@ -2175,7 +2181,19 @@ def _add_scoring_semantic_consistency_theme_finding(
             )
         )
     ]
-    if len(clauses) < 2:
+    category_markers = {
+        "report_formality": ("CMA", "检测报告"),
+        "business_background": ("资产总额", "成立时间", "营业收入", "净利润", "科技型中小企业"),
+        "cross_domain": ("高空清洗", "CCRC", "ISO20000", "有机产品认证", "生活垃圾分类", "先进单位", "注册安全工程师"),
+        "ip_or_system": ("定位管理标签模块", "软件著作权", "专利证书", "资产管理读写基站"),
+        "insurance_or_personnel": ("食品安全责任险", "公众责任险", "高级餐饮业职业经理人", "食品安全管理员"),
+    }
+    hit_categories = {
+        category
+        for category, markers in category_markers.items()
+        if any(any(marker in clause.text for marker in markers) for clause in clauses)
+    }
+    if len(clauses) < 2 or len(hit_categories) < 2:
         return findings
     findings.append(
         _build_theme_finding(
@@ -3237,6 +3255,10 @@ def _document_domain(document: NormalizedDocument) -> str:
         return "catering_service"
     if any(marker in base_text for marker in ("家具", "办公类家具", "医用家具")):
         return "furniture_goods"
+    if any(marker in base_text for marker in ("窗帘", "隔帘", "床品", "服装", "被服")):
+        return "textile_goods"
+    if any(marker in base_text for marker in ("家具", "办公类家具", "医用家具")):
+        return "furniture_goods"
     if any(marker in base_text for marker in ("血透", "透析", "医疗器械", "三维电生理", "胃肠镜", "设备采购项目")):
         return "medical_device_goods"
     if any(marker in base_text for marker in ("中药", "配方颗粒", "医院", "药品", "饮片")):
@@ -3247,8 +3269,6 @@ def _document_domain(document: NormalizedDocument) -> str:
         return "property_service"
     if any(marker in base_text for marker in ("平台", "信息", "软件", "系统", "数据")):
         return "information_system"
-    if any(marker in base_text for marker in ("窗帘", "隔帘", "床品", "服装", "被服")):
-        return "textile_goods"
     if any(marker in base_text for marker in ("发电机", "机电", "安装", "设备")):
         return "equipment_installation"
     return "general"

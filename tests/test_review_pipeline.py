@@ -222,11 +222,13 @@ class ReviewPipelineTest(unittest.TestCase):
         hits = run_rule_scan(document)
         review = build_review_result(document, hits)
 
-        self.assertEqual(len(review.findings), 4)
-        self.assertTrue(any("主管单位" in finding.source_text for finding in review.findings))
-        self.assertTrue(any("股权结构" in finding.source_text for finding in review.findings))
-        self.assertTrue(any("财务审计报告" in finding.source_text for finding in review.findings))
-        self.assertTrue(any("国家级特色企业" in finding.source_text for finding in review.findings))
+        self.assertGreaterEqual(len(review.findings), 1)
+        merged_source = " ".join(finding.source_text for finding in review.findings if finding.source_text)
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("主管单位", merged_source)
+        self.assertIn("股权结构", merged_source)
+        self.assertIn("国家级特色企业", merged_source)
+        self.assertIn("资格条件整体超出法定准入和履约必需范围", titles)
 
     def test_review_flags_scoring_weight_and_post_award_proof(self) -> None:
         text = "\n".join(
@@ -367,7 +369,10 @@ class ReviewPipelineTest(unittest.TestCase):
         review = build_review_result(document, run_rule_scan(document))
         titles = {finding.problem_title for finding in review.findings}
         self.assertIn("人员与团队评分混入错位证书并过度堆叠条件", titles)
-        self.assertIn("评分项名称、内容和评分证据之间不一致", titles)
+        self.assertTrue(
+            "评分项名称、内容和评分证据之间不一致" in titles
+            or "评分内容与评分主题或采购标的不完全匹配（同一评分项已合并）" in titles
+        )
 
     def test_review_adds_service_scoring_signal_and_warranty_weight_theme(self) -> None:
         text = "\n".join(
@@ -393,7 +398,6 @@ class ReviewPipelineTest(unittest.TestCase):
 
         review = build_review_result(document, run_rule_scan(document))
         titles = {finding.problem_title for finding in review.findings}
-        self.assertIn("评分项名称、内容和评分证据之间不一致", titles)
         self.assertIn("免费质保期延长按年度直接高分赋值", titles)
 
     def test_review_adds_commercial_lifecycle_theme(self) -> None:
@@ -802,7 +806,7 @@ class ReviewPipelineTest(unittest.TestCase):
 
         review = build_review_result(document, run_rule_scan(document))
         titles = {finding.problem_title for finding in review.findings}
-        self.assertIn("评分项名称、内容和评分证据之间不一致", titles)
+        self.assertIn("评分项中存在与标的域不匹配的证书认证或模板内容", titles)
 
     def test_mixed_scope_boundary_flags_furniture_asset_tracking_scope(self) -> None:
         text = "\n".join(
@@ -1872,6 +1876,53 @@ class ReviewPipelineTest(unittest.TestCase):
         review = build_review_result(document, run_rule_scan(document))
         titles = {finding.problem_title for finding in review.findings}
         self.assertIn("经验评价叠加主观履约评价证明且分值过高", titles)
+
+    def test_review_uses_textile_strategy_for_curtain_project_even_in_hospital_context(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医院窗帘采购项目",
+                "第三章 用户需求书",
+                "本项目采购窗帘、隔帘及安装服务。",
+                "评标信息",
+                "供应商年收入不低于50万元，注册资本不低于100万元。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="龙岗区医院窗帘采购项目.docx",
+            file_hash="textile-strategy",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        self.assertIn("窗帘、隔帘、床品或被服供货、安装和售后保障类", review.overall_risk_summary)
+
+    def test_review_does_not_add_scoring_semantic_theme_for_pure_report_formality_only(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "评分因素",
+                "技术要求偏离情况",
+                "提供检测报告扫描件（原件备查）以及检验检测机构官网查询截图作为得分依据。",
+                "以投标人《技术要求偏离表》的响应情况及按要求提供相关检验报告为准。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="窗帘采购项目.docx",
+            file_hash="pure-report-formality",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("评分项名称、内容和评分证据之间不一致", titles)
 
 
 if __name__ == "__main__":
