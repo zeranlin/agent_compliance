@@ -34,6 +34,7 @@ from agent_compliance.pipelines.review_evidence import (
 from agent_compliance.knowledge.references_index import ReferenceRecord, find_references
 from agent_compliance.knowledge.procurement_catalog import (
     CatalogClassification,
+    classification_has_catalog_prefix,
     classification_has_domain,
     classify_procurement_catalog,
 )
@@ -1130,7 +1131,7 @@ def _add_scoring_domain_theme_finding(
     if any("评分项中存在与标的域不匹配的证书认证或模板内容" in finding.problem_title for finding in findings):
         return findings
     domain = _effective_domain_key(document, classification)
-    mismatch_markers = _domain_mismatch_markers(domain)
+    mismatch_markers = _domain_mismatch_markers(domain, classification=classification)
     clauses = [
         clause
         for clause in document.clauses
@@ -1364,7 +1365,7 @@ def _add_template_domain_theme_finding(
     if any("文件中存在与标的域不匹配的模板残留或义务外扩" in finding.problem_title for finding in findings):
         return findings
     domain = _effective_domain_key(document, classification)
-    mismatch_markers = _domain_mismatch_markers(domain)
+    mismatch_markers = _domain_mismatch_markers(domain, classification=classification)
     mixed_scope_markers = ("软件端口", "医院信息系统", "HIS", "PACS", "LIS", "数据交换", "碳足迹", "盘查报告", "改进报告")
     clauses = []
     for clause in document.clauses:
@@ -1761,7 +1762,7 @@ def _is_explanatory_summary_clause(clause) -> bool:
     )
 
 
-def _domain_mismatch_markers(domain: str) -> tuple[str, ...]:
+def _domain_mismatch_markers(domain: str, classification: CatalogClassification | None = None) -> tuple[str, ...]:
     mapping = {
         "information_system": ("园区保洁", "设施维修", "安防管理", "保洁", "垃圾", "特种设备", "高空清洗", "CCRC", "ISO20000"),
         "property_service": ("芯片", "系统", "软件", "平台", "接口", "HIS", "PACS", "LIS", "数据交换", "棉花加工", "水运工程监理甲级"),
@@ -1808,7 +1809,16 @@ def _domain_mismatch_markers(domain: str) -> tuple[str, ...]:
         "general": ("园区保洁", "设施维修", "安防管理", "保洁", "芯片", "系统", "特种设备", "有害生物防制", "SPCA", "高空清洗", "CCRC", "ISO20000", "水运工程监理甲级", "棉花加工"),
         "furniture_goods": ("资产定位", "定位管理标签模块", "蓝牙", "UWB", "资产管理读写基站", "智能芯片", "碳足迹", "无缝对接"),
     }
-    return mapping.get(domain, mapping["general"])
+    markers = list(mapping.get(domain, mapping["general"]))
+    if classification_has_catalog_prefix(classification, "C160"):
+        markers.extend(("软件", "平台", "接口", "软件著作权"))
+    if classification_has_catalog_prefix(classification, "C2307") or classification_has_catalog_prefix(classification, "C2309"):
+        markers.extend(("宣传", "印刷", "广告", "导视"))
+    if classification_has_catalog_prefix(classification, "A0702") or classification_has_catalog_prefix(classification, "A023103"):
+        markers.extend(("配方颗粒", "药瓶清洁", "自动化调剂"))
+    if classification_has_catalog_prefix(classification, "B0608"):
+        markers.extend(("安装调试", "机电设备", "运行期"))
+    return tuple(dict.fromkeys(markers))
 
 
 def _is_scoring_clause(clause) -> bool:

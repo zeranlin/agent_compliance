@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from agent_compliance.schemas import NormalizedDocument
-from agent_compliance.knowledge.review_domain_map import load_review_domain_map
+from agent_compliance.knowledge.review_domain_map import load_review_domain_map, review_domain_map_by_catalog_id
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -53,6 +53,10 @@ class CatalogClassification:
     primary_domain_key: str
     secondary_catalogs: tuple[str, ...]
     secondary_catalog_names: tuple[str, ...]
+    primary_mapped_catalog_codes: tuple[str, ...]
+    primary_mapped_catalog_prefixes: tuple[str, ...]
+    secondary_mapped_catalog_codes: tuple[str, ...]
+    secondary_mapped_catalog_prefixes: tuple[str, ...]
     category_type: str
     catalog_confidence: float
     is_mixed_scope: bool
@@ -134,6 +138,22 @@ def _catalog_by_domain_key(domain_key: str) -> ProcurementCatalog | None:
     return None
 
 
+def _mapped_codes_and_prefixes(catalog_ids: tuple[str, ...] | list[str]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    codes: list[str] = []
+    prefixes: list[str] = []
+    for catalog_id in catalog_ids:
+        entry = review_domain_map_by_catalog_id(catalog_id)
+        if entry is None:
+            continue
+        for code in entry.mapped_catalog_codes:
+            if code not in codes:
+                codes.append(code)
+        for prefix in entry.mapped_catalog_prefixes:
+            if prefix not in prefixes:
+                prefixes.append(prefix)
+    return tuple(codes), tuple(prefixes)
+
+
 def classify_procurement_catalog(document: NormalizedDocument) -> CatalogClassification:
     catalogs = load_procurement_catalogs()
     title_text = f"{document.document_name} {document.source_path}".lower()
@@ -160,6 +180,10 @@ def classify_procurement_catalog(document: NormalizedDocument) -> CatalogClassif
             primary_domain_key="general",
             secondary_catalogs=(),
             secondary_catalog_names=(),
+            primary_mapped_catalog_codes=(),
+            primary_mapped_catalog_prefixes=(),
+            secondary_mapped_catalog_codes=(),
+            secondary_mapped_catalog_prefixes=(),
             category_type="mixed",
             catalog_confidence=0.0,
             is_mixed_scope=False,
@@ -174,6 +198,10 @@ def classify_procurement_catalog(document: NormalizedDocument) -> CatalogClassif
             primary_domain_key="general",
             secondary_catalogs=(),
             secondary_catalog_names=(),
+            primary_mapped_catalog_codes=(),
+            primary_mapped_catalog_prefixes=(),
+            secondary_mapped_catalog_codes=(),
+            secondary_mapped_catalog_prefixes=(),
             category_type="mixed",
             catalog_confidence=0.0,
             is_mixed_scope=False,
@@ -211,6 +239,8 @@ def classify_procurement_catalog(document: NormalizedDocument) -> CatalogClassif
 
     confidence = primary_score / max(primary_score + sum(score for score, _, _ in secondary), 1)
     evidence = tuple(dict.fromkeys([*primary_matches, *[match for _, _, matches in secondary for match in matches]]))[:8]
+    primary_codes, primary_prefixes = _mapped_codes_and_prefixes((primary_catalog.catalog_id,))
+    secondary_codes, secondary_prefixes = _mapped_codes_and_prefixes([item[1].catalog_id for item in secondary])
 
     return CatalogClassification(
         primary_catalog=primary_catalog.catalog_id,
@@ -218,6 +248,10 @@ def classify_procurement_catalog(document: NormalizedDocument) -> CatalogClassif
         primary_domain_key=primary_domain_key,
         secondary_catalogs=tuple(item[1].catalog_id for item in secondary),
         secondary_catalog_names=tuple(item[1].catalog_name for item in secondary),
+        primary_mapped_catalog_codes=primary_codes,
+        primary_mapped_catalog_prefixes=primary_prefixes,
+        secondary_mapped_catalog_codes=secondary_codes,
+        secondary_mapped_catalog_prefixes=secondary_prefixes,
         category_type=category_type,
         catalog_confidence=round(confidence, 2),
         is_mixed_scope=is_mixed_scope,
@@ -239,3 +273,12 @@ def classification_has_domain(classification: CatalogClassification | None, doma
         return True
     catalogs = {catalog.catalog_id: catalog for catalog in load_procurement_catalogs()}
     return any(catalogs.get(catalog_id) and catalogs[catalog_id].domain_key == domain_key for catalog_id in classification.secondary_catalogs)
+
+
+def classification_has_catalog_prefix(classification: CatalogClassification | None, prefix: str) -> bool:
+    if classification is None:
+        return False
+    return any(code.startswith(prefix) for code in classification.primary_mapped_catalog_codes) or any(
+        mapped_prefix.startswith(prefix) or prefix.startswith(mapped_prefix)
+        for mapped_prefix in (*classification.primary_mapped_catalog_prefixes, *classification.secondary_mapped_catalog_prefixes)
+    )

@@ -47,3 +47,10 @@ def review_domain_map_by_domain_key(domain_key: str) -> ReviewDomainMapEntry | N
         if entry.review_domain_key == domain_key:
             return entry
     return None
+
+
+def review_domain_map_by_catalog_id(catalog_id: str) -> ReviewDomainMapEntry | None:
+    for entry in load_review_domain_map():
+        if entry.catalog_id == catalog_id:
+            return entry
+    return None

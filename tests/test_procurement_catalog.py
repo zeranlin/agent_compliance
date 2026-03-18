@@ -6,6 +6,7 @@ from pathlib import Path
 
 from agent_compliance.knowledge.procurement_catalog import (
     classify_procurement_catalog,
+    classification_has_catalog_prefix,
     full_catalog_names_by_code_or_prefix,
     load_procurement_catalogs,
 )
@@ -45,6 +46,7 @@ class ProcurementCatalogTest(unittest.TestCase):
 
         self.assertEqual(classification.primary_domain_key, "information_system")
         self.assertEqual(classification.primary_catalog_name, "信息化平台及系统运维")
+        self.assertTrue(classification_has_catalog_prefix(classification, "C1602"))
         self.assertFalse(classification.is_mixed_scope)
 
     def test_classify_by_official_catalog_name(self) -> None:
@@ -76,6 +78,7 @@ class ProcurementCatalogTest(unittest.TestCase):
         classification = classify_procurement_catalog(document)
 
         self.assertEqual(classification.primary_domain_key, "furniture_goods")
+        self.assertTrue(classification_has_catalog_prefix(classification, "A0501"))
         self.assertTrue(classification.is_mixed_scope)
         self.assertIn("家具", classification.primary_catalog_name)
 

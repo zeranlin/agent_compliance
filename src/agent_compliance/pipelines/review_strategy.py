@@ -25,6 +25,8 @@ class DocumentStrategyProfile:
     primary_catalog_id: str = ""
     primary_catalog_name: str = ""
     secondary_catalog_names: tuple[str, ...] = ()
+    primary_mapped_catalog_codes: tuple[str, ...] = ()
+    secondary_mapped_catalog_codes: tuple[str, ...] = ()
     is_mixed_scope: bool = False
     catalog_confidence: float = 0.0
     catalog_evidence: tuple[str, ...] = ()
@@ -48,8 +50,12 @@ def build_overall_summary(
         summary += f" 当前文件识别为{strategy.procurement_mode}，主标的提示为{strategy.domain_hint}。"
     if strategy.primary_catalog_name:
         summary += f" 当前主品目识别为{strategy.primary_catalog_name}。"
+    if strategy.primary_mapped_catalog_codes:
+        summary += f" 对应官方品目编码包括{join_labels(strategy.primary_mapped_catalog_codes)}。"
     if strategy.secondary_catalog_names:
         summary += f" 次品目提示包括{join_labels(strategy.secondary_catalog_names)}。"
+    if strategy.secondary_mapped_catalog_codes:
+        summary += f" 次品目映射编码包括{join_labels(strategy.secondary_mapped_catalog_codes[:4])}。"
     if strategy.is_mixed_scope:
         summary += " 当前识别为混合采购场景，需重点复核边界不清、义务外扩和错位要求。"
     if profile.dominant_sections:
@@ -123,6 +129,8 @@ def build_document_strategy_profile(
             primary_catalog_id=classification.primary_catalog if classification else "",
             primary_catalog_name=classification.primary_catalog_name if classification else "",
             secondary_catalog_names=classification.secondary_catalog_names if classification else (),
+            primary_mapped_catalog_codes=classification.primary_mapped_catalog_codes if classification else (),
+            secondary_mapped_catalog_codes=classification.secondary_mapped_catalog_codes if classification else (),
             is_mixed_scope=classification.is_mixed_scope if classification else False,
             catalog_confidence=classification.catalog_confidence if classification else 0.0,
             catalog_evidence=classification.catalog_evidence if classification else (),
@@ -196,6 +204,8 @@ def build_document_strategy_profile(
         primary_catalog_id=classification.primary_catalog if classification else "",
         primary_catalog_name=classification.primary_catalog_name if classification else "",
         secondary_catalog_names=classification.secondary_catalog_names if classification else (),
+        primary_mapped_catalog_codes=classification.primary_mapped_catalog_codes if classification else (),
+        secondary_mapped_catalog_codes=classification.secondary_mapped_catalog_codes if classification else (),
         is_mixed_scope=classification.is_mixed_scope if classification else False,
         catalog_confidence=classification.catalog_confidence if classification else 0.0,
         catalog_evidence=classification.catalog_evidence if classification else (),
