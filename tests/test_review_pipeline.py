@@ -5,9 +5,9 @@ import unittest
 from tests._bootstrap import REPO_ROOT
 from agent_compliance.parsers.pagination import build_page_map, page_hint_for_line
 from agent_compliance.parsers.section_splitter import split_into_clauses
-from agent_compliance.pipelines.review import build_review_result
+from agent_compliance.pipelines.review import _drop_false_positive_findings, build_review_result
 from agent_compliance.pipelines.rule_scan import run_rule_scan
-from agent_compliance.schemas import NormalizedDocument
+from agent_compliance.schemas import Finding, NormalizedDocument
 
 
 class ReviewPipelineTest(unittest.TestCase):
@@ -1611,6 +1611,60 @@ class ReviewPipelineTest(unittest.TestCase):
         titles = {finding.problem_title for finding in review.findings}
         self.assertIn("经验评价、生产设备和认证因素高分集中并偏离核心供货能力", titles)
         self.assertIn("单一评分因素权重设置过高（同一评分项已合并）", titles)
+
+    def test_review_uses_property_service_strategy_profile_for_property_project(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：西湾小学物业管理服务",
+                "评分因素",
+                "投标人具有以下认证证书，且认证范围包含物业管理内容，每提供一项有效认证的得34分，最高得100分。",
+                "投标人具有同类项目物业管理服务经验的，每提供1个业绩得25分，最高得100分。",
+                "每月10日前结算上月管理服务费。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/物业管理服务.docx",
+            document_name="物业管理服务.docx",
+            file_hash="property-strategy",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        self.assertIn("物业管理或综合后勤服务项目", review.overall_risk_summary)
+        self.assertIn("校园、医院或公共机构物业服务及驻场保障类", review.overall_risk_summary)
+
+    def test_review_drops_qualification_domain_mismatch_when_it_only_appears_in_scoring(self) -> None:
+        finding = Finding(
+            finding_id="F-001",
+            document_name="物业管理服务.docx",
+            problem_title="资格条件中出现与采购标的不匹配的资质要求",
+            page_hint=None,
+            clause_id="保洁主管评分",
+            source_section="评分因素",
+            section_path="评标信息-评分项-技术部分-评分因素",
+            table_or_item_label="评分因素",
+            text_line_start=1,
+            text_line_end=1,
+            source_text="具有相关机构颁发的有害生物防制员证书得5分",
+            issue_type="qualification_domain_mismatch",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky="",
+            impact_on_competition_or_performance="",
+            legal_or_policy_basis=None,
+            rewrite_suggestion="",
+            needs_human_review=True,
+            human_review_reason="",
+            finding_origin="rule",
+        )
+
+        filtered = _drop_false_positive_findings([finding])
+        self.assertEqual([], filtered)
 
     def test_review_adds_service_scoring_mismatch_theme_for_endoscope_style_scoring(self) -> None:
         text = "\n".join(

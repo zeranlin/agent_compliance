@@ -306,6 +306,7 @@ def _drop_false_positive_findings(findings: list[Finding]) -> list[Finding]:
     filtered: list[Finding] = []
     for finding in findings:
         section_path = finding.section_path or ""
+        source_section = finding.source_section or ""
         if (
             finding.issue_type == "ambiguous_requirement"
             and any(
@@ -318,6 +319,8 @@ def _drop_false_positive_findings(findings: list[Finding]) -> list[Finding]:
                 )
             )
         ):
+            continue
+        if finding.issue_type == "qualification_domain_mismatch" and ("评分" in section_path or "评分" in source_section):
             continue
         filtered.append(finding)
     return filtered
@@ -456,6 +459,9 @@ def _build_document_strategy_profile(
     elif any(token in combined for token in ("中药", "药品", "颗粒", "医院")) or domain in {"medical_tcm", "medical_tcm_mixed"}:
         procurement_mode = "医疗药品或医用配套采购项目"
         domain_hint = "药品供货、设备配套与院内接口并存" if domain == "medical_tcm_mixed" else "药品供货与医用配套服务类"
+    elif domain == "property_service":
+        procurement_mode = "物业管理或综合后勤服务项目"
+        domain_hint = "校园、医院或公共机构物业服务及驻场保障类"
     elif any(token in combined for token in ("系统", "平台", "接口", "演示", "驻场运维")) or domain == "information_system":
         procurement_mode = "信息化或数字化服务项目"
         domain_hint = "平台建设、系统对接或持续运维类"
@@ -2289,7 +2295,21 @@ def _add_software_copyright_scoring_theme_finding(
         clause
         for clause in document.clauses
         if _is_scoring_clause(clause)
-        and any(marker in clause.text for marker in ("软件著作权", "著作权登记证书", "资产管理读写基站", "城市大数据服务运营类", "城市公共信息服务云类"))
+        and any(
+            marker in clause.text
+            for marker in (
+                "软件著作权",
+                "著作权登记证书",
+                "资产管理读写基站",
+                "城市大数据服务运营类",
+                "城市公共信息服务云类",
+                "物业垃圾分类自动化分捡类系统",
+                "物业能源管理类软件",
+                "物业电梯安全远程监控类系统",
+                "物业消防设备监测自动化类系统",
+                "物业空调运行自动化监测类系统",
+            )
+        )
         and any(marker in clause.text for marker in ("20分", "100 分", "最高得 100 分", "最高得100分"))
     ]
     if not clauses:
@@ -2310,9 +2330,9 @@ def _add_software_copyright_scoring_theme_finding(
             ),
             impact_on_competition_or_performance="可能放大既有知识产权储备优势，压缩具备履约能力但无对应著作权储备供应商的竞争空间。",
             legal_or_policy_basis="政府采购需求管理办法（财政部）；综合评分法边界分析（中国政府采购网）",
-            rewrite_suggestion="建议删除高分值软件著作权堆叠评分，改为围绕平台功能实现、接口能力、运维组织和交付成果设置可核验的履约评价因素。",
+            rewrite_suggestion="建议删除高分值软件著作权堆叠评分，改为围绕实际应用场景、服务方案、运维组织和交付成果设置可核验的履约评价因素。",
             needs_human_review=True,
-            human_review_reason="需结合采购范围、现有系统基础和平台运营实际需求判断软件著作权是否仅能作为辅助证明，还是已被不当放大为高分因素。",
+            human_review_reason="需结合采购范围、现有系统基础和实际服务需求判断软件著作权是否仅能作为辅助证明，还是已被不当放大为高分因素。",
             finding_origin="analyzer",
         )
     )
@@ -2429,6 +2449,10 @@ def _add_commercial_lifecycle_theme_finding(
             for marker in (
                 "付款",
                 "支付",
+                "扣除当月物业服务费",
+                "每低1分",
+                "月得分",
+                "考核不合格",
                 "验收",
                 "送检",
                 "检测",
@@ -2460,6 +2484,10 @@ def _add_commercial_lifecycle_theme_finding(
                 "付款",
                 "支付",
                 "阶段款",
+                "扣除当月物业服务费",
+                "每低1分",
+                "月得分",
+                "考核不合格",
                 "履约评价",
                 "评价标准",
                 "评价指标",
@@ -2488,7 +2516,24 @@ def _add_commercial_lifecycle_theme_finding(
     responsibility_clauses = [
         clause
         for clause in focused_clauses
-        if any(marker in clause.text for marker in ("24小时", "1 小时", "48小时", "解除合同", "违约金", "到场", "开机率", "备用设备", "一切损失"))
+        if any(
+            marker in clause.text
+            for marker in (
+                "24小时",
+                "1 小时",
+                "48小时",
+                "解除合同",
+                "违约金",
+                "到场",
+                "开机率",
+                "备用设备",
+                "一切损失",
+                "扣除当月物业服务费",
+                "每低1分",
+                "月得分",
+                "考核不合格",
+            )
+        )
     ]
     acceptance_clauses = [clause for clause in focused_clauses if any(marker in clause.text for marker in ("验收", "送检", "检测", "监理", "复检", "终验", "专家评审"))]
     if len(focused_clauses) < 3 or not responsibility_clauses or not acceptance_clauses:
@@ -2609,6 +2654,7 @@ def _add_mixed_scope_boundary_theme_finding(document: NormalizedDocument, findin
     if (
         "混合采购场景叠加自动化设备和信息化接口义务，边界不清" in existing_titles
         or "家具采购场景叠加资产定位和智能管理系统义务，边界不清" in existing_titles
+        or "物业服务场景叠加自动化系统和软件著作权评分，边界不清" in existing_titles
     ):
         return findings
     domain = _document_domain(document)
@@ -2664,6 +2710,31 @@ def _add_mixed_scope_boundary_theme_finding(document: NormalizedDocument, findin
         impact = "可能将家具供货以外的定位系统、芯片管理和软件配套义务一并压给供应商，抬高履约门槛并增加争议风险。"
         rewrite = "建议将家具供货与资产定位、智能芯片和软件管理系统义务分开表述；确需配套建设的，应单独说明其业务必要性、边界和验收责任。"
         review_reason = "需结合家具采购边界、院内资产管理系统现状和是否属于独立信息化建设内容判断相关配套义务是否应并入本次采购。"
+    elif domain == "property_service":
+        clauses = [
+            clause
+            for clause in document.clauses
+            if any(
+                marker in clause.text
+                for marker in (
+                    "物业垃圾分类自动化分捡类系统",
+                    "物业能源管理类软件",
+                    "物业电梯安全远程监控类系统",
+                    "物业消防设备监测自动化类系统",
+                    "物业空调运行自动化监测类系统",
+                    "软件著作权",
+                    "著作权登记证书",
+                )
+            )
+        ]
+        title = "物业服务场景叠加自动化系统和软件著作权评分，边界不清"
+        rationale = (
+            "文件在物业管理服务采购中叠加了垃圾分类自动分拣、能源管理、电梯远程监控、消防自动监测和空调运行监测等系统类软件著作权评分。"
+            "当物业服务履约与多类自动化系统建设或知识产权储备被混合写入同一评分主题时，容易导致采购边界和履约重心被带偏。"
+        )
+        impact = "可能把物业服务以外的软件系统建设和知识产权储备一并转化为高分优势，抬高竞争门槛并偏离核心服务能力比较。"
+        rewrite = "建议将物业服务能力评价与自动化系统建设能力分开表述；如确需考察数字化管理能力，应围绕实际应用场景、功能效果和服务方案设置低权重、可核验评分因素，而非直接按软件著作权储备赋分。"
+        review_reason = "需结合本次物业服务采购范围、学校现有智能化设施情况和数字化管理需求判断相关系统类能力是否应并入本项目评分。"
     elif domain == "medical_device_goods":
         clauses = [
             clause
@@ -3077,6 +3148,8 @@ def _document_domain(document: NormalizedDocument) -> str:
         if any(marker in clause_text for marker in ("自动化调剂", "发药机", "信息化管理系统", "无缝对接", "设备需求参数")):
             return "medical_tcm_mixed"
         return "medical_tcm"
+    if any(marker in base_text for marker in ("物业管理", "物业服务", "保安", "保洁", "后勤服务")):
+        return "property_service"
     if any(marker in base_text for marker in ("平台", "信息", "软件", "系统", "数据")):
         return "information_system"
     if any(marker in base_text for marker in ("窗帘", "隔帘", "床品", "服装", "被服")):
