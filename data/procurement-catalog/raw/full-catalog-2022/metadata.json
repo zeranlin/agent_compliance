@@ -1,0 +1,23 @@
+{
+  "source_id": "PROCUREMENT-CATALOG-2022-FULL",
+  "title": "政府采购品目分类目录（2022年印发）",
+  "file_name": "source.pdf",
+  "source_type": "official_catalog_pdf",
+  "source_org": "财政部",
+  "category_scope": [
+    "货物",
+    "工程",
+    "服务"
+  ],
+  "local_snapshot_status": "downloaded",
+  "sha256": "59483df358db0bb6e9d705bfae4aa14eba81ef0ff4b255e1d7b03e4511be9b43",
+  "file_size_bytes": 1186949,
+  "snapshot_date": "2026-03-18",
+  "source_path_hint": "data/procurement-catalog/raw/full-catalog-2022/source.pdf",
+  "upstream_note": "来自用户提供的《2022政府采购品目分类目录.pdf》原始文件快照",
+  "next_artifacts": [
+    "data/procurement-catalog/catalogs-full.json",
+    "data/procurement-catalog/review-domain-map.json"
+  ],
+  "status_note": "当前已完成原始文件入库，后续需要继续进行结构化抽取、层级树整理和审查映射补充。"
+}
