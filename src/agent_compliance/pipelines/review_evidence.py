@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
+from agent_compliance.knowledge.procurement_catalog import (
+    CatalogClassification,
+    classification_has_catalog_prefix,
+    classification_has_domain,
+)
 from agent_compliance.pipelines.review_arbiter import line_ranges_overlap
 from agent_compliance.schemas import Finding
 
@@ -86,7 +91,10 @@ def build_theme_excerpt(source_text: str | None) -> str:
     return "；".join(unique_parts[:2]) + f" 等{len(unique_parts)}项"
 
 
-def select_representative_evidence(finding: Finding) -> str:
+def select_representative_evidence(
+    finding: Finding,
+    classification: CatalogClassification | None = None,
+) -> str:
     source_text = finding.source_text or ""
     if not source_text:
         return ""
@@ -95,7 +103,7 @@ def select_representative_evidence(finding: Finding) -> str:
         return clip_excerpt(source_text, limit=78)
 
     title = finding.problem_title
-    keywords = evidence_keywords_for_title(title)
+    keywords = evidence_keywords_for_title(title, classification=classification)
     ranked = sorted(
         OrderedDict.fromkeys(parts),
         key=lambda part: (
@@ -110,7 +118,11 @@ def select_representative_evidence(finding: Finding) -> str:
     return excerpt
 
 
-def evidence_keywords_for_title(title: str) -> tuple[str, ...]:
+def evidence_keywords_for_title(
+    title: str,
+    *,
+    classification: CatalogClassification | None = None,
+) -> tuple[str, ...]:
     mapping = {
         "评分项名称、内容和评分证据之间不一致": (
             "工程案例",
@@ -164,7 +176,22 @@ def evidence_keywords_for_title(title: str) -> tuple[str, ...]:
             "按3%扣减",
         ),
     }
-    return mapping.get(title, ())
+    keywords = list(mapping.get(title, ()))
+    if classification_has_catalog_prefix(classification, "C160") or classification_has_domain(classification, "information_system"):
+        keywords.extend(("软件", "平台", "接口", "软件著作权", "演示", "签到"))
+    if any(
+        classification_has_catalog_prefix(classification, prefix) for prefix in ("C2307", "C2309", "C2315")
+    ) or classification_has_domain(classification, "signage_printing_service"):
+        keywords.extend(("宣传", "印刷", "导视", "广告", "喷绘", "写真", "雕刻", "软件著作权"))
+    if classification_has_catalog_prefix(classification, "A0232") or classification_has_domain(
+        classification, "medical_device_goods"
+    ):
+        keywords.extend(("医疗设备", "检验报告", "CMA", "开机率", "验收", "送检"))
+    if classification_has_catalog_prefix(classification, "C210400") or classification_has_domain(
+        classification, "property_service"
+    ):
+        keywords.extend(("医院物业", "履约评价", "服务费挂钩", "满意度", "到场", "驻场"))
+    return tuple(OrderedDict.fromkeys(keywords))
 
 
 def representative_excerpt(source_text: str) -> str:

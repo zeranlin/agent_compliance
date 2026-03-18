@@ -495,7 +495,7 @@ def _refine_findings(
     refined = _filter_technical_justification_noise(document, refined)
     refined = _merge_similar_technical_findings(refined)
     refined = _merge_nearby_liability_findings(refined)
-    refined = _apply_theme_splitter_and_summarizer(refined)
+    refined = _apply_theme_splitter_and_summarizer(refined, classification=classification)
     refined = _drop_appendix_semantic_duplicates(refined)
     for finding in refined:
         finding.source_text = _representative_excerpt(finding.source_text)
@@ -1880,7 +1880,10 @@ def _build_theme_finding(
     )
 
 
-def _apply_theme_splitter_and_summarizer(findings: list[Finding]) -> list[Finding]:
+def _apply_theme_splitter_and_summarizer(
+    findings: list[Finding],
+    classification: CatalogClassification | None = None,
+) -> list[Finding]:
     for finding in findings:
         if finding.finding_origin != "analyzer":
             continue
@@ -1983,7 +1986,7 @@ def _apply_theme_splitter_and_summarizer(findings: list[Finding]) -> list[Findin
             finding.rewrite_suggestion = (
                 "建议将付款、验收、复检、售后到场和责任承担拆分为独立条款，分别明确触发条件、责任来源和费用边界，不宜通过开放式义务和叠加式后果整体压重供应商责任。"
             )
-        finding.source_text = _select_representative_evidence(finding)
+        finding.source_text = _select_representative_evidence(finding, classification=classification)
     return findings
 
 

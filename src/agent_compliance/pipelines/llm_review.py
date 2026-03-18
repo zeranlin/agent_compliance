@@ -7,6 +7,10 @@ from pathlib import Path
 
 from agent_compliance.config import LLMConfig, detect_paths
 from agent_compliance.evals.runner import benchmark_summary
+from agent_compliance.knowledge.procurement_catalog import (
+    CatalogClassification,
+    classify_procurement_catalog,
+)
 from agent_compliance.models.llm_client import ChatMessage, OpenAICompatibleLLMClient
 from agent_compliance.schemas import Clause, Finding, NormalizedDocument, ReviewResult
 from agent_compliance.pipelines.review import reconcile_review_result
@@ -65,8 +69,9 @@ def apply_llm_review_tasks(
         return review, empty
 
     client = OpenAICompatibleLLMClient(llm_config)
+    classification = classify_procurement_catalog(document)
     added_findings: list[Finding] = []
-    added_findings.extend(_run_document_audit_task(document, review, client))
+    added_findings.extend(_run_document_audit_task(document, review, client, classification=classification))
     added_findings.extend(_run_template_mismatch_task(document, review, client))
     added_findings.extend(_run_scoring_structure_task(document, review, client))
     added_findings.extend(_run_commercial_chain_task(document, review, client))
@@ -328,6 +333,8 @@ def _run_document_audit_task(
     document: NormalizedDocument,
     review: ReviewResult,
     client: OpenAICompatibleLLMClient,
+    *,
+    classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     candidate_clauses = _document_audit_candidate_clauses(document)
     if not candidate_clauses:
@@ -343,6 +350,7 @@ def _run_document_audit_task(
         document=document,
         clauses=candidate_clauses[:24],
         review=review,
+        classification=classification,
     )
     payload = _safe_chat_json(client, prompt, default={"findings": []})
     findings = _findings_from_payload(
@@ -362,7 +370,7 @@ def _run_document_audit_task(
             "template_mismatch",
         },
     )
-    findings.extend(_fallback_document_audit_findings(document, review, candidate_clauses))
+    findings.extend(_fallback_document_audit_findings(document, review, candidate_clauses, classification=classification))
     return _dedupe_added_findings(findings)
 
 
@@ -478,11 +486,12 @@ def _build_task_prompt(
     document: NormalizedDocument,
     clauses: list[Clause],
     review: ReviewResult,
+    classification: CatalogClassification | None = None,
 ) -> str:
     lines = [
         f"任务: {task_name}",
         f"文件: {document.document_name}",
-        f"采购标的摘要: {_document_domain_summary(document)}",
+        f"采购标的摘要: {_document_domain_summary(document, classification=classification)}",
         "已存在 findings 摘要:",
     ]
     for finding in review.findings[:15]:
@@ -692,6 +701,7 @@ def _fallback_document_audit_findings(
     document: NormalizedDocument,
     review: ReviewResult,
     clauses: list[Clause],
+    classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     findings: list[Finding] = []
     theme_groups = [
@@ -710,6 +720,14 @@ def _fallback_document_audit_findings(
             "评分或资质条款中出现与当前采购标的领域不匹配的案例、证书、认证范围或模板内容，容易把无关材料错误地转化为得分点或准入条件。",
             "建议删除与项目标的不匹配的案例、证书和认证范围，仅保留与评分主题和履约目标直接相关的内容。",
             "scoring_content_mismatch",
+        ),
+        (
+            ("软件著作权", "系统端口", "无缝对接", "平台", "接口"),
+            {"template_mismatch", "scoring_content_mismatch", "technical_justification_needed"},
+            "混合采购场景叠加信息化接口和软件化义务，边界不清",
+            "当前采购文件在主标的之外叠加了软件著作权、系统端口或平台接口等信息化义务。若未说明这些内容与主采购标的的直接履约关系，容易形成混合采购边界不清。",
+            "建议先明确主采购标的和配套边界，将系统接口、平台接入和软件化义务与主标的分开表述；不属于本次采购范围的应删除或另行采购。",
+            "template_mismatch",
         ),
         (
             ("生产日期必须是", "专业工程师", "5 年以上"),
@@ -731,6 +749,12 @@ def _fallback_document_audit_findings(
     for tokens, issue_types, title, rationale, rewrite, issue_type in theme_groups:
         matched_clauses = [item for item in clauses if any(token in item.text for token in tokens)]
         if not matched_clauses:
+            continue
+        if (
+            title == "混合采购场景叠加信息化接口和软件化义务，边界不清"
+            and classification is not None
+            and classification.primary_domain_key == "information_system"
+        ):
             continue
         if _review_has_issue(review, issue_types, {clause.clause_id for clause in matched_clauses}):
             continue
@@ -840,7 +864,20 @@ def _render_difference_learning(difference_learning: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
-def _document_domain_summary(document: NormalizedDocument) -> str:
+def _document_domain_summary(
+    document: NormalizedDocument,
+    *,
+    classification: CatalogClassification | None = None,
+) -> str:
+    if classification is not None and classification.primary_catalog_name:
+        summary = [f"主品目更接近：{classification.primary_catalog_name}。"]
+        if classification.primary_mapped_catalog_codes:
+            summary.append(f"官方品目映射：{', '.join(classification.primary_mapped_catalog_codes[:3])}。")
+        if classification.secondary_catalog_names:
+            summary.append(f"次品目候选：{', '.join(classification.secondary_catalog_names[:3])}。")
+        if classification.is_mixed_scope:
+            summary.append("当前文件存在混合采购或跨品目边界特征。")
+        return "".join(summary)
     text = " ".join(clause.text for clause in document.clauses[:120])
     if any(token in text for token in ("医生服", "护士服", "病员服", "床品", "被套", "枕套", "洗手衣")):
         return "当前文件主标的更接近医用服装、病员服、床品等纺织类货物。"

@@ -3,14 +3,63 @@ from __future__ import annotations
 import unittest
 
 from tests._bootstrap import REPO_ROOT
+from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog
 from agent_compliance.parsers.pagination import build_page_map, page_hint_for_line
 from agent_compliance.parsers.section_splitter import split_into_clauses
+from agent_compliance.pipelines.review_evidence import select_representative_evidence
 from agent_compliance.pipelines.review import _drop_false_positive_findings, build_review_result
 from agent_compliance.pipelines.rule_scan import run_rule_scan
 from agent_compliance.schemas import Finding, NormalizedDocument
 
 
 class ReviewPipelineTest(unittest.TestCase):
+    def test_representative_evidence_prefers_catalog_relevant_keywords(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医院导视标识和宣传印刷服务",
+                "评标信息",
+                "投标人具有软件著作权登记证书得10分。",
+                "投标人具有UV打印机、喷绘机、写真机的得10分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/signage.docx",
+            document_name="医院导视标识和宣传印刷服务.docx",
+            file_hash="signage-evidence",
+            normalized_text_path="/tmp/signage.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        classification = classify_procurement_catalog(document)
+        finding = Finding(
+            finding_id="F-001",
+            document_name=document.document_name,
+            problem_title="评分项名称、内容和评分证据之间不一致",
+            page_hint=None,
+            clause_id=clauses[2].clause_id,
+            source_section=clauses[2].source_section or "",
+            section_path=clauses[2].section_path,
+            table_or_item_label=clauses[2].table_or_item_label,
+            text_line_start=clauses[2].line_start,
+            text_line_end=clauses[3].line_end,
+            source_text="；".join([clauses[2].text, clauses[3].text]),
+            issue_type="scoring_content_mismatch",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky="x",
+            impact_on_competition_or_performance="x",
+            legal_or_policy_basis=None,
+            rewrite_suggestion="x",
+            needs_human_review=False,
+            human_review_reason=None,
+            finding_origin="analyzer",
+        )
+        excerpt = select_representative_evidence(finding, classification=classification)
+        self.assertIn("软件著作权", excerpt)
+
     def test_review_result_uses_local_references_and_dedupes_hits(self) -> None:
         text = "\n".join(
             [

@@ -7,8 +7,9 @@ from unittest.mock import patch
 
 from agent_compliance.cli import build_parser
 from agent_compliance.config import LLMConfig, detect_llm_config
+from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog
 from agent_compliance.pipelines.llm_enhance import _build_prompt, enhance_review_result
-from agent_compliance.pipelines.llm_review import apply_llm_review_tasks, run_benchmark_gate
+from agent_compliance.pipelines.llm_review import _build_task_prompt, apply_llm_review_tasks, run_benchmark_gate
 from agent_compliance.parsers.section_splitter import split_into_clauses
 from agent_compliance.schemas import Finding, NormalizedDocument, ReviewResult
 from agent_compliance.web.app import _web_llm_config
@@ -449,6 +450,48 @@ class LLMIntegrationTest(unittest.TestCase):
             artifacts.difference_md_path,
         ]:
             Path(path).unlink(missing_ok=True)
+
+    def test_document_audit_prompt_includes_catalog_summary(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医院导视标识和宣传印刷服务",
+                "采购内容：标识标牌设计、制作、印刷与安装。",
+                "用户需求书",
+                "中标人需完成院区导视系统制作和宣传印刷。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="catalog-prompt",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = ReviewResult(
+            document_name="sample.txt",
+            review_scope="资格条件、评分规则、技术要求、商务及验收条款",
+            jurisdiction="中国",
+            review_timestamp="2026-03-16T00:00:00+00:00",
+            overall_risk_summary="summary",
+            findings=[],
+            items_for_human_review=[],
+            review_limitations=[],
+        )
+        classification = classify_procurement_catalog(document)
+        prompt = _build_task_prompt(
+            task_name="document_audit",
+            instruction="测试",
+            document=document,
+            clauses=clauses[:2],
+            review=review,
+            classification=classification,
+        )
+        self.assertIn("主品目更接近", prompt)
+        self.assertIn("官方品目映射", prompt)
+        if classification.secondary_catalog_names:
+            self.assertIn("次品目候选", prompt)
 
 
 if __name__ == "__main__":

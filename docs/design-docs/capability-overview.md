@@ -313,6 +313,7 @@
 - 当前主编排已正式接入品目分类结果：`review.py` 会先完成 `procurement_catalog_classifier` 识别，再把同一份分类结果传入 `review_strategy.py`，用于生成文件级策略画像、章节复核路线和分析器执行顺序，而不再只是作为摘要展示字段。
 - 当前 `domain_match_engine` 与高频 `qualification / scoring / technical / commercial` 分析器也已开始按主品目、次品目和混合采购标记做差异化判断，不再只按固定顺序和通用规则做统一分析。
 - 当前 `qualification_reasoning_engine` 和 `finding_arbiter` 也已开始参考官方品目编码前缀控制资格总问题上浮和主题覆盖边界，能够更稳地区分物业、标识印制、医疗设备等场景下哪些错位证书和门槛应独立上浮、哪些不应被总问题过度吞并。
+- 当前官方品目编码映射结果也已继续下沉到 `document_audit_llm` 和 `evidence_selector`：全文辅助扫描会在提示词里显式带出主品目、官方品目映射和混合采购提示，代表性证据选择也会结合品目场景优先保留更具诊断价值的原文摘录。
 - 当前已把 2022 版《政府采购品目分类目录》原始 PDF 快照纳入 `data/procurement-catalog/raw/full-catalog-2022/`，为后续生成全量 `catalogs-full.json` 和审查映射层提供本地权威来源。
 - 当前已基于该 PDF 生成第一版 `data/procurement-catalog/catalogs-full.json` 全量目录骨架，可直接用于品目编码、层级、父子关系和主次品目识别增强。
 - 当前已新增 `data/procurement-catalog/review-domain-map.json` 第一版审查领域映射，用官方品目编码和前缀先覆盖家具、被服、物业、信息化、医疗设备、药品配套、标识印制、设备安装、餐饮等高频场景。
