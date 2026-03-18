@@ -121,6 +121,7 @@
 - 面向下一阶段架构增强的 [procurement-catalog-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/procurement-catalog-layer-design.md)，用于引入采购品目目录层、标的标准化识别和混合场景边界判断
 - 面向主编排升级的 [code-review-main-pipeline-update.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-main-pipeline-update.md)，用于把品目目录层正式接入代码审查主链路，并重排策略、规则、分析器和仲裁顺序
 - 面向下一阶段架构排查的 [architecture-gap-priorities.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/architecture-gap-priorities.md)，用于明确当前真正缺失的架构层与补强优先级，而不是继续零散补规则
+- 面向当前持续调优阶段的 [engine-tuning-checklist.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/engine-tuning-checklist.md)，用于明确哪些 engine 是当前高优先级校准项、误判高发点和跨层联动问题
 - 面向法规条文级语义增强的 [legal-semantic-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/legal-semantic-layer-design.md)，用于正式设计 `legal_clause_index`、`issue_type_authority_map` 和 `legal_authority_reasoner`
 
 ## 四、精确定位能力
