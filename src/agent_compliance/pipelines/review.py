@@ -8,7 +8,9 @@ from agent_compliance.analyzers.qualification import (
     apply_qualification_analyzers,
     looks_like_supplier_level_qualification_clause as _looks_like_supplier_level_qualification_clause,
 )
+from agent_compliance.analyzers.commercial import apply_commercial_analyzers
 from agent_compliance.analyzers.scoring import apply_scoring_analyzers
+from agent_compliance.analyzers.technical import apply_technical_analyzers
 from agent_compliance.pipelines.review_arbiter import (
     apply_finding_arbiter,
     is_qualification_like_finding as _is_qualification_like_finding,
@@ -433,7 +435,12 @@ def _refine_findings(document: NormalizedDocument, findings: list[Finding]) -> l
         document_domain=_document_domain,
         merge_optional_text=_merge_optional_text,
     )
-    refined = _add_commercial_chain_findings(document, refined)
+    refined = apply_commercial_analyzers(
+        document,
+        refined,
+        build_theme_finding=_build_theme_finding,
+        is_substantive_commercial_clause=_is_substantive_commercial_clause,
+    )
     refined = _add_domain_match_findings(document, refined)
     refined = apply_qualification_analyzers(
         document,
@@ -441,11 +448,12 @@ def _refine_findings(document: NormalizedDocument, findings: list[Finding]) -> l
         build_theme_finding=_build_theme_finding,
         is_qualification_clause=_is_qualification_clause,
     )
-    refined = _add_technical_reference_consistency_findings(document, refined)
-    refined = _add_commercial_burden_findings(document, refined)
-    refined = _add_geographic_tendency_findings(document, refined)
-    refined = _add_acceptance_boundary_findings(document, refined)
-    refined = _add_liability_balance_findings(document, refined)
+    refined = apply_technical_analyzers(
+        document,
+        refined,
+        build_theme_finding=_build_theme_finding,
+        is_technical_clause=_is_technical_clause,
+    )
     refined = _add_industry_appropriateness_findings(document, refined)
     refined = apply_finding_arbiter(refined)
     refined = _merge_technical_justification_findings(refined)
@@ -678,12 +686,6 @@ def _technical_justification_human_review_reason(family: str) -> str:
     )
 
 
-def _add_commercial_chain_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
-    findings = _add_payment_evaluation_chain_finding(document, findings)
-    findings = _add_commercial_lifecycle_theme_finding(document, findings)
-    return findings
-
-
 def _add_domain_match_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
     findings = _add_qualification_domain_theme_finding(document, findings)
     findings = _add_scoring_domain_theme_finding(document, findings)
@@ -694,222 +696,6 @@ def _add_domain_match_findings(document: NormalizedDocument, findings: list[Find
         findings,
         build_theme_finding=_build_theme_finding,
         is_qualification_clause=_is_qualification_clause,
-    )
-    return findings
-
-
-def _add_technical_reference_consistency_findings(
-    document: NormalizedDocument, findings: list[Finding]
-) -> list[Finding]:
-    findings = _add_technical_standard_mismatch_theme_finding(document, findings)
-    findings = _add_proof_formality_findings(document, findings)
-    return findings
-
-
-def _add_commercial_burden_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
-    findings = _add_commercial_financing_burden_theme_finding(document, findings)
-    findings = _add_delivery_deadline_anomaly_theme_finding(document, findings)
-    findings = _add_commercial_acceptance_fee_shift_theme_finding(document, findings)
-    findings = _add_liability_imbalance_theme_finding(document, findings)
-    return findings
-
-
-def _add_technical_standard_mismatch_theme_finding(
-    document: NormalizedDocument, findings: list[Finding]
-) -> list[Finding]:
-    if any("技术要求引用了与标的不匹配的标准或规范" in finding.problem_title for finding in findings):
-        return findings
-    clauses = [
-        clause
-        for clause in document.clauses
-        if _is_technical_clause(clause)
-        and any(
-            marker in clause.text
-            for marker in (
-                "QB/T 8101",
-                "QB/T 8075",
-                "QB/T 4263",
-                "QB/T 1649",
-                "QB/T 4089",
-                "GB 6249",
-                "GB 15605",
-                "EN14175-3",
-                "ISO 20743",
-                "ISO20743",
-                "ISO 10993",
-                "ISO10993",
-                "空气质量检测装置",
-                "菜肴罐头",
-                "聚苯乙烯泡沫包装材料",
-            )
-        )
-    ]
-    if not clauses:
-        return findings
-    findings.append(
-        _build_theme_finding(
-            document=document,
-            clauses=clauses,
-            issue_type="technical_justification_needed",
-            problem_title="技术要求引用了与标的不匹配的标准或规范",
-            risk_level="high",
-            severity_score=3,
-            confidence="high",
-            compliance_judgment="likely_non_compliant",
-            why_it_is_risky=(
-                "技术章节引用了与采购标的技术属性明显不匹配的标准或规范。"
-                "这类标准错位通常意味着模板复制、标准引用失当或把无关规范转化为技术门槛。"
-            ),
-            impact_on_competition_or_performance="可能错误压缩符合条件的产品范围，并增加技术复核和投诉争议风险。",
-            legal_or_policy_basis="政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）",
-            rewrite_suggestion="建议删除与采购标的不匹配的标准或规范，仅保留与本项目技术性能和验收直接相关的国家、行业或通用标准。",
-            needs_human_review=True,
-            human_review_reason="需结合采购标的技术属性、适用标准边界和市场通行做法判断相关标准引用是否确有必要。",
-            finding_origin="analyzer",
-        )
-    )
-    return findings
-
-
-def _add_proof_formality_findings(document: NormalizedDocument, findings: list[Finding]) -> list[Finding]:
-    if any("技术证明材料形式要求过严且带有地方化限制" in finding.problem_title for finding in findings):
-        return findings
-    clauses = [
-        clause
-        for clause in document.clauses
-        if _is_technical_clause(clause)
-        and any(
-            marker in clause.text
-            for marker in (
-                "本市具有检验检测机构",
-                "带有 CMA",
-                "带有CMA",
-                "权威质检部门",
-                "检测报告原件扫描件",
-                "2022 年起至投标截止之日期间",
-                "国家级检测中心出具的检验报告",
-                "提供相关检测报告",
-                "提供国家级检测中心出具的检验报告",
-                "全国认证认可信息公共服务平台",
-                "CMA  资质许可（认定）范围内",
-                "CMA资质许可（认定）范围内",
-                "经广告审查机关备案的产品彩页",
-                "专项检测报告",
-            )
-        )
-    ]
-    if not clauses:
-        return findings
-    findings.append(
-        _build_theme_finding(
-            document=document,
-            clauses=clauses,
-            issue_type="technical_justification_needed",
-            problem_title="技术证明材料形式要求过严且带有地方化限制",
-            risk_level="high",
-            severity_score=3,
-            confidence="high",
-            compliance_judgment="potentially_problematic",
-            why_it_is_risky=(
-                "技术章节对检测机构地域、报告时段、CMA 标识和原件扫描件形式作了叠加限制。"
-                "这类证明形式要求容易把验证方式进一步收窄为特定材料路径，抬高证明成本。"
-            ),
-            impact_on_competition_or_performance="可能显著提高供应商举证成本，并缩窄可接受的证明材料范围。",
-            legal_or_policy_basis="政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）",
-            rewrite_suggestion="建议改为能够证明对应技术指标满足需求的有效资料，不限定本地机构、特定报告时段和原件扫描件形式。",
-            needs_human_review=True,
-            human_review_reason="需结合采购标的技术特征、适用标准和市场可得性判断相关证明形式限制是否确有必要。",
-            finding_origin="analyzer",
-        )
-    )
-    return findings
-
-
-def _add_commercial_financing_burden_theme_finding(
-    document: NormalizedDocument, findings: list[Finding]
-) -> list[Finding]:
-    if any("商务条款设置异常资金占用安排" in finding.problem_title for finding in findings):
-        return findings
-    clauses = [
-        clause
-        for clause in document.clauses
-        if _is_substantive_commercial_clause(clause)
-        if any(
-            marker in clause.text
-            for marker in (
-                "预算金额的5%作为履约担保",
-                "以现金形式缴纳采购预算的5%作为履约保证金",
-                "诚信履约备用金",
-                "自动转为",
-                "售后服务保证金",
-                "质保期结束（36个月）",
-                "36个月",
-            )
-        )
-    ]
-    if len(clauses) < 1:
-        return findings
-    findings.append(
-        _build_theme_finding(
-            document=document,
-            clauses=clauses,
-            issue_type="one_sided_commercial_term",
-            problem_title="商务条款设置异常资金占用安排",
-            risk_level="high",
-            severity_score=3,
-            confidence="high",
-            compliance_judgment="likely_non_compliant",
-            why_it_is_risky=(
-                "商务条款通过现金形式履约保证金、验收后自动转售后保证金以及较长质保占压等方式叠加设置资金占用安排。"
-                "这类资金占用设计会明显增加供应商的前期履约成本和现金流压力。"
-            ),
-            impact_on_competition_or_performance="可能显著抬高报价和资金占用成本，并压缩可参与竞争的供应商范围。",
-            legal_or_policy_basis="中华人民共和国民法典；政府采购需求管理办法（财政部）",
-            rewrite_suggestion="建议分别校准履约担保比例和备用金安排，不宜通过叠加式资金占用条件整体提高供应商履约门槛。",
-            needs_human_review=True,
-            human_review_reason="需结合财政支付、履约担保和项目供货周期判断相关商务安排是否合理并符合采购内控要求。",
-            finding_origin="analyzer",
-        )
-    )
-    return findings
-
-
-def _add_delivery_deadline_anomaly_theme_finding(
-    document: NormalizedDocument, findings: list[Finding]
-) -> list[Finding]:
-    if any("交货期限设置异常或明显失真" in finding.problem_title for finding in findings):
-        return findings
-    clauses = [
-        clause
-        for clause in document.clauses
-        if any(
-            marker in clause.text
-            for marker in ("1000      个日历日内交货", "1000 个日历日内交货", "1000个日历日内交货")
-        )
-    ]
-    if not clauses:
-        return findings
-    findings.append(
-        _build_theme_finding(
-            document=document,
-            clauses=clauses,
-            issue_type="one_sided_commercial_term",
-            problem_title="交货期限设置异常或明显失真",
-            risk_level="high",
-            severity_score=3,
-            confidence="high",
-            compliance_judgment="potentially_problematic",
-            why_it_is_risky=(
-                "商务条款设置了与通常电子仪器仪表供货节奏明显不匹配的超长交货期限。"
-                "这类失真的交货安排容易掩盖真实供货周期要求，也会增加合同履行和验收节点的不确定性。"
-            ),
-            impact_on_competition_or_performance="可能导致项目排期、履约责任和验收节点失真，并增加后续履约争议风险。",
-            legal_or_policy_basis="政府采购需求管理办法（财政部）；中华人民共和国民法典",
-            rewrite_suggestion="建议结合采购清单、供货周期和安装调试安排重设合理交货期限，避免使用明显失真的超长交付时限。",
-            needs_human_review=True,
-            human_review_reason="需结合采购内容、安装调试周期和项目建设时序判断当前交货期限是否属于录入错误或异常设置。",
-            finding_origin="analyzer",
-        )
     )
     return findings
 
