@@ -453,6 +453,9 @@ def _build_document_strategy_profile(
     if domain == "furniture_goods":
         procurement_mode = "货物采购并含安装调试项目"
         domain_hint = "办公或医用家具供货、安装和售后保障类"
+    elif domain == "catering_service":
+        procurement_mode = "餐饮托管或食堂运营服务项目"
+        domain_hint = "医院、学校或公共机构食堂托管、供餐保障与后勤餐饮服务类"
     elif any(token in combined for token in ("血透", "透析", "医疗器械", "设备采购", "HIS", "PACS", "LIS", "碳足迹")) or domain == "medical_device_goods":
         procurement_mode = "货物采购并含安装调试项目"
         domain_hint = "医用设备供货、院内接口配套与附加合规义务并存"
@@ -2019,9 +2022,21 @@ def _add_personnel_scoring_theme_finding(
         clause
         for clause in document.clauses
         if _is_scoring_clause(clause)
-        and any(
-            marker in f"{clause.section_path or ''} {clause.text}"
-            for marker in ("拟安排项目负责人情况", "拟安排的项目团队成员情况", "项目负责人", "团队成员")
+        and (
+            any(
+                marker in f"{clause.section_path or ''} {clause.text}"
+                for marker in ("拟安排项目负责人情况", "拟安排的项目团队成员情况", "项目负责人", "团队成员", "主要团队成员", "主要技术人员", "人员管理方案")
+            )
+            or any(
+                marker in clause.text
+                for marker in (
+                    "高级餐饮业职业经理人",
+                    "食品安全管理员",
+                    "中式烹调师",
+                    "中式（西式）面点师",
+                    "中式烹调师或中式（西式）面点师",
+                )
+            )
         )
         and any(
             marker in clause.text
@@ -2039,10 +2054,23 @@ def _add_personnel_scoring_theme_finding(
                 "荣誉",
                 "项目经验",
                 "特种设备",
+                "高级餐饮业职业经理人",
+                "食品安全管理员",
+                "中式烹调师",
+                "中式（西式）面点师",
+                "中式烹调师或中式（西式）面点师",
+                "健康证明",
             )
         )
     ]
-    if len(clauses) < 2:
+    catering_personnel_markers = (
+        "高级餐饮业职业经理人",
+        "食品安全管理员",
+        "中式烹调师",
+        "中式（西式）面点师",
+        "中式烹调师或中式（西式）面点师",
+    )
+    if len(clauses) < 2 and not any(any(marker in clause.text for marker in catering_personnel_markers) for clause in clauses):
         return findings
     findings.append(
         _build_theme_finding(
@@ -2140,6 +2168,10 @@ def _add_scoring_semantic_consistency_theme_finding(
                 "资产管理读写基站",
                 "先进单位",
                 "注册安全工程师",
+                "食品安全责任险",
+                "公众责任险",
+                "高级餐饮业职业经理人",
+                "食品安全管理员",
             )
         )
     ]
@@ -2348,7 +2380,19 @@ def _add_experience_evaluation_theme_finding(
         clause
         for clause in document.clauses
         if _is_scoring_clause(clause)
-        and any(marker in clause.text for marker in ("履约评价为满意", "履约评价为优秀", "其他同等评价", "国家机关或事业单位委托"))
+        and any(
+            marker in clause.text
+            for marker in (
+                "履约评价为满意",
+                "履约评价为优秀",
+                "其他同等评价",
+                "国家机关或事业单位委托",
+                "考核评价为",
+                "总体履约评价结果",
+                "优”或“优秀",
+                "优或优秀",
+            )
+        )
         and any(marker in clause.text for marker in ("10 分", "100分", "最高得 100 分", "最高得100分"))
     ]
     if not clauses:
@@ -2400,13 +2444,32 @@ def _add_payment_evaluation_chain_finding(
                 "连续两次被评级为“中”",
                 "累计扣款金额达到合同金额的 30%",
                 "甲方有权解除合同",
+                "每月服务费与考核结果挂钩",
+                "满意度评价结果与服务费挂钩",
+                "满意度评价在",
+                "按1%扣减",
+                "按2%扣减",
+                "按3%扣减",
+                "提前告知",
             )
         )
     ]
     evaluation_clauses = [
         clause
         for clause in clauses
-        if any(marker in clause.text for marker in ("履约评价", "评价标准", "评价指标", "项目负责人可根据项目要求自行设定"))
+        if any(
+            marker in clause.text
+            for marker in (
+                "履约评价",
+                "评价标准",
+                "评价指标",
+                "项目负责人可根据项目要求自行设定",
+                "每月服务费与考核结果挂钩",
+                "满意度评价结果与服务费挂钩",
+                "满意度评价在",
+                "提前告知",
+            )
+        )
     ]
     if len(clauses) < 3 or not evaluation_clauses:
         return findings
@@ -2453,6 +2516,12 @@ def _add_commercial_lifecycle_theme_finding(
                 "每低1分",
                 "月得分",
                 "考核不合格",
+                "每月服务费与考核结果挂钩",
+                "满意度评价结果与服务费挂钩",
+                "满意度评价在",
+                "按1%扣减",
+                "按2%扣减",
+                "按3%扣减",
                 "验收",
                 "送检",
                 "检测",
@@ -2488,6 +2557,12 @@ def _add_commercial_lifecycle_theme_finding(
                 "每低1分",
                 "月得分",
                 "考核不合格",
+                "每月服务费与考核结果挂钩",
+                "满意度评价结果与服务费挂钩",
+                "满意度评价在",
+                "按1%扣减",
+                "按2%扣减",
+                "按3%扣减",
                 "履约评价",
                 "评价标准",
                 "评价指标",
@@ -2994,6 +3069,24 @@ def _add_geographic_tendency_findings(document: NormalizedDocument, findings: li
                 "本地备件库",
             )
         )
+        and (
+            any(
+                marker in clause.text
+                for marker in (
+                    "到场",
+                    "响应",
+                    "驻场",
+                    "现场服务",
+                    "售后服务场所",
+                    "固定的售后服务场所",
+                    "本地售后网点",
+                    "驻点服务站",
+                    "本地备件库",
+                    "高新区内",
+                )
+            )
+            or not any(marker in clause.text for marker in ("24小时营业", "24小时营业及就餐服务", "供餐服务", "就餐服务"))
+        )
     ]
     if not clauses:
         return findings
@@ -3140,6 +3233,8 @@ def _add_industry_appropriateness_findings(document: NormalizedDocument, finding
 def _document_domain(document: NormalizedDocument) -> str:
     base_text = f"{document.document_name} {document.source_path}"
     clause_text = " ".join(clause.text for clause in document.clauses[:200])
+    if any(marker in base_text for marker in ("食堂", "供餐", "餐饮", "托管服务")):
+        return "catering_service"
     if any(marker in base_text for marker in ("家具", "办公类家具", "医用家具")):
         return "furniture_goods"
     if any(marker in base_text for marker in ("血透", "透析", "医疗器械", "三维电生理", "胃肠镜", "设备采购项目")):
@@ -3515,6 +3610,10 @@ def _evidence_keywords_for_title(title: str) -> tuple[str, ...]:
             "奖项",
             "项目经验",
             "特种设备",
+            "高级餐饮业职业经理人",
+            "食品安全管理员",
+            "中式烹调师",
+            "面点师",
         ),
         "现场演示分值过高且签到要求形成额外门槛": (
             "可运行展示系统",
@@ -3536,6 +3635,11 @@ def _evidence_keywords_for_title(title: str) -> tuple[str, ...]:
             "到场",
             "解除合同",
             "售后服务保证金",
+            "满意度评价",
+            "服务费挂钩",
+            "按1%扣减",
+            "按2%扣减",
+            "按3%扣减",
         ),
     }
     return mapping.get(title, ())

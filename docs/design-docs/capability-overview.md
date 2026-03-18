@@ -303,12 +303,14 @@
   - 商务责任和违约后果设置明显偏重
 - 当前已继续增强 `commercial_burden_analyzer`，可单独识别“履约担保验收后自动转售后保证金、长期占压至质保期结束”这类异常资金占用安排。
 - 当前已继续增强 `domain_match_engine`，开始支持“药品 + 自动化设备 + 信息化接口”这类混合采购场景的边界判断，能区分合理配套设备要求与超出药品采购边界的系统对接、运维清洁义务。
+- 当前已补入餐饮托管/食堂运营服务场景识别，可在医院、学校或公共机构食堂项目中优先按“评分标准 -> 商务与验收 -> 技术要求”的路线复核，并避免将“24小时营业及就餐服务”等持续供餐义务误判为属地限制。
 - 当前已补入 `geographic_tendency_analyzer`、`acceptance_boundary_analyzer`、`industry_appropriateness_analyzer` 和 `theme_splitter_and_summarizer`，可进一步识别：
   - 驻场、短时响应或服务场地要求形成事实上的属地倾斜
   - 验收程序、复检与最终确认边界不清
   - 评分和技术要求中存在行业适配性不足的错位内容
 - 当前已继续增强 `finding_arbiter`，可进一步压掉正文与投标文件格式附件中的语义重复问题，并优先保留更适合改稿的正文主问题和代表性证据。
 - 当前已继续增强 `technical_necessity_explainer`，在“需论证”类技术问题中开始明确补充必要性、市场可得性、适用标准和建议论证方向，而不只停留在笼统提醒。
+- 当前已继续增强 `commercial_lifecycle_analyzer`、`scoring_semantic_consistency_engine` 和 `evidence_selector` 在食堂托管服务样本中的协同表现，可把“月度满意度与服务费挂钩、按比例扣减、保险和人员证书高分堆叠、同类食堂业绩叠加优/优秀履约评价”等问题收束为更接近人工审查的主题主问题与代表性证据。
 
 相关设计：
 - [case-library-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/case-library-design.md)

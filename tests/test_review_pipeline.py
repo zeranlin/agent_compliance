@@ -1778,6 +1778,101 @@ class ReviewPipelineTest(unittest.TestCase):
         titles = {finding.problem_title for finding in review.findings}
         self.assertNotIn("认证评分混入错位证书且高分值结构失衡", titles)
 
+    def test_review_uses_catering_strategy_profile_for_canteen_project(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "深圳市某医院食堂托管服务采购项目",
+                "负责职工食堂日常事务管理和供餐服务。",
+                "评分因素",
+                "投标人具有政府部门食堂管理服务类同类项目业绩并经采购单位考核评价为优或优秀的，每提供一项得25分，最高得100分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="食堂托管服务采购项目.docx",
+            file_hash="canteen-strategy",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        self.assertIn("餐饮托管或食堂运营服务项目", review.overall_risk_summary)
+        self.assertIn("食堂托管、供餐保障", review.overall_risk_summary)
+
+    def test_review_does_not_treat_24_hour_catering_service_as_geographic_restriction(self) -> None:
+        text = "\n".join(
+            [
+                "第三章 用户需求书",
+                "根据医院整体规划，可提供24小时营业及就餐服务。",
+                "负责食堂全年无休供餐保障。",
+                "评分因素",
+                "投标人具有政府部门食堂管理服务类同类项目业绩并经采购单位考核评价为优或优秀的，每提供一项得25分，最高得100分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="食堂托管服务采购项目.docx",
+            file_hash="canteen-24h-service",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertNotIn("驻场、短时响应或服务场地要求形成事实上的属地倾斜", titles)
+
+    def test_review_adds_personnel_theme_for_catering_certificates(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "评分因素",
+                "拟安排的项目负责人情况（仅限一人）",
+                "具备高级餐饮业职业经理人证书、食品安全管理员证书。",
+                "拟安排的项目主要团队成员（主要技术人员）情况",
+                "具备中式烹调师或中式（西式）面点师证书。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="食堂托管服务采购项目.docx",
+            file_hash="canteen-personnel-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("人员与团队评分混入错位证书并过度堆叠条件", titles)
+
+    def test_review_adds_experience_theme_for_excellent_canteen_evaluation(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "评分因素",
+                "投标人具有政府部门食堂管理服务类同类项目业绩并经采购单位考核评价为优或优秀的，每提供一项得25分，最高得100分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="食堂托管服务采购项目.docx",
+            file_hash="canteen-experience-theme",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("经验评价叠加主观履约评价证明且分值过高", titles)
+
 
 if __name__ == "__main__":
     unittest.main()
