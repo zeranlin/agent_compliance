@@ -118,6 +118,7 @@
 当前也已补齐两类面向不同读者的说明材料：
 - 面向业务和用户的 [code-review-product-introduction.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/code-review-product-introduction.md)
 - 面向技术接入的 [code-review-technical-integration.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/code-review-technical-integration.md)
+- 面向下一阶段架构增强的 [procurement-catalog-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/procurement-catalog-layer-design.md)，用于引入采购品目目录层、标的标准化识别和混合场景边界判断
 
 ## 四、精确定位能力
 
@@ -306,6 +307,7 @@
   - 商务责任和违约后果设置明显偏重
 - 当前已继续增强 `commercial_burden_analyzer`，可单独识别“履约担保验收后自动转售后保证金、长期占压至质保期结束”这类异常资金占用安排。
 - 当前已继续增强 `domain_match_engine`，开始支持“药品 + 自动化设备 + 信息化接口”这类混合采购场景的边界判断，能区分合理配套设备要求与超出药品采购边界的系统对接、运维清洁义务。
+- 当前已形成“采购品目目录层”设计方案，后续将引入 `procurement_catalog_classifier` 和最小可用品目集，在 `document_strategy_router -> domain_match_engine -> analyzers` 之间补入标的标准化识别、品目知识映射和混合场景边界校准能力。
 - 当前已补入餐饮托管/食堂运营服务场景识别，可在医院、学校或公共机构食堂项目中优先按“评分标准 -> 商务与验收 -> 技术要求”的路线复核，并避免将“24小时营业及就餐服务”等持续供餐义务误判为属地限制。
 - 当前已补入 `geographic_tendency_analyzer`、`acceptance_boundary_analyzer`、`industry_appropriateness_analyzer` 和 `theme_splitter_and_summarizer`，可进一步识别：
   - 驻场、短时响应或服务场地要求形成事实上的属地倾斜
