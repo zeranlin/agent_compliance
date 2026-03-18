@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_compliance.config import detect_paths
-from agent_compliance.pipelines.rule_scan import ALL_RULES
+from agent_compliance.knowledge.rule_registry import build_rule_registry
 
 
 DECISIONS_FILE = "rule-decisions.json"
@@ -15,19 +15,12 @@ def load_rule_management_payload() -> dict[str, Any]:
     paths = detect_paths()
     decisions = _load_decisions(paths.improvement_root / DECISIONS_FILE)
     candidates = _load_candidates(paths.improvement_root, decisions)
+    formal_rules = _load_formal_rules()
     return {
-        "formal_rules": [
-            {
-                "rule_id": rule.rule_id,
-                "issue_type": rule.issue_type,
-                "source_section": rule.source_section,
-                "merge_key": rule.merge_key,
-                "rewrite_hint": rule.rewrite_hint,
-            }
-            for rule in ALL_RULES
-        ],
+        "formal_rules": formal_rules,
         "candidate_rules": candidates,
         "decision_summary": _decision_summary(candidates),
+        "formal_rule_summary": _formal_rule_summary(formal_rules),
         "catalog_scene_summary": _catalog_scene_summary(candidates),
         "domain_summary": _domain_summary(candidates),
         "authority_summary": _authority_summary(candidates),
@@ -96,6 +89,26 @@ def _load_decisions(path: Path) -> dict[str, dict[str, str]]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _load_formal_rules() -> list[dict[str, Any]]:
+    items = [
+        {
+            "rule_id": entry.rule_id,
+            "issue_type": entry.issue_type,
+            "source_section": entry.source_section,
+            "merge_key": entry.merge_key,
+            "rule_family": entry.rule_family,
+            "governance_tier": entry.governance_tier,
+            "rule_status": entry.rule_status,
+            "enabled_by_default": entry.enabled_by_default,
+            "default_priority": entry.default_priority,
+            "related_reference_ids": list(entry.related_reference_ids),
+        }
+        for entry in build_rule_registry()
+    ]
+    items.sort(key=lambda item: (item["rule_family"], item["rule_id"]))
+    return items
+
+
 def _decision_summary(candidates: list[dict[str, Any]]) -> dict[str, int]:
     summary = {"pending": 0, "confirmed": 0, "deferred": 0, "ignored": 0}
     for item in candidates:
@@ -103,6 +116,22 @@ def _decision_summary(candidates: list[dict[str, Any]]) -> dict[str, int]:
         summary[decision] = summary.get(decision, 0) + 1
     summary["total"] = len(candidates)
     return summary
+
+
+def _formal_rule_summary(formal_rules: list[dict[str, Any]]) -> dict[str, Any]:
+    by_status: dict[str, int] = {}
+    by_tier: dict[str, int] = {}
+    by_family: dict[str, int] = {}
+    for item in formal_rules:
+        by_status[item["rule_status"]] = by_status.get(item["rule_status"], 0) + 1
+        by_tier[item["governance_tier"]] = by_tier.get(item["governance_tier"], 0) + 1
+        by_family[item["rule_family"]] = by_family.get(item["rule_family"], 0) + 1
+    return {
+        "total": len(formal_rules),
+        "by_status": by_status,
+        "by_tier": by_tier,
+        "by_family": by_family,
+    }
 
 
 def _catalog_scene_summary(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:

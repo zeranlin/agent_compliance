@@ -3811,6 +3811,7 @@ def _rules_html() -> str:
 
     function renderRules(payload) {
       const summary = payload.decision_summary || {};
+      const formalSummary = payload.formal_rule_summary || {};
       const topScene = (payload.catalog_scene_summary || [])[0];
       const topDomain = (payload.domain_summary || [])[0];
       const topAuthority = (payload.authority_summary || [])[0];
@@ -3818,9 +3819,17 @@ def _rules_html() -> str:
       const domainText = topDomain ? `；审查领域以 ${topDomain.primary_domain_key} 为主` : '';
       const authorityText = topAuthority ? `；主依据以 ${topAuthority.primary_authority} 为主` : '';
       rulesSummaryNode.textContent = `正式规则 ${payload.formal_rules.length} 条；候选规则 ${payload.candidate_rules.length} 条；待确认 ${summary.pending || 0} 条；已确认 ${summary.confirmed || 0} 条${sceneText}${domainText}${authorityText}。`;
+      const activeCount = ((formalSummary.by_status || {}).formal_active) || 0;
+      const catalogSensitiveCount = ((formalSummary.by_status || {}).formal_catalog_sensitive) || 0;
+      const supportCount = ((formalSummary.by_status || {}).formal_support) || 0;
+      const qualificationCount = ((formalSummary.by_family || {}).qualification) || 0;
+      const scoringCount = ((formalSummary.by_family || {}).scoring) || 0;
+      const technicalCount = ((formalSummary.by_family || {}).technical) || 0;
+      const commercialCount = ((formalSummary.by_family || {}).commercial) || 0;
       rulesColHeadNode.innerHTML = `
         <h2>候选规则</h2>
         <div class="meta">候选规则来自模型新增问题和 benchmark gate 结果。确认入库表示进入本地规则候选确认状态，不会自动改代码。</div>
+        <div class="meta">正式规则治理：激活 ${activeCount} 条，品目敏感 ${catalogSensitiveCount} 条，支撑 ${supportCount} 条；资格 ${qualificationCount} 条，评分 ${scoringCount} 条，技术 ${technicalCount} 条，商务 ${commercialCount} 条。</div>
         <div class="rules-toolbar">
           <button type="button" class="filter-chip ${currentRuleFilter === 'pending' ? 'active' : ''}" data-rule-filter="pending">待确认</button>
           <button type="button" class="filter-chip ${currentRuleFilter === 'confirmed' ? 'active' : ''}" data-rule-filter="confirmed">已确认</button>

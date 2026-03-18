@@ -26,6 +26,8 @@ def run_rule_scan(
     for clause in document.clauses:
         matched_by_merge_key: dict[str, RuleHit] = {}
         for routed_rule in routed_rules:
+            if not routed_rule.is_enabled:
+                continue
             rule = routed_rule.rule
             if rule.pattern.search(clause.text):
                 hit = RuleHit(

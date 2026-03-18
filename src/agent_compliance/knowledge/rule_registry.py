@@ -25,6 +25,8 @@ class RuleRegistryEntry:
     source_section: str
     merge_key: str
     governance_tier: str
+    rule_status: str
+    enabled_by_default: bool
     default_priority: int
     related_reference_ids: tuple[str, ...]
 
@@ -35,7 +37,7 @@ class RulePriorityProfile:
     default_family_priorities: dict[str, int]
     default_issue_type_adjustments: dict[str, int]
     default_rule_adjustments: dict[str, int]
-    domain_profiles: dict[str, dict[str, dict[str, int]]]
+    domain_profiles: dict[str, dict[str, object]]
 
 
 def rule_priority_profile_path() -> Path:
@@ -57,6 +59,10 @@ def load_rule_priority_profile() -> RulePriorityProfile:
                 "family_priorities": {str(k): int(v) for k, v in value.get("family_priorities", {}).items()},
                 "issue_type_adjustments": {str(k): int(v) for k, v in value.get("issue_type_adjustments", {}).items()},
                 "rule_adjustments": {str(k): int(v) for k, v in value.get("rule_adjustments", {}).items()},
+                "disabled_rule_ids": tuple(str(item) for item in value.get("disabled_rule_ids", []) if str(item).strip()),
+                "disabled_issue_types": tuple(str(item) for item in value.get("disabled_issue_types", []) if str(item).strip()),
+                "deprioritized_rule_ids": tuple(str(item) for item in value.get("deprioritized_rule_ids", []) if str(item).strip()),
+                "deprioritized_issue_types": tuple(str(item) for item in value.get("deprioritized_issue_types", []) if str(item).strip()),
             }
             for key, value in payload.get("domain_profiles", {}).items()
             if isinstance(value, dict)
@@ -78,6 +84,8 @@ def build_rule_registry() -> tuple[RuleRegistryEntry, ...]:
                 source_section=rule.source_section,
                 merge_key=rule.merge_key or rule.issue_type,
                 governance_tier=_infer_governance_tier(rule),
+                rule_status=_infer_rule_status(rule),
+                enabled_by_default=_infer_enabled_by_default(rule),
                 default_priority=profile.default_family_priorities.get(family, 80),
                 related_reference_ids=rule.related_reference_ids,
             )
@@ -113,3 +121,16 @@ def _infer_governance_tier(rule: RuleDefinition) -> str:
     if rule.issue_type in {"qualification_domain_mismatch", "scoring_content_mismatch", "technical_justification_needed"}:
         return "scenario"
     return "support"
+
+
+def _infer_rule_status(rule: RuleDefinition) -> str:
+    tier = _infer_governance_tier(rule)
+    if tier == "core":
+        return "formal_active"
+    if tier == "scenario":
+        return "formal_catalog_sensitive"
+    return "formal_support"
+
+
+def _infer_enabled_by_default(rule: RuleDefinition) -> bool:
+    return _infer_governance_tier(rule) in {"core", "scenario", "support"}

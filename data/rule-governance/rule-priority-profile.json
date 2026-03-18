@@ -25,7 +25,13 @@
       "rule_adjustments": {
         "SCORE-010": 12,
         "SCORE-009": 8
-      }
+      },
+      "disabled_rule_ids": [],
+      "disabled_issue_types": [],
+      "deprioritized_rule_ids": [],
+      "deprioritized_issue_types": [
+        "qualification_domain_mismatch"
+      ]
     },
     "furniture_goods": {
       "family_priorities": {
@@ -41,7 +47,11 @@
       "rule_adjustments": {
         "SCORE-007": 10,
         "SCORE-015": 8
-      }
+      },
+      "disabled_rule_ids": [],
+      "disabled_issue_types": [],
+      "deprioritized_rule_ids": [],
+      "deprioritized_issue_types": []
     },
     "property_service": {
       "family_priorities": {
@@ -57,7 +67,15 @@
       "rule_adjustments": {
         "CONTRACT-010": 8,
         "CONTRACT-014": 6
-      }
+      },
+      "disabled_rule_ids": [
+        "SCORE-015"
+      ],
+      "disabled_issue_types": [],
+      "deprioritized_rule_ids": [],
+      "deprioritized_issue_types": [
+        "qualification_domain_mismatch"
+      ]
     },
     "medical_device_goods": {
       "family_priorities": {
@@ -73,7 +91,13 @@
       "rule_adjustments": {
         "TECH-003": 8,
         "CONTRACT-014": 8
-      }
+      },
+      "disabled_rule_ids": [],
+      "disabled_issue_types": [],
+      "deprioritized_rule_ids": [],
+      "deprioritized_issue_types": [
+        "geographic_restriction"
+      ]
     },
     "signage_printing_service": {
       "family_priorities": {
@@ -89,7 +113,11 @@
       "rule_adjustments": {
         "SCORE-012": 12,
         "QUAL-013": 10
-      }
+      },
+      "disabled_rule_ids": [],
+      "disabled_issue_types": [],
+      "deprioritized_rule_ids": [],
+      "deprioritized_issue_types": []
     }
   }
 }

@@ -24,6 +24,8 @@ class RoutedRule:
     rule: RuleDefinition
     registry_entry: RuleRegistryEntry
     priority_score: int
+    is_enabled: bool
+    is_deweighted: bool
     route_reason: str
 
 
@@ -39,19 +41,49 @@ def route_rules_for_catalog(
     family_priorities = {**profile.default_family_priorities, **domain_profile.get("family_priorities", {})}
     issue_adjustments = {**profile.default_issue_type_adjustments, **domain_profile.get("issue_type_adjustments", {})}
     rule_adjustments = {**profile.default_rule_adjustments, **domain_profile.get("rule_adjustments", {})}
+    disabled_rule_ids = set(domain_profile.get("disabled_rule_ids", ()))
+    disabled_issue_types = set(domain_profile.get("disabled_issue_types", ()))
+    deprioritized_rule_ids = set(domain_profile.get("deprioritized_rule_ids", ()))
+    deprioritized_issue_types = set(domain_profile.get("deprioritized_issue_types", ()))
 
     routed: list[RoutedRule] = []
     for rule in ALL_RULES:
         entry = registry[rule.rule_id]
+        if rule.rule_id in disabled_rule_ids or rule.issue_type in disabled_issue_types:
+            routed.append(
+                RoutedRule(
+                    rule=rule,
+                    registry_entry=entry,
+                    priority_score=-999,
+                    is_enabled=False,
+                    is_deweighted=False,
+                    route_reason=f"{domain_key} 场景已显式停用当前规则或问题类型。",
+                )
+            )
+            continue
         score = family_priorities.get(entry.rule_family, entry.default_priority)
         score += issue_adjustments.get(rule.issue_type, 0)
         score += rule_adjustments.get(rule.rule_id, 0)
+        is_deweighted = False
+        if rule.rule_id in deprioritized_rule_ids or rule.issue_type in deprioritized_issue_types:
+            score -= 20
+            is_deweighted = True
         routed.append(
             RoutedRule(
                 rule=rule,
                 registry_entry=entry,
                 priority_score=score,
-                route_reason=_route_reason(entry, domain_key, score, family_priorities, issue_adjustments, rule_adjustments),
+                is_enabled=True,
+                is_deweighted=is_deweighted,
+                route_reason=_route_reason(
+                    entry,
+                    domain_key,
+                    score,
+                    family_priorities,
+                    issue_adjustments,
+                    rule_adjustments,
+                    is_deweighted=is_deweighted,
+                ),
             )
         )
     routed.sort(key=lambda item: (-item.priority_score, -item.rule.severity_score, item.rule.rule_id))
@@ -65,9 +97,13 @@ def _route_reason(
     family_priorities: dict[str, int],
     issue_adjustments: dict[str, int],
     rule_adjustments: dict[str, int],
+    *,
+    is_deweighted: bool,
 ) -> str:
     base = family_priorities.get(entry.rule_family, entry.default_priority)
     delta = score - base
+    if is_deweighted:
+        return f"{domain_key} 场景对当前规则做了显式降权。"
     if delta > 0:
         return f"{domain_key} 场景对 {entry.rule_family} 家族和当前问题类型做了加权。"
     if entry.issue_type in issue_adjustments or entry.rule_id in rule_adjustments:
