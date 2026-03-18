@@ -131,6 +131,9 @@ class Finding:
     rewrite_suggestion: str
     needs_human_review: bool
     human_review_reason: str | None
+    primary_authority: str | None = None
+    secondary_authorities: list[str] | None = None
+    applicability_logic: str | None = None
     finding_origin: str = "rule"
 
     def to_dict(self) -> dict[str, Any]:

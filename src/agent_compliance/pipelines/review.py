@@ -32,6 +32,7 @@ from agent_compliance.pipelines.review_evidence import (
     shorten_section_path as _shorten_section_path,
 )
 from agent_compliance.knowledge.references_index import ReferenceRecord, find_references
+from agent_compliance.knowledge.legal_authority_reasoner import apply_legal_authority_reasoner
 from agent_compliance.knowledge.procurement_catalog import (
     CatalogClassification,
     classification_has_catalog_prefix,
@@ -113,6 +114,7 @@ def reconcile_review_result(
     classification: CatalogClassification | None = None,
 ) -> ReviewResult:
     review.findings = apply_finding_arbiter(review.findings, classification=classification)
+    review.findings = apply_legal_authority_reasoner(review.findings)
     review.findings = sort_findings(review.findings)
     review.findings = renumber_findings(review.findings)
     review.overall_risk_summary = build_overall_summary(

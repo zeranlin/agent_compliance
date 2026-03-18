@@ -84,6 +84,8 @@ class ReviewPipelineTest(unittest.TestCase):
 
         self.assertGreaterEqual(len(review.findings), 2)
         self.assertTrue(any(finding.legal_or_policy_basis for finding in review.findings))
+        self.assertTrue(any(finding.primary_authority for finding in review.findings))
+        self.assertTrue(any(finding.applicability_logic for finding in review.findings))
         self.assertIn("本地离线审查共形成", review.overall_risk_summary)
         self.assertTrue(any(finding.section_path for finding in review.findings))
 
