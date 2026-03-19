@@ -2032,7 +2032,9 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("资格条件整体超出法定准入和履约必需范围", titles)
         self.assertIn("技术要求引用了与标的不匹配的标准或规范", titles)
         self.assertIn("技术证明材料形式要求过严且带有地方化限制", titles)
-        self.assertIn("设备采购场景叠加信息化接口和碳足迹义务，边界不清", titles)
+        self.assertIn("设备采购中叠加医院信息系统开放对接义务，边界需复核", titles)
+        self.assertIn("设备采购中叠加碳足迹盘查和持续改进义务，边界需复核", titles)
+        self.assertNotIn("设备采购场景叠加信息化接口和碳足迹义务，边界不清", titles)
         self.assertNotIn("文件中存在与标的域不匹配的模板残留或义务外扩", titles)
         self.assertIn("货物采购并含安装调试项目", review.overall_risk_summary)
 

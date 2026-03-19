@@ -101,6 +101,27 @@ def _drop_overbroad_theme_findings(theme_findings: list[Finding]) -> list[Findin
         if has_payment_chain and has_other_specific:
             continue
         kept.append(finding)
+    theme_findings = kept
+
+    broad_mixed_title = "设备采购场景叠加信息化接口和碳足迹义务，边界不清"
+    specific_mixed_titles = {
+        "设备采购中叠加医院信息系统开放对接义务，边界需复核",
+        "设备采购中叠加碳足迹盘查和持续改进义务，边界需复核",
+    }
+    kept = []
+    for finding in theme_findings:
+        if finding.problem_title != broad_mixed_title:
+            kept.append(finding)
+            continue
+        overlapping_specifics = [
+            candidate
+            for candidate in theme_findings
+            if candidate.problem_title in specific_mixed_titles
+            and line_ranges_overlap(candidate, finding, tolerance=8)
+        ]
+        if overlapping_specifics:
+            continue
+        kept.append(finding)
     return kept
 
 
@@ -524,6 +545,18 @@ def theme_covers_finding(
         return finding.issue_type in {"template_mismatch", "other", "technical_justification_needed"} and text_contains_any(
             finding,
             ("软件端口", "医院信息系统", "HIS", "PACS", "LIS", "数据交换", "碳足迹", "改进报告"),
+        )
+
+    if "设备采购中叠加医院信息系统开放对接义务，边界需复核" in title:
+        return finding.issue_type in {"template_mismatch", "other", "technical_justification_needed"} and text_contains_any(
+            finding,
+            ("软件端口", "医院信息系统", "HIS", "PACS", "LIS", "数据交换"),
+        )
+
+    if "设备采购中叠加碳足迹盘查和持续改进义务，边界需复核" in title:
+        return finding.issue_type in {"template_mismatch", "other", "technical_justification_needed"} and text_contains_any(
+            finding,
+            ("碳足迹", "盘查报告", "改进报告"),
         )
 
     return False

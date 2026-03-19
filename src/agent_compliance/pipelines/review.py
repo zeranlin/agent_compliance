@@ -1222,6 +1222,8 @@ def _add_mixed_scope_boundary_theme_finding(
         or "物业服务场景叠加自动化系统和软件著作权评分，边界不清" in existing_titles
         or "标识标牌及宣传印制服务叠加设备保障和信息化支撑内容，边界不清" in existing_titles
         or "体育器材及运动场设施叠加轻量智能化功能，边界需进一步论证" in existing_titles
+        or "设备采购中叠加医院信息系统开放对接义务，边界需复核" in existing_titles
+        or "设备采购中叠加碳足迹盘查和持续改进义务，边界需复核" in existing_titles
     ):
         return findings
     domain = _effective_domain_key(document, classification)
@@ -1404,6 +1406,78 @@ def _add_mixed_scope_boundary_theme_finding(
         support_hits = _collect_marker_hits(clauses, profile_support_markers)
         support_clause_count = _count_marker_clauses(clauses, profile_support_markers)
         if not hard_hits and profile_support_markers and (len(support_hits) < 3 or support_clause_count < 2):
+            return findings
+        interface_markers = (
+            "免费开放软件端口",
+            "医院信息系统",
+            "HIS",
+            "PACS",
+            "LIS",
+            "完整的数据交换",
+            "数据对接产生的费用",
+        )
+        carbon_markers = (
+            "碳足迹盘查报告",
+            "碳足迹改进报告",
+            "碳足迹",
+            "盘查报告",
+            "改进报告",
+        )
+        interface_clauses = [
+            clause for clause in clauses if any(marker in clause.text for marker in interface_markers)
+        ]
+        carbon_clauses = [
+            clause for clause in clauses if any(marker in clause.text for marker in carbon_markers)
+        ]
+        if interface_clauses:
+            _append_theme_finding(
+                findings,
+                _build_theme_finding(
+                    document=document,
+                    clauses=interface_clauses,
+                    issue_type="template_mismatch",
+                    problem_title="设备采购中叠加医院信息系统开放对接义务，边界需复核",
+                    risk_level="high",
+                    severity_score=3,
+                    confidence="high",
+                    compliance_judgment="potentially_problematic",
+                    why_it_is_risky=(
+                        "文件在设备采购中要求中标人免费开放软件端口、承担医院信息系统对接责任并持续配合数据交换。"
+                        "这类接口开放和系统配合义务已经超出通常设备供货、安装调试和试运行验收范围，容易把附加的信息化建设责任整体转嫁给供应商。"
+                    ),
+                    impact_on_competition_or_performance="可能将设备供货以外的接口开放、系统对接和持续配合义务一并压给供应商，抬高履约门槛并增加争议风险。",
+                    legal_or_policy_basis="政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）",
+                    rewrite_suggestion="建议将设备供货安装与医院信息系统接口开放、数据交换配合义务分开表述；如确需保留，应明确接口范围、配合边界、费用承担和验收责任。",
+                    needs_human_review=True,
+                    human_review_reason="需结合设备联网需求、医院现有信息系统接口边界和本次采购职责分工判断接口开放与持续配合义务是否应并入本次设备采购范围。",
+                    finding_origin="analyzer",
+                ),
+            )
+        if carbon_clauses:
+            _append_theme_finding(
+                findings,
+                _build_theme_finding(
+                    document=document,
+                    clauses=carbon_clauses,
+                    issue_type="template_mismatch",
+                    problem_title="设备采购中叠加碳足迹盘查和持续改进义务，边界需复核",
+                    risk_level="high",
+                    severity_score=3,
+                    confidence="high",
+                    compliance_judgment="potentially_problematic",
+                    why_it_is_risky=(
+                        "文件在设备采购中要求中标人提供碳足迹盘查报告并持续提交改进报告。"
+                        "这类 ESG 或碳管理义务通常不属于设备供货安装和验收的直接必需内容，容易把额外合规责任整体转嫁给供应商。"
+                    ),
+                    impact_on_competition_or_performance="可能将设备供货以外的碳管理和持续改进义务一并压给供应商，扩大履约边界并抬高投标成本。",
+                    legal_or_policy_basis="政府采购需求管理办法（财政部）；政府采购需求编制常见问题分析（中国政府采购网）",
+                    rewrite_suggestion="建议将设备供货安装与碳足迹盘查、持续改进报告义务分开表述；如确需保留，应单独说明业务必要性、适用范围和验收责任。",
+                    needs_human_review=True,
+                    human_review_reason="需结合采购人内部绿色采购管理要求、设备供货边界和碳管理职责分工判断相关义务是否应并入本次设备采购范围。",
+                    finding_origin="analyzer",
+                ),
+            )
+        if interface_clauses or carbon_clauses:
             return findings
         title = "设备采购场景叠加信息化接口和碳足迹义务，边界不清"
         rationale = (
