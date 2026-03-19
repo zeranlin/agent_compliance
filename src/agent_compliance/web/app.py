@@ -1012,7 +1012,7 @@ def _index_html() -> str:
     <section class="hero">
       <h1>采购审查工作台</h1>
       <p>上传采购文件后，页面会渲染文件正文并生成审查问题清单。点击任意问题，右侧正文会自动定位到对应位置并高亮，方便快速复核。</p>
-      <p><a href="/rules">打开规则管理页面</a></p>
+      <p><a href="/review-buyer">打开采购人审查页</a> · <a href="/review-next">打开增强审查页</a> · <a href="/rules">打开规则管理页面</a></p>
     </section>
 
     <form id="review-form" class="panel toolbar">
@@ -2113,6 +2113,7 @@ def _review_next_html() -> str:
         <p>这是一页专门用来看“主问题化、章节化、仲裁化”升级效果的新页面。它会优先展示章节级主问题、来源链路和仲裁收束效果，而不是只展示扁平 findings 列表。</p>
         <div class="hero-actions">
           <a href="/">旧版审查页</a>
+          <a href="/review-buyer">采购人审查页</a>
           <a href="/rules">规则管理页</a>
         </div>
       </div>
@@ -4954,7 +4955,7 @@ def _rules_html() -> str:
     <section class="hero">
       <h1>规则管理</h1>
       <p>这里单独管理模型新增候选规则、benchmark gate 状态和入库确认决策。</p>
-      <p><a href="/">返回审查工作台</a></p>
+      <p><a href="/">返回审查工作台</a> · <a href="/review-buyer">打开采购人审查页</a> · <a href="/review-next">打开增强审查页</a></p>
     </section>
 
     <section class="panel">
