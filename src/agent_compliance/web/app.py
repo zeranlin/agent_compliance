@@ -47,10 +47,15 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         if path == "/":
             self._send_html(_index_html())
             return
+        if path == "/review-buyer":
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", "/review-check")
+            self.end_headers()
+            return
         if path == "/review-next":
             self._send_html(_review_next_html())
             return
-        if path == "/review-buyer":
+        if path == "/review-check":
             self._send_html(_review_buyer_html())
             return
         if path == "/review-fresh":
@@ -1020,7 +1025,7 @@ def _index_html() -> str:
     <section class="hero">
       <h1>采购审查工作台</h1>
       <p>上传采购文件后，页面会渲染文件正文并生成审查问题清单。点击任意问题，右侧正文会自动定位到对应位置并高亮，方便快速复核。</p>
-      <p><a href="/review-buyer">打开采购人审查页</a> · <a href="/review-next">打开增强审查页</a> · <a href="/rules">打开规则管理页面</a></p>
+      <p><a href="/review-check">打开采购人审查页</a> · <a href="/review-next">打开增强审查页</a> · <a href="/rules">打开规则管理页面</a></p>
     </section>
 
     <form id="review-form" class="panel toolbar">
@@ -2121,7 +2126,7 @@ def _review_next_html() -> str:
         <p>这是一页专门用来看“主问题化、章节化、仲裁化”升级效果的新页面。它会优先展示章节级主问题、来源链路和仲裁收束效果，而不是只展示扁平 findings 列表。</p>
         <div class="hero-actions">
           <a href="/">旧版审查页</a>
-          <a href="/review-buyer">采购人审查页</a>
+          <a href="/review-check">采购人审查页</a>
           <a href="/rules">规则管理页</a>
         </div>
       </div>
@@ -3858,22 +3863,25 @@ def _review_buyer_html() -> str:
   <title>采购需求合规性审查工作台</title>
   <style>
     :root {
-      --bg: #f4efe5;
-      --panel: #fffdf8;
-      --line: #ddd2c2;
-      --ink: #20252b;
-      --muted: #6c675e;
-      --accent: #9d4a24;
-      --high: #a33d22;
-      --medium: #8f6714;
-      --active: #fff2dd;
+      --bg: #edf3f8;
+      --panel: #ffffff;
+      --sidebar: #fbf7ef;
+      --line: #d7e0ea;
+      --ink: #16212b;
+      --muted: #566575;
+      --accent: #1f5f8b;
+      --accent-soft: #eaf3fb;
+      --high: #b42318;
+      --medium: #b26a00;
+      --active: #fff3de;
+      --success: #1f6f5f;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
       color: var(--ink);
-      background: linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
+      background: linear-gradient(180deg, #f8fbfe 0%, var(--bg) 100%);
     }
     .app { max-width: 1520px; margin: 0 auto; padding: 20px; }
     .hero {
@@ -3886,7 +3894,7 @@ def _review_buyer_html() -> str:
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 16px;
-      box-shadow: 0 12px 30px rgba(52, 41, 29, 0.06);
+      box-shadow: 0 10px 28px rgba(20, 42, 64, 0.06);
     }
     .hero-card {
       padding: 18px 20px;
@@ -3901,6 +3909,9 @@ def _review_buyer_html() -> str:
       margin: 0;
       color: var(--muted);
       line-height: 1.7;
+    }
+    .hero-card:first-child {
+      background: linear-gradient(135deg, #ffffff 0%, #f1f7fc 100%);
     }
     .hero-actions {
       display: flex;
@@ -3977,8 +3988,8 @@ def _review_buyer_html() -> str:
       gap: 8px;
       padding: 10px 12px;
       border-radius: 14px;
-      background: rgba(255, 248, 240, 0.9);
-      border: 1px solid rgba(201, 175, 150, 0.45);
+      background: var(--accent-soft);
+      border: 1px solid #c8dced;
     }
     .export-panel-head {
       display: flex;
@@ -4002,9 +4013,10 @@ def _review_buyer_html() -> str:
     .stage-card {
       grid-column: 1 / -1;
       padding: 12px 14px;
-      border: 1px solid var(--line);
+      border: 1px solid #c8dced;
+      border-left: 4px solid var(--accent);
       border-radius: 14px;
-      background: #fff8f1;
+      background: #f4f9fd;
       display: grid;
       gap: 6px;
     }
@@ -4033,6 +4045,7 @@ def _review_buyer_html() -> str:
       display: grid;
       grid-template-rows: auto auto auto auto 1fr;
       gap: 12px;
+      background: var(--sidebar);
     }
     .issue-list {
       min-height: 0;
@@ -4052,7 +4065,7 @@ def _review_buyer_html() -> str:
       gap: 10px;
       padding: 10px 12px;
       border-radius: 12px;
-      background: #fff;
+      background: #f3f7fb;
       border: 1px solid var(--line);
       cursor: pointer;
     }
@@ -4077,7 +4090,7 @@ def _review_buyer_html() -> str:
       font-weight: 800;
     }
     .issue-group-high { background: rgba(163, 61, 34, 0.12); color: var(--high); }
-    .issue-group-count { background: #e9f2ff; color: #315476; }
+    .issue-group-count { background: #e7f0fa; color: var(--accent); }
     .issue-group.is-collapsed .issue-group-body { display: none; }
     .issue-group-body { display: grid; gap: 8px; }
     .issue-card {
@@ -4089,12 +4102,12 @@ def _review_buyer_html() -> str:
       display: grid;
       gap: 8px;
     }
-    .issue-card.high { border-left: 5px solid var(--high); background: linear-gradient(90deg, rgba(163, 61, 34, 0.05), #fff 14%); }
-    .issue-card.medium { border-left: 5px solid var(--medium); background: linear-gradient(90deg, rgba(143, 103, 20, 0.05), #fff 14%); }
+    .issue-card.high { border-left: 5px solid var(--high); background: linear-gradient(90deg, rgba(180, 35, 24, 0.06), #fff 16%); }
+    .issue-card.medium { border-left: 5px solid var(--medium); background: linear-gradient(90deg, rgba(178, 106, 0, 0.06), #fff 16%); }
     .issue-card.active {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(157, 74, 36, 0.12);
-      background: #fff8f1;
+      border-color: #8bb6d8;
+      box-shadow: 0 0 0 2px rgba(31, 95, 139, 0.12);
+      background: #f7fbff;
     }
     .issue-title { font-size: 16px; line-height: 1.5; font-weight: 700; }
     .badge-row, .mini-meta {
@@ -4114,11 +4127,12 @@ def _review_buyer_html() -> str:
     }
     .badge.high { background: rgba(163, 61, 34, 0.1); color: var(--high); }
     .badge.medium { background: rgba(143, 103, 20, 0.12); color: var(--medium); }
-    .badge.main { background: rgba(32, 100, 74, 0.12); color: #20644a; }
-    .mini-pill { background: #f5efe8; color: var(--muted); font-weight: 600; }
+    .badge.main { background: rgba(31, 111, 95, 0.12); color: var(--success); }
+    .badge:not(.high):not(.medium):not(.main) { background: #edf4fb; color: var(--accent); }
+    .mini-pill { background: #eef3f8; color: var(--muted); font-weight: 600; }
     .mini-pill.action-direct { background: rgba(163, 61, 34, 0.12); color: var(--high); }
     .mini-pill.action-soften { background: rgba(143, 103, 20, 0.12); color: var(--medium); }
-    .mini-pill.action-justify { background: rgba(39, 93, 138, 0.12); color: #275d8a; }
+    .mini-pill.action-justify { background: rgba(31, 95, 139, 0.12); color: var(--accent); }
     .mini-pill.action-review { background: rgba(110, 62, 164, 0.12); color: #6e3ea4; }
     .issue-excerpt { color: var(--muted); font-size: 13px; line-height: 1.6; }
     .right-pane {
@@ -4126,12 +4140,14 @@ def _review_buyer_html() -> str:
       display: grid;
       grid-template-rows: minmax(0, 1fr) auto;
       overflow: hidden;
+      background: #fff;
     }
     .document-head {
       padding: 14px 16px;
       border-bottom: 1px solid var(--line);
       display: grid;
       gap: 8px;
+      background: #f7fbff;
     }
     .document-body {
       max-height: calc(100vh - 360px);
@@ -4205,7 +4221,7 @@ def _review_buyer_html() -> str:
     .detail-pane {
       border-top: 1px solid var(--line);
       padding: 12px 16px;
-      background: #fffaf3;
+      background: #f8fbfe;
       display: grid;
       gap: 10px;
     }
@@ -4235,8 +4251,8 @@ def _review_buyer_html() -> str:
       color: var(--muted);
     }
     .detail-item.action-callout {
-      background: #fff8f1;
-      border-color: rgba(201, 175, 150, 0.6);
+      background: #eef6fd;
+      border-color: #c8dced;
     }
     .empty {
       padding: 20px 16px;
@@ -4260,7 +4276,7 @@ def _review_buyer_html() -> str:
   <div class="app">
     <section class="hero">
       <div class="panel hero-card">
-        <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#9d4a24; font-weight:700;">Buyer Review</div>
+        <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#1f5f8b; font-weight:700;">Review Check</div>
         <h1>采购需求合规性审查工作台</h1>
         <p>这个页面面向采购人使用，优先服务采购需求形成、修改、复核和发布前审查。页面只保留采购人最关心的结论、问题定位、法规依据和改稿建议。</p>
         <div class="hero-actions">
@@ -4302,7 +4318,7 @@ def _review_buyer_html() -> str:
     <section id="workspace" class="workspace">
       <aside class="panel left-pane">
         <div>
-          <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#9d4a24; font-weight:700;">Review Navigation</div>
+          <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#1f5f8b; font-weight:700;">Review Navigation</div>
           <h2 style="margin:8px 0 6px;">审查问题</h2>
           <div class="meta">左侧按章节归并高风险问题，默认优先显示章节主问题，方便采购人逐条定位和改稿。</div>
         </div>
@@ -4333,8 +4349,8 @@ def _review_buyer_html() -> str:
           <div id="document-body" class="document-body"></div>
         </div>
         <div class="detail-pane">
-          <div class="detail-title">
-            <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#9d4a24; font-weight:700;">Review Opinion</div>
+            <div class="detail-title">
+            <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#1f5f8b; font-weight:700;">Review Opinion</div>
             <strong id="detail-title">尚未选择问题</strong>
             <div id="detail-badges" class="badge-row"></div>
           </div>
@@ -4969,7 +4985,7 @@ def _rules_html() -> str:
     <section class="hero">
       <h1>规则管理</h1>
       <p>这里单独管理模型新增候选规则、benchmark gate 状态和入库确认决策。</p>
-      <p><a href="/">返回审查工作台</a> · <a href="/review-buyer">打开采购人审查页</a> · <a href="/review-next">打开增强审查页</a></p>
+      <p><a href="/">返回审查工作台</a> · <a href="/review-check">打开采购人审查页</a> · <a href="/review-next">打开增强审查页</a></p>
     </section>
 
     <section class="panel">
