@@ -122,10 +122,15 @@ class ReviewExportTest(unittest.TestCase):
         self.assertEqual(content_type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         self.assertTrue(filename.endswith("-summary.xlsx"))
         workbook = load_workbook(BytesIO(content))
-        sheet = workbook.active
-        self.assertEqual(sheet["A1"].value, "问题标题")
-        self.assertEqual(sheet.max_row, 2)
-        self.assertIn("主观分档", str(sheet["A2"].value))
+        self.assertEqual(workbook.sheetnames[0], "审查摘要")
+        summary_sheet = workbook["审查摘要"]
+        detail_sheet = workbook["主问题"]
+        self.assertEqual(summary_sheet["A1"].value, "文档名称")
+        self.assertEqual(detail_sheet["A1"].value, "问题标题")
+        self.assertEqual(detail_sheet.max_row, 2)
+        self.assertEqual(detail_sheet.freeze_panes, "A2")
+        self.assertIsNotNone(detail_sheet.auto_filter.ref)
+        self.assertIn("主观分档", str(detail_sheet["A2"].value))
 
     def test_write_export_output_persists_file_under_generated_exports(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

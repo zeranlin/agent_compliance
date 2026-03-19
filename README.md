@@ -76,6 +76,7 @@
 - 当前已补入规则管理区，可查看正式规则数量、候选规则、benchmark gate 状态，并记录“确认入库 / 暂缓 / 忽略”决策
 - `review-next` 已开始支持审查结果导出，当前提供 `Markdown / Excel / JSON` 和 `主问题版 / 完整明细版`
 - 导出产物会同步写入 `docs/generated/exports/`
+- Excel 导出已包含摘要页、冻结首行、自动筛选和按风险等级着色，便于业务和法务直接复核
 
 本地引用资料：
 - [法规依据本地引用库](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/legal-authorities/README.md)

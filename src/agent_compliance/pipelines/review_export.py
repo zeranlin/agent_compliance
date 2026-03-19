@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 
 from agent_compliance.config import detect_paths
 from agent_compliance.schemas import Finding, ReviewResult
@@ -160,14 +161,14 @@ def build_export_filename(document_name: str, mode: str, extension: str) -> str:
 
 def render_export_xlsx(review: ReviewResult, *, mode: str) -> bytes:
     workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = "主问题" if mode == "summary" else "完整明细"
+    summary_sheet = workbook.active
+    summary_sheet.title = "审查摘要"
+    _write_summary_sheet(summary_sheet, review, mode=mode)
+    detail_sheet = workbook.create_sheet("主问题" if mode == "summary" else "完整明细")
     rows = build_excel_rows(review, mode=mode)
     for row in rows:
-        sheet.append(row)
-    for column in sheet.columns:
-        max_len = max(len(str(cell.value or "")) for cell in column)
-        sheet.column_dimensions[column[0].column_letter].width = min(max(max_len + 2, 12), 48)
+        detail_sheet.append(row)
+    _style_detail_sheet(detail_sheet)
     buffer = BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
@@ -218,6 +219,65 @@ def build_excel_rows(review: ReviewResult, *, mode: str) -> list[list[Any]]:
             ]
         )
     return rows
+
+
+def _write_summary_sheet(sheet, review: ReviewResult, *, mode: str) -> None:
+    findings = _pick_findings(review.findings, mode)
+    summary_rows = [
+        ["文档名称", review.document_name],
+        ["审查范围", review.review_scope],
+        ["审查时间", review.review_timestamp],
+        ["导出模式", "主问题版" if mode == "summary" else "完整明细版"],
+        ["风险摘要", review.overall_risk_summary],
+        ["问题数量", len(findings)],
+        ["高风险数量", sum(1 for item in findings if item.risk_level == "high")],
+        ["中风险数量", sum(1 for item in findings if item.risk_level == "medium")],
+        ["低风险数量", sum(1 for item in findings if item.risk_level == "low")],
+        ["需人工复核", "；".join(review.items_for_human_review) if review.items_for_human_review else "无"],
+    ]
+    for row in summary_rows:
+        sheet.append(row)
+    header_fill = PatternFill("solid", fgColor="D9EAF7")
+    for row in sheet.iter_rows(min_row=1, max_row=sheet.max_row, min_col=1, max_col=2):
+        row[0].font = Font(bold=True)
+        row[0].fill = header_fill
+        row[0].alignment = Alignment(vertical="top")
+        row[1].alignment = Alignment(wrap_text=True, vertical="top")
+    sheet.column_dimensions["A"].width = 18
+    sheet.column_dimensions["B"].width = 84
+
+
+def _style_detail_sheet(sheet) -> None:
+    header_fill = PatternFill("solid", fgColor="D9EAF7")
+    high_fill = PatternFill("solid", fgColor="FBE4D5")
+    medium_fill = PatternFill("solid", fgColor="FFF2CC")
+    low_fill = PatternFill("solid", fgColor="E2F0D9")
+
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = sheet.dimensions
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+        cell.fill = header_fill
+        cell.alignment = Alignment(wrap_text=True, vertical="center")
+
+    risk_col_idx = 3
+    for row in sheet.iter_rows(min_row=2, max_row=sheet.max_row):
+        risk = str(row[risk_col_idx - 1].value or "")
+        fill = None
+        if risk == "high":
+            fill = high_fill
+        elif risk == "medium":
+            fill = medium_fill
+        elif risk == "low":
+            fill = low_fill
+        for cell in row:
+            cell.alignment = Alignment(wrap_text=True, vertical="top")
+            if fill is not None:
+                cell.fill = fill
+
+    for column in sheet.columns:
+        max_len = max(len(str(cell.value or "")) for cell in column)
+        sheet.column_dimensions[column[0].column_letter].width = min(max(max_len + 2, 12), 48)
 
 
 def _pick_findings(findings: list[Finding], mode: str) -> list[Finding]:
