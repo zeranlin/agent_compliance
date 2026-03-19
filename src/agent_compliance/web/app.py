@@ -4394,9 +4394,10 @@ def _review_buyer_html() -> str:
     }
     .progress-panel {
       display: none;
-      margin-bottom: 16px;
-      padding: 16px;
-      gap: 14px;
+      padding: 12px 0 0;
+      margin-top: 6px;
+      gap: 12px;
+      border-top: 1px dashed var(--line);
     }
     .progress-head {
       display: flex;
@@ -4407,22 +4408,24 @@ def _review_buyer_html() -> str:
     }
     .progress-steps {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 10px;
+      grid-template-columns: 1fr;
+      gap: 8px;
     }
     .progress-step {
-      padding: 12px;
-      border-radius: 14px;
+      padding: 10px 12px;
+      border-radius: 12px;
       border: 1px solid var(--line);
       background: #fff;
       display: grid;
-      gap: 6px;
-      min-height: 110px;
+      grid-template-columns: 86px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
     }
     .progress-step .step-state {
       font-size: 12px;
       color: var(--muted);
       font-weight: 700;
+      padding-top: 2px;
     }
     .progress-step.running {
       border-color: #8bb6d8;
@@ -4441,7 +4444,7 @@ def _review_buyer_html() -> str:
       background: #f7f8fa;
     }
     .progress-step strong {
-      font-size: 15px;
+      font-size: 14px;
     }
     .progress-tech {
       border-top: 1px dashed var(--line);
@@ -4456,7 +4459,7 @@ def _review_buyer_html() -> str:
     }
     .progress-tech-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: 1fr;
       gap: 8px;
     }
     .progress-tech-item {
@@ -4792,7 +4795,7 @@ def _review_buyer_html() -> str:
       text-align: center;
     }
     @media (max-width: 1180px) {
-      .hero, .workspace, .summary-grid, .summary-metrics, .progress-steps, .progress-tech-grid { grid-template-columns: 1fr; }
+      .hero, .workspace, .summary-grid, .summary-metrics { grid-template-columns: 1fr; }
       .left-pane {
         position: static;
         max-height: none;
@@ -4829,6 +4832,20 @@ def _review_buyer_html() -> str:
           </div>
         </form>
         <div id="status" class="meta">等待上传文件</div>
+        <div id="progress-panel" class="progress-panel">
+          <div class="progress-head">
+            <div>
+              <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#1f5f8b; font-weight:700;">Review Progress</div>
+              <div id="progress-message" class="meta">上传文件并启动审查后，这里会动态展示当前进度。</div>
+            </div>
+            <div id="progress-mode" class="meta"></div>
+          </div>
+          <div id="progress-steps" class="progress-steps"></div>
+          <details class="progress-tech">
+            <summary>查看详细审查过程</summary>
+            <div id="progress-tech-grid" class="progress-tech-grid"></div>
+          </details>
+        </div>
         <div id="export-toolbar" class="export-panel">
           <div class="export-panel-head">
             <strong>结果导出</strong>
