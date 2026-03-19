@@ -9,7 +9,14 @@ from agent_compliance.cli import build_parser
 from agent_compliance.config import LLMConfig, detect_llm_config
 from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog
 from agent_compliance.pipelines.llm_enhance import _build_prompt, enhance_review_result
-from agent_compliance.pipelines.llm_review import _build_task_prompt, apply_llm_review_tasks, run_benchmark_gate
+from agent_compliance.pipelines.llm_review import (
+    _build_task_prompt,
+    _chapter_summary_candidate_clauses,
+    _document_audit_candidate_clauses,
+    _select_legal_reasoning_targets,
+    apply_llm_review_tasks,
+    run_benchmark_gate,
+)
 from agent_compliance.parsers.section_splitter import split_into_clauses
 from agent_compliance.schemas import Finding, NormalizedDocument, ReviewResult
 from agent_compliance.web.app import _web_llm_config
@@ -518,6 +525,207 @@ class LLMIntegrationTest(unittest.TestCase):
         self.assertIn("品目边界提示", prompt)
         if classification.secondary_catalog_names:
             self.assertIn("次品目候选", prompt)
+
+    def test_document_audit_candidate_clauses_are_compressed_to_high_value_subset(self) -> None:
+        text = "\n".join(
+            [
+                "全民健身工程（多功能运动场项目）",
+                "项目概况",
+                "本项目采购多功能运动场及配套设施。",
+                "资格要求",
+                "投标人需提供资质证书。",
+                "评标信息",
+                "技术部分评分PT满分78分。",
+                "专项检测报告得分。",
+                "商务要求",
+                "采购人不承担任何责任。",
+                "验收要求",
+                "最终验收结果以采购人为准。",
+                "补充说明",
+                "普通描述一。",
+                "普通描述二。",
+                "普通描述三。",
+                "普通描述四。",
+                "普通描述五。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="auditselect",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = ReviewResult(
+            document_name="sample.txt",
+            review_scope="资格条件、评分规则、技术要求、商务及验收条款",
+            jurisdiction="中国",
+            review_timestamp="2026-03-19T00:00:00+00:00",
+            overall_risk_summary="summary",
+            findings=[],
+            items_for_human_review=[],
+            review_limitations=[],
+        )
+        classification = classify_procurement_catalog(document)
+
+        selected = _document_audit_candidate_clauses(document, review=review, classification=classification)
+
+        self.assertLessEqual(len(selected), 18)
+        self.assertTrue(any("资质证书" in clause.text for clause in selected))
+        self.assertTrue(any("采购人不承担任何责任" in clause.text for clause in selected))
+        self.assertFalse(any("普通描述五" in clause.text for clause in selected))
+
+    def test_chapter_summary_candidates_focus_on_dense_scoring_sections(self) -> None:
+        text = "\n".join(
+            [
+                "评标信息",
+                "技术部分评分PT满分78分。",
+                "技术参数负偏离扣分。",
+                "专项检测报告加分。",
+                "售后服务方案评分。",
+                "商务部分评分PB满分12分。",
+                "合同条款",
+                "采购人有权单方调整考核标准。",
+                "验收结果以采购人最终确认为准。",
+                "其他说明",
+                "普通说明段落。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sample.txt",
+            document_name="sample.txt",
+            file_hash="chapterselect",
+            normalized_text_path="/tmp/sample.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        review = ReviewResult(
+            document_name="sample.txt",
+            review_scope="资格条件、评分规则、技术要求、商务及验收条款",
+            jurisdiction="中国",
+            review_timestamp="2026-03-19T00:00:00+00:00",
+            overall_risk_summary="summary",
+            findings=[
+                Finding(
+                    finding_id="F-001",
+                    document_name="sample.txt",
+                    problem_title="技术评分权重过高",
+                    page_hint=None,
+                    clause_id=clauses[1].clause_id,
+                    source_section=clauses[1].source_section or "",
+                    section_path=clauses[1].section_path,
+                    table_or_item_label=None,
+                    text_line_start=clauses[1].line_start,
+                    text_line_end=clauses[1].line_end,
+                    source_text=clauses[1].text,
+                    issue_type="excessive_scoring_weight",
+                    risk_level="high",
+                    severity_score=3,
+                    confidence="high",
+                    compliance_judgment="potentially_problematic",
+                    why_it_is_risky="",
+                    impact_on_competition_or_performance="",
+                    legal_or_policy_basis=None,
+                    rewrite_suggestion="",
+                    needs_human_review=False,
+                    human_review_reason=None,
+                )
+            ],
+            items_for_human_review=[],
+            review_limitations=[],
+        )
+
+        selected = _chapter_summary_candidate_clauses(document, review, domain="scoring")
+
+        self.assertLessEqual(len(selected), 12)
+        self.assertTrue(any("技术部分评分PT满分78分" in clause.text for clause in selected))
+        self.assertFalse(any("普通说明段落" in clause.text for clause in selected))
+
+    def test_legal_reasoning_targets_prioritize_high_value_findings(self) -> None:
+        findings = [
+            Finding(
+                finding_id="F-001",
+                document_name="sample.txt",
+                problem_title="章节结构失衡",
+                page_hint=None,
+                clause_id="1",
+                source_section="评分",
+                section_path="评标信息",
+                table_or_item_label=None,
+                text_line_start=1,
+                text_line_end=1,
+                source_text="技术部分评分PT满分78分。",
+                issue_type="excessive_scoring_weight",
+                risk_level="high",
+                severity_score=3,
+                confidence="medium",
+                compliance_judgment="potentially_problematic",
+                why_it_is_risky="",
+                impact_on_competition_or_performance="",
+                legal_or_policy_basis=None,
+                rewrite_suggestion="",
+                needs_human_review=False,
+                human_review_reason=None,
+                finding_origin="llm_added",
+            ),
+            Finding(
+                finding_id="F-002",
+                document_name="sample.txt",
+                problem_title="边界需复核",
+                page_hint=None,
+                clause_id="2",
+                source_section="商务",
+                section_path="合同条款",
+                table_or_item_label=None,
+                text_line_start=2,
+                text_line_end=2,
+                source_text="采购人有权单方调整考核标准。",
+                issue_type="one_sided_commercial_term",
+                risk_level="medium",
+                severity_score=2,
+                confidence="medium",
+                compliance_judgment="needs_human_review",
+                why_it_is_risky="",
+                impact_on_competition_or_performance="",
+                legal_or_policy_basis=None,
+                rewrite_suggestion="",
+                needs_human_review=True,
+                human_review_reason="需复核",
+                finding_origin="llm_added",
+            ),
+            Finding(
+                finding_id="F-003",
+                document_name="sample.txt",
+                problem_title="普通碎点",
+                page_hint=None,
+                clause_id="3",
+                source_section="商务",
+                section_path="合同条款",
+                table_or_item_label=None,
+                text_line_start=3,
+                text_line_end=3,
+                source_text="普通表述。",
+                issue_type="ambiguous_requirement",
+                risk_level="medium",
+                severity_score=2,
+                confidence="medium",
+                compliance_judgment="potentially_problematic",
+                why_it_is_risky="",
+                impact_on_competition_or_performance="",
+                legal_or_policy_basis=None,
+                rewrite_suggestion="",
+                needs_human_review=False,
+                human_review_reason=None,
+                finding_origin="llm_added",
+            ),
+        ]
+
+        selected = _select_legal_reasoning_targets(findings)
+
+        self.assertEqual({item.finding_id for item in selected}, {"F-001", "F-002"})
 
 
 if __name__ == "__main__":

@@ -87,7 +87,16 @@ def apply_llm_review_tasks(
         + _run_commercial_chain_task(document, review, client)
     )
     added_findings = _dedupe_added_findings([*document_audit_findings, *chapter_summary_findings])
-    legal_reasoned_findings = apply_legal_authority_reasoner(added_findings)
+    legal_reasoning_targets = _select_legal_reasoning_targets(added_findings)
+    legal_reasoned_findings = apply_legal_authority_reasoner(legal_reasoning_targets)
+    if len(legal_reasoned_findings) != len(added_findings):
+        reasoned_by_key = {
+            _added_finding_signature(finding): finding for finding in legal_reasoned_findings
+        }
+        legal_reasoned_findings = [
+            reasoned_by_key.get(_added_finding_signature(finding), finding)
+            for finding in added_findings
+        ]
     added_findings = apply_confidence_calibrator(
         legal_reasoned_findings,
         classification=classification,
@@ -110,7 +119,7 @@ def apply_llm_review_tasks(
             {
                 "node": "legal_reasoning_llm",
                 "label": "法规适用逻辑解释",
-                "finding_count": len(added_findings),
+                "finding_count": len(legal_reasoning_targets),
             },
         ],
     }
@@ -456,7 +465,11 @@ def _run_document_audit_task(
     *,
     classification: CatalogClassification | None = None,
 ) -> list[Finding]:
-    candidate_clauses = _document_audit_candidate_clauses(document)
+    candidate_clauses = _document_audit_candidate_clauses(
+        document,
+        review=review,
+        classification=classification,
+    )
     if not candidate_clauses:
         return []
     prompt = _build_task_prompt(
@@ -468,7 +481,7 @@ def _run_document_audit_task(
             "不要重复已有 findings；如果多个候选条款属于同一章节主题，请尽量合成一条主问题。"
         ),
         document=document,
-        clauses=candidate_clauses[:24],
+        clauses=candidate_clauses,
         review=review,
         classification=classification,
     )
@@ -499,11 +512,11 @@ def _run_scoring_structure_task(
     review: ReviewResult,
     client: OpenAICompatibleLLMClient,
 ) -> list[Finding]:
-    candidate_clauses = [
-        clause
-        for clause in document.clauses
-        if clause.section_path and "评标信息" in clause.section_path and any(token in clause.text for token in ("评分", "样品", "认证", "业绩", "方案", "得"))
-    ]
+    candidate_clauses = _chapter_summary_candidate_clauses(
+        document,
+        review,
+        domain="scoring",
+    )
     if not candidate_clauses:
         return []
 
@@ -547,7 +560,7 @@ def _run_scoring_structure_task(
             task_name=task_name,
             instruction=instruction,
             document=document,
-            clauses=clauses[:12],
+            clauses=clauses[:10],
             review=review,
         )
         payload = _safe_chat_json(client, prompt, default={"findings": []})
@@ -570,11 +583,11 @@ def _run_commercial_chain_task(
     review: ReviewResult,
     client: OpenAICompatibleLLMClient,
 ) -> list[Finding]:
-    candidate_clauses = [
-        clause
-        for clause in document.clauses
-        if any(token in clause.text for token in ("验收", "付款", "抽样", "检测", "违约", "责任", "负全责", "实际需求为准"))
-    ]
+    candidate_clauses = _chapter_summary_candidate_clauses(
+        document,
+        review,
+        domain="commercial",
+    )
     if not candidate_clauses:
         return []
     prompt = _build_task_prompt(
@@ -584,7 +597,7 @@ def _run_commercial_chain_task(
             "只输出组合后才看得出的商务链路风险，不要重复已有单句结论。"
         ),
         document=document,
-        clauses=candidate_clauses[:20],
+        clauses=candidate_clauses[:12],
         review=review,
     )
     payload = _safe_chat_json(client, prompt, default={"findings": []})
@@ -898,7 +911,12 @@ def _fallback_document_audit_findings(
     return findings
 
 
-def _document_audit_candidate_clauses(document: NormalizedDocument) -> list[Clause]:
+def _document_audit_candidate_clauses(
+    document: NormalizedDocument,
+    *,
+    review: ReviewResult | None = None,
+    classification: CatalogClassification | None = None,
+) -> list[Clause]:
     markers = (
         "资质证书",
         "登记证书",
@@ -918,7 +936,141 @@ def _document_audit_candidate_clauses(document: NormalizedDocument) -> list[Clau
         "最终验收结果",
         "实际需求为准",
     )
-    return [clause for clause in document.clauses if any(token in clause.text for token in markers)]
+    profile_patterns = _classification_profile_high_risk_patterns(classification)
+    profile_tokens = _pattern_tokens(profile_patterns)
+    issue_tokens = _issue_tokens_from_review(review)
+    scored: list[tuple[int, Clause]] = []
+    for clause in document.clauses:
+        score = 0
+        has_direct_signal = False
+        if any(token in clause.text for token in markers):
+            score += 4
+            has_direct_signal = True
+        if any(token in clause.text for token in profile_tokens):
+            score += 3
+            has_direct_signal = True
+        if any(token in clause.text for token in issue_tokens):
+            score += 2
+            has_direct_signal = True
+        if clause.section_path and any(token in clause.section_path for token in ("资格", "评分", "技术", "商务", "验收")):
+            score += 1
+        if score > 0 and (has_direct_signal or score >= 5):
+            scored.append((score, clause))
+    scored.sort(key=lambda item: (-item[0], item[1].line_start))
+    return [clause for _, clause in scored[:18]]
+
+
+def _chapter_summary_candidate_clauses(
+    document: NormalizedDocument,
+    review: ReviewResult,
+    *,
+    domain: str,
+) -> list[Clause]:
+    if domain == "scoring":
+        section_markers = ("评标", "评分", "商务评分", "技术评分")
+        text_markers = ("评分", "样品", "认证", "业绩", "方案", "得分", "演示", "证书")
+        review_issue_types = {
+            "scoring_content_mismatch",
+            "scoring_structure_imbalance",
+            "excessive_scoring_weight",
+            "ambiguous_requirement",
+            "duplicative_scoring_advantage",
+            "irrelevant_certification_or_award",
+            "geographic_restriction",
+        }
+    else:
+        section_markers = ("商务", "合同", "付款", "验收")
+        text_markers = ("验收", "付款", "抽样", "检测", "违约", "责任", "负全责", "实际需求为准", "扣罚", "解除")
+        review_issue_types = {
+            "one_sided_commercial_term",
+            "payment_acceptance_linkage",
+            "unclear_acceptance_standard",
+        }
+    review_tokens = _issue_tokens_from_review(review, issue_types=review_issue_types)
+    section_counts: dict[str, int] = {}
+    for clause in document.clauses:
+        section = clause.section_path or ""
+        if section and any(marker in section for marker in section_markers):
+            section_counts[section] = section_counts.get(section, 0) + 1
+    scored: list[tuple[int, Clause]] = []
+    for clause in document.clauses:
+        score = 0
+        has_direct_signal = False
+        section = clause.section_path or ""
+        if section and any(marker in section for marker in section_markers):
+            score += 3
+            score += min(section_counts.get(section, 0), 4)
+        if any(token in clause.text for token in text_markers):
+            score += 3
+            has_direct_signal = True
+        if any(token in clause.text for token in review_tokens):
+            score += 2
+            has_direct_signal = True
+        if score > 0 and has_direct_signal:
+            scored.append((score, clause))
+    scored.sort(key=lambda item: (-item[0], item[1].line_start))
+    limit = 12 if domain == "scoring" else 14
+    return [clause for _, clause in scored[:limit]]
+
+
+def _select_legal_reasoning_targets(findings: list[Finding]) -> list[Finding]:
+    selected = [
+        finding
+        for finding in findings
+        if finding.risk_level == "high"
+        or finding.needs_human_review
+        or finding.finding_origin == "analyzer"
+        or any(token in finding.problem_title for token in ("章节", "整体", "结构", "边界"))
+    ]
+    if not selected:
+        return findings[:6]
+    deduped: list[Finding] = []
+    seen: set[tuple[str, int, str]] = set()
+    for finding in selected:
+        key = _added_finding_signature(finding)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(finding)
+    return deduped[:8]
+
+
+def _added_finding_signature(finding: Finding) -> tuple[str, int, str]:
+    return (
+        finding.issue_type,
+        finding.text_line_start,
+        _normalized_summary_signature(f"{finding.problem_title} {finding.source_text}"),
+    )
+
+
+def _issue_tokens_from_review(
+    review: ReviewResult | None,
+    *,
+    issue_types: set[str] | None = None,
+) -> list[str]:
+    if review is None:
+        return []
+    tokens: list[str] = []
+    for finding in review.findings:
+        if issue_types and finding.issue_type not in issue_types:
+            continue
+        for token in _pattern_tokens([finding.problem_title, finding.source_text]):
+            if token not in tokens:
+                tokens.append(token)
+    return tokens[:18]
+
+
+def _pattern_tokens(patterns: list[str]) -> list[str]:
+    tokens: list[str] = []
+    for pattern in patterns:
+        text = str(pattern).strip()
+        if len(text) < 2:
+            continue
+        for chunk in text.replace("，", " ").replace("、", " ").replace("/", " ").replace("（", " ").replace("）", " ").split():
+            chunk = chunk.strip("：:,.。;；")
+            if len(chunk) >= 2 and chunk not in tokens:
+                tokens.append(chunk)
+    return tokens[:24]
 
 
 def _render_rule_candidates(rule_candidates: list[dict[str, object]]) -> str:
