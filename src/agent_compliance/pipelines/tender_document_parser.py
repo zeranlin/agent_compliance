@@ -9,7 +9,7 @@ from agent_compliance.pipelines.tender_document_risk_scope_layer import (
     RISK_SCOPE_SUPPORTING,
     annotate_tender_document_risk_scope,
 )
-from agent_compliance.schemas import NormalizedDocument, StructuredTenderDocument, StructuredTenderSection
+from agent_compliance.schemas import Clause, NormalizedDocument, StructuredTenderDocument, StructuredTenderSection
 
 TENDER_PARSER_MODE_OFF = "off"
 TENDER_PARSER_MODE_ASSIST = "assist"
@@ -96,3 +96,37 @@ def _unique_preserve_order(values) -> list[str]:
     for value in values:
         ordered[str(value)] = None
     return list(ordered.keys())
+
+
+def collect_structured_clause_ids(
+    structured_document: StructuredTenderDocument | None,
+    *,
+    structure_types: tuple[str, ...] | None = None,
+    risk_scopes: tuple[str, ...] | None = None,
+) -> set[str]:
+    if structured_document is None:
+        return set()
+    clause_ids: set[str] = set()
+    for section in structured_document.sections:
+        if structure_types and section.document_structure_type not in structure_types:
+            continue
+        if risk_scopes and section.risk_scope not in risk_scopes:
+            continue
+        clause_ids.update(section.clause_ids)
+    return clause_ids
+
+
+def clause_in_structured_sections(
+    clause: Clause,
+    structured_document: StructuredTenderDocument | None,
+    *,
+    structure_types: tuple[str, ...] | None = None,
+    risk_scopes: tuple[str, ...] | None = None,
+) -> bool:
+    if structured_document is None:
+        return False
+    return clause.clause_id in collect_structured_clause_ids(
+        structured_document,
+        structure_types=structure_types,
+        risk_scopes=risk_scopes,
+    )

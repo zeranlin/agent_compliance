@@ -9,10 +9,13 @@ from agent_compliance.pipelines.tender_document_parser import (
     TENDER_PARSER_MODE_ASSIST,
     TENDER_PARSER_MODE_OFF,
     TENDER_PARSER_MODE_REQUIRED,
+    clause_in_structured_sections,
+    collect_structured_clause_ids,
     parse_tender_document,
     prepare_review_document,
     resolve_tender_parser_mode,
 )
+from agent_compliance.pipelines.tender_document_risk_scope_layer import RISK_SCOPE_CORE, STRUCTURE_SCORING_RULES
 from agent_compliance.schemas import NormalizedDocument
 
 
@@ -64,6 +67,34 @@ class TenderDocumentParserTest(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             prepare_review_document(document, parser_mode=TENDER_PARSER_MODE_REQUIRED)
+
+    def test_structured_section_helpers_can_pick_scoring_clauses(self) -> None:
+        document = _build_document(
+            "\n".join(
+                [
+                    "评标信息",
+                    "评分因素",
+                    "提供检测报告得5分。",
+                    "技术要求",
+                    "中标人应完成供货、安装、调试。",
+                ]
+            )
+        )
+        structured = parse_tender_document(document, parser_mode=TENDER_PARSER_MODE_ASSIST)
+        scoring_ids = collect_structured_clause_ids(
+            structured,
+            structure_types=(STRUCTURE_SCORING_RULES,),
+            risk_scopes=(RISK_SCOPE_CORE,),
+        )
+        self.assertTrue(scoring_ids)
+        self.assertTrue(
+            clause_in_structured_sections(
+                document.clauses[1],
+                structured,
+                structure_types=(STRUCTURE_SCORING_RULES,),
+                risk_scopes=(RISK_SCOPE_CORE,),
+            )
+        )
 
 
 if __name__ == "__main__":

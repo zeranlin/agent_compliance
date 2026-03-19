@@ -20,7 +20,7 @@ from agent_compliance.pipelines.requirement_scope_layer import (
     is_high_weight_requirement_clause,
     is_substantive_requirement_clause,
 )
-from agent_compliance.pipelines.tender_document_parser import prepare_review_document
+from agent_compliance.pipelines.tender_document_parser import clause_in_structured_sections, prepare_review_document
 from agent_compliance.pipelines.tender_document_risk_scope_layer import is_core_risk_scope_clause, is_supporting_or_core_risk_scope_clause
 from agent_compliance.pipelines.rewrite_generator import apply_rewrite_generator
 from agent_compliance.pipelines.procurement_stage_router import route_procurement_stage
@@ -67,6 +67,13 @@ from agent_compliance.pipelines.review_strategy import (
     document_domain as _document_domain,
 )
 from agent_compliance.schemas import Finding, NormalizedDocument, ReviewResult, RuleHit, utc_now_iso
+from agent_compliance.pipelines.tender_document_risk_scope_layer import (
+    STRUCTURE_ACCEPTANCE_REQUIREMENTS,
+    STRUCTURE_COMMERCIAL_REQUIREMENTS,
+    STRUCTURE_CONTRACT_TERMS,
+    STRUCTURE_SCORING_RULES,
+    STRUCTURE_TECHNICAL_REQUIREMENTS,
+)
 
 
 def build_review_result(
@@ -75,7 +82,7 @@ def build_review_result(
     *,
     parser_mode: str | None = None,
 ) -> ReviewResult:
-    document, _structured = prepare_review_document(document, parser_mode=parser_mode)
+    document, structured_document = prepare_review_document(document, parser_mode=parser_mode)
     classification = classify_procurement_catalog(document)
     grouped_hits = _group_hits(document, _dedupe_hits(hits))
     findings: list[Finding] = []
@@ -127,7 +134,7 @@ def build_review_result(
         findings.append(finding)
 
     findings = _drop_false_positive_findings(findings)
-    findings = _refine_findings(document, findings, classification=classification)
+    findings = _refine_findings(document, findings, classification=classification, structured_document=structured_document)
 
     return reconcile_review_result(
         ReviewResult(
@@ -479,6 +486,7 @@ def _refine_findings(
     document: NormalizedDocument,
     findings: list[Finding],
     classification: CatalogClassification | None = None,
+    structured_document=None,
 ) -> list[Finding]:
     refined: list[Finding] = []
     primary_signatures: list[tuple[str, str]] = []
@@ -512,6 +520,7 @@ def _refine_findings(
                 document_domain=_document_domain,
                 merge_optional_text=_merge_optional_text,
                 catalog_classification=classification,
+                structured_document=structured_document,
             )
             continue
         if analyzer_group == "commercial":
@@ -521,6 +530,7 @@ def _refine_findings(
                 build_theme_finding=_build_theme_finding,
                 is_substantive_commercial_clause=_is_substantive_commercial_clause,
                 catalog_classification=classification,
+                structured_document=structured_document,
             )
             continue
         if analyzer_group == "qualification":
@@ -541,7 +551,12 @@ def _refine_findings(
                 catalog_classification=classification,
             )
             continue
-    refined = _add_domain_match_findings(document, refined, classification=classification)
+    refined = _add_domain_match_findings(
+        document,
+        refined,
+        classification=classification,
+        structured_document=structured_document,
+    )
     refined = _add_industry_appropriateness_findings(document, refined)
     refined = apply_finding_arbiter(refined, classification=classification)
     refined = _merge_technical_justification_findings(refined)
@@ -778,10 +793,16 @@ def _add_domain_match_findings(
     document: NormalizedDocument,
     findings: list[Finding],
     classification: CatalogClassification | None = None,
+    structured_document=None,
 ) -> list[Finding]:
     findings = _add_qualification_domain_theme_finding(document, findings, classification=classification)
     findings = _add_scoring_domain_theme_finding(document, findings, classification=classification)
-    findings = _add_mixed_scope_boundary_theme_finding(document, findings, classification=classification)
+    findings = _add_mixed_scope_boundary_theme_finding(
+        document,
+        findings,
+        classification=classification,
+        structured_document=structured_document,
+    )
     findings = _add_template_domain_theme_finding(document, findings, classification=classification)
     findings = _qualification_industry_appropriateness_finding(
         document,
@@ -1229,6 +1250,7 @@ def _add_mixed_scope_boundary_theme_finding(
     document: NormalizedDocument,
     findings: list[Finding],
     classification: CatalogClassification | None = None,
+    structured_document=None,
 ) -> list[Finding]:
     existing_titles = {finding.problem_title for finding in findings}
     if (
@@ -1248,6 +1270,25 @@ def _add_mixed_scope_boundary_theme_finding(
     profile_out_of_scope_markers = catalog_mixed_scope_out_of_scope_markers_for_classification(classification)
     profile_hard_markers = catalog_mixed_scope_hard_mismatch_markers_for_classification(classification)
     min_out_of_scope_hits = 2
+
+    def _is_mixed_scope_candidate_clause(clause) -> bool:
+        if not (is_substantive_requirement_clause(clause) and is_core_risk_scope_clause(clause)):
+            return False
+        if structured_document is None:
+            return True
+        return clause_in_structured_sections(
+            clause,
+            structured_document,
+            structure_types=(
+                STRUCTURE_SCORING_RULES,
+                STRUCTURE_TECHNICAL_REQUIREMENTS,
+                STRUCTURE_COMMERCIAL_REQUIREMENTS,
+                STRUCTURE_ACCEPTANCE_REQUIREMENTS,
+                STRUCTURE_CONTRACT_TERMS,
+            ),
+            risk_scopes=("core_risk_scope",),
+        )
+
     if domain == "medical_tcm_mixed":
         mixed_markers = profile_out_of_scope_markers or (
             "信息化管理系统",
@@ -1263,7 +1304,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_substantive_requirement_clause(clause) and is_core_risk_scope_clause(clause)
+            if _is_mixed_scope_candidate_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1299,7 +1340,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_substantive_requirement_clause(clause) and is_core_risk_scope_clause(clause)
+            if _is_mixed_scope_candidate_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1334,7 +1375,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_substantive_requirement_clause(clause) and is_core_risk_scope_clause(clause)
+            if _is_mixed_scope_candidate_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1371,7 +1412,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_substantive_requirement_clause(clause) and is_core_risk_scope_clause(clause)
+            if _is_mixed_scope_candidate_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1408,7 +1449,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_substantive_requirement_clause(clause) and is_core_risk_scope_clause(clause)
+            if _is_mixed_scope_candidate_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)

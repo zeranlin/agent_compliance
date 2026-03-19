@@ -166,6 +166,7 @@
 - 已形成更上游的 [tender-document-risk-scope-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/tender-document-risk-scope-layer-design.md)，准备先按“招标文件业务结构块 + 风险作用域”识别真正需要重点审查的板块，再将其下沉到 `requirement_scope_layer` 做条款语义分层
 - `tender_document_risk_scope_layer` 第一版已开始落地，Clause 现在可继续携带 `document_structure_type / risk_scope / scope_reason`，并已先接回 `review.py`、评分/商务主线、混合边界条款筛选、仲裁与证据选择，用于区分核心风险板块、辅助判断板块和当前低权重板块
 - 已新增 [tender-document-parser-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/tender-document-parser-design.md)，并落地第一版 `tender_document_parser` 可配置前置能力；当前代码审查主链已支持 `off / assist / required` 三种 parser 模式，用于在不破坏原独立审查链的前提下，先把招标文件解析成结构化板块后再进入风险识别
+- 评分语义、混合边界和商务链路三条主线已开始直接消费 `tender_document_parser` 产出的 `StructuredTenderDocument.sections`，不再只间接依赖 clause 标签；当前会优先按 `scoring_rules / commercial_requirements / acceptance_requirements / contract_terms` 等结构化板块约束 analyzer 输入
 - 面向规则治理增强的 [rule-governance-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/rule-governance-layer-design.md)，用于定义 `rule_registry`、`rule_priority_profile` 和 `catalog_sensitive_rule_router`
 - 面向大模型混合审查模式的 [llm-fast-path-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/llm-fast-path-design.md)，用于明确“代码审查主骨架 + 大模型关键节点同步介入 + 统一仲裁输出”的主思路
 

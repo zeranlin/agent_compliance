@@ -9,7 +9,15 @@ from agent_compliance.knowledge.procurement_catalog import (
     classification_has_catalog_prefix,
     classification_has_domain,
 )
-from agent_compliance.schemas import Finding, NormalizedDocument
+from agent_compliance.pipelines.tender_document_parser import clause_in_structured_sections
+from agent_compliance.pipelines.tender_document_risk_scope_layer import (
+    RISK_SCOPE_CORE,
+    RISK_SCOPE_SUPPORTING,
+    STRUCTURE_ACCEPTANCE_REQUIREMENTS,
+    STRUCTURE_COMMERCIAL_REQUIREMENTS,
+    STRUCTURE_CONTRACT_TERMS,
+)
+from agent_compliance.schemas import Finding, NormalizedDocument, StructuredTenderDocument
 
 
 ClausePredicate = Callable[[Any], bool]
@@ -23,7 +31,23 @@ def apply_commercial_analyzers(
     build_theme_finding: ThemeBuilder,
     is_substantive_commercial_clause: ClausePredicate,
     catalog_classification: CatalogClassification | None = None,
+    structured_document: StructuredTenderDocument | None = None,
 ) -> list[Finding]:
+    if structured_document is not None:
+        original_is_substantive_commercial_clause = is_substantive_commercial_clause
+
+        def is_substantive_commercial_clause(clause: Any) -> bool:
+            return original_is_substantive_commercial_clause(clause) and clause_in_structured_sections(
+                clause,
+                structured_document,
+                structure_types=(
+                    STRUCTURE_COMMERCIAL_REQUIREMENTS,
+                    STRUCTURE_ACCEPTANCE_REQUIREMENTS,
+                    STRUCTURE_CONTRACT_TERMS,
+                ),
+                risk_scopes=(RISK_SCOPE_CORE, RISK_SCOPE_SUPPORTING),
+            )
+
     findings = _add_payment_evaluation_chain_finding(
         document,
         findings,

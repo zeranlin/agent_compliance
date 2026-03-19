@@ -16,7 +16,9 @@ from agent_compliance.knowledge.procurement_catalog import (
     classification_has_catalog_prefix,
     classification_has_domain,
 )
-from agent_compliance.schemas import Finding, NormalizedDocument
+from agent_compliance.pipelines.tender_document_parser import clause_in_structured_sections
+from agent_compliance.pipelines.tender_document_risk_scope_layer import RISK_SCOPE_CORE, RISK_SCOPE_SUPPORTING, STRUCTURE_SCORING_RULES
+from agent_compliance.schemas import Finding, NormalizedDocument, StructuredTenderDocument
 
 
 ClausePredicate = Callable[[Any], bool]
@@ -34,7 +36,19 @@ def apply_scoring_analyzers(
     document_domain: DomainResolver,
     merge_optional_text: TextMerger,
     catalog_classification: CatalogClassification | None = None,
+    structured_document: StructuredTenderDocument | None = None,
 ) -> list[Finding]:
+    if structured_document is not None:
+        original_is_scoring_clause = is_scoring_clause
+
+        def is_scoring_clause(clause: Any) -> bool:
+            return original_is_scoring_clause(clause) and clause_in_structured_sections(
+                clause,
+                structured_document,
+                structure_types=(STRUCTURE_SCORING_RULES,),
+                risk_scopes=(RISK_SCOPE_CORE, RISK_SCOPE_SUPPORTING),
+            )
+
     findings = _add_scoring_structure_imbalance_finding(findings, merge_optional_text=merge_optional_text)
     findings = _add_goods_capacity_scoring_theme_finding(
         document,
