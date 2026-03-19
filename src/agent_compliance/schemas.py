@@ -20,6 +20,9 @@ class Clause:
     section_path: str | None = None
     table_or_item_label: str | None = None
     page_hint: str | None = None
+    document_structure_type: str | None = None
+    risk_scope: str | None = None
+    scope_reason: str | None = None
     scope_type: str | None = None
     clause_function: str | None = None
     effect_strength: str | None = None
@@ -137,6 +140,9 @@ class Finding:
     rewrite_suggestion: str
     needs_human_review: bool
     human_review_reason: str | None
+    document_structure_type: str | None = None
+    risk_scope: str | None = None
+    scope_reason: str | None = None
     primary_authority: str | None = None
     secondary_authorities: list[str] | None = None
     applicability_logic: str | None = None

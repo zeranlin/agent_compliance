@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from agent_compliance.pipelines.requirement_scope_layer import (
-    filter_effective_requirement_findings,
-)
+from agent_compliance.pipelines.requirement_scope_layer import filter_effective_requirement_findings
+from agent_compliance.pipelines.tender_document_risk_scope_layer import RISK_SCOPE_OUT
 from agent_compliance.knowledge.procurement_catalog import (
     CatalogClassification,
     classification_has_catalog_prefix,
@@ -37,6 +36,11 @@ def apply_finding_arbiter(
     classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     findings = filter_effective_requirement_findings(findings)
+    findings = [
+        finding
+        for finding in findings
+        if getattr(finding, "risk_scope", None) != RISK_SCOPE_OUT
+    ]
     theme_findings = [finding for finding in findings if finding.finding_origin == "analyzer"]
     theme_findings = _drop_overbroad_theme_findings(theme_findings)
     if not theme_findings:

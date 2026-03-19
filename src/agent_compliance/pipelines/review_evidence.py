@@ -7,6 +7,7 @@ from agent_compliance.knowledge.procurement_catalog import (
     classification_has_catalog_prefix,
     classification_has_domain,
 )
+from agent_compliance.pipelines.tender_document_risk_scope_layer import RISK_SCOPE_CORE
 from agent_compliance.pipelines.requirement_scope_layer import (
     EFFECT_STRONG_BINDING,
     classify_requirement_scope,
@@ -123,6 +124,7 @@ def select_representative_evidence(
     ranked = sorted(
         OrderedDict.fromkeys(parts),
         key=lambda part: (
+            -int(getattr(finding, "risk_scope", None) == RISK_SCOPE_CORE),
             -int(
                 classify_requirement_scope(
                     clause_id=finding.clause_id,

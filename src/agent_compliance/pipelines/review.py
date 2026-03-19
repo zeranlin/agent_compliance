@@ -21,6 +21,11 @@ from agent_compliance.pipelines.requirement_scope_layer import (
     is_high_weight_requirement_clause,
     is_substantive_requirement_clause,
 )
+from agent_compliance.pipelines.tender_document_risk_scope_layer import (
+    annotate_tender_document_risk_scope,
+    is_core_risk_scope_clause,
+    is_supporting_or_core_risk_scope_clause,
+)
 from agent_compliance.pipelines.rewrite_generator import apply_rewrite_generator
 from agent_compliance.pipelines.procurement_stage_router import route_procurement_stage
 from agent_compliance.pipelines.review_arbiter import (
@@ -69,6 +74,7 @@ from agent_compliance.schemas import Finding, NormalizedDocument, ReviewResult, 
 
 
 def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> ReviewResult:
+    annotate_tender_document_risk_scope(document)
     annotate_document_requirement_scope(document)
     classification = classify_procurement_catalog(document)
     grouped_hits = _group_hits(document, _dedupe_hits(hits))
@@ -83,7 +89,8 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
             table_or_item_label=clause.table_or_item_label if clause else None,
             text=clause.text if clause else hit.matched_text,
         )
-        if scope.category != "body":
+        clause_in_scope = clause is None or is_supporting_or_core_risk_scope_clause(clause)
+        if scope.category != "body" or not clause_in_scope:
             continue
         references = find_references(
             reference_ids=group.reference_ids,
@@ -113,6 +120,9 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
             rewrite_suggestion=_rewrite_suggestion(group),
             needs_human_review=_needs_human_review(hit.issue_type_candidate),
             human_review_reason=_human_review_reason(hit.issue_type_candidate),
+            document_structure_type=clause.document_structure_type if clause else None,
+            risk_scope=clause.risk_scope if clause else None,
+            scope_reason=clause.scope_reason if clause else None,
         )
         findings.append(finding)
 
@@ -1253,7 +1263,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_substantive_requirement_clause(clause)
+            if is_substantive_requirement_clause(clause) and is_core_risk_scope_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1289,7 +1299,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_substantive_requirement_clause(clause)
+            if is_substantive_requirement_clause(clause) and is_core_risk_scope_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1324,7 +1334,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_substantive_requirement_clause(clause)
+            if is_substantive_requirement_clause(clause) and is_core_risk_scope_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1361,7 +1371,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_substantive_requirement_clause(clause)
+            if is_substantive_requirement_clause(clause) and is_core_risk_scope_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1398,7 +1408,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_substantive_requirement_clause(clause)
+            if is_substantive_requirement_clause(clause) and is_core_risk_scope_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1498,7 +1508,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_substantive_requirement_clause(clause)
+            if is_substantive_requirement_clause(clause) and is_core_risk_scope_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1907,6 +1917,8 @@ def _is_commercial_clause(clause) -> bool:
 
 
 def _is_substantive_commercial_clause(clause) -> bool:
+    if not is_supporting_or_core_risk_scope_clause(clause):
+        return False
     if not _is_commercial_clause(clause):
         return False
     location_text = " ".join(part for part in (clause.section_path or "", clause.source_section or "", clause.table_or_item_label or "") if part)
@@ -2019,6 +2031,8 @@ def _domain_mismatch_markers(domain: str, classification: CatalogClassification 
 
 
 def _is_scoring_clause(clause) -> bool:
+    if not is_supporting_or_core_risk_scope_clause(clause):
+        return False
     if _is_template_instruction_clause(clause):
         return False
     section_path = clause.section_path or ""
@@ -2083,6 +2097,9 @@ def _build_theme_finding(
         rewrite_suggestion=rewrite_suggestion,
         needs_human_review=needs_human_review,
         human_review_reason=human_review_reason,
+        document_structure_type=first.document_structure_type,
+        risk_scope=first.risk_scope,
+        scope_reason=first.scope_reason,
         finding_origin=finding_origin,
     )
 

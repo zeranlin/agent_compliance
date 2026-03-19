@@ -164,6 +164,7 @@
 - 已形成更完整的 [requirement-scope-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/requirement-scope-layer-design.md)，准备把“有效审查对象识别 + 条款功能识别 + 条款效力分层”升级为统一输入层，后续作为 `mixed_scope_boundary_engine`、`scoring_semantic_consistency_engine`、`commercial_lifecycle_analyzer` 和 `finding_arbiter` 的共享前置语义层
 - `requirement_scope_layer` 第一版已落地到主链，Clause 现在开始携带 `scope_type / clause_function / effect_strength`，并已接入 `review.py + review_arbiter.py + review_evidence.py`；当前主线优先用品目、评分、商务和混合边界相关条款的“有效对象 / 实质功能 / 约束强度”标签来控制输入质量
 - 已形成更上游的 [tender-document-risk-scope-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/tender-document-risk-scope-layer-design.md)，准备先按“招标文件业务结构块 + 风险作用域”识别真正需要重点审查的板块，再将其下沉到 `requirement_scope_layer` 做条款语义分层
+- `tender_document_risk_scope_layer` 第一版已开始落地，Clause 现在可继续携带 `document_structure_type / risk_scope / scope_reason`，并已先接回 `review.py`、评分/商务主线、混合边界条款筛选、仲裁与证据选择，用于区分核心风险板块、辅助判断板块和当前低权重板块
 - 面向规则治理增强的 [rule-governance-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/rule-governance-layer-design.md)，用于定义 `rule_registry`、`rule_priority_profile` 和 `catalog_sensitive_rule_router`
 - 面向大模型混合审查模式的 [llm-fast-path-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/llm-fast-path-design.md)，用于明确“代码审查主骨架 + 大模型关键节点同步介入 + 统一仲裁输出”的主思路
 
