@@ -22,6 +22,7 @@ from agent_compliance.cache.review_cache import (
 )
 from agent_compliance.config import LLMConfig, detect_llm_config, detect_paths
 from agent_compliance.improvement.rule_management import load_rule_management_payload, save_rule_decision
+from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog
 from agent_compliance.parsers.pagination import page_hint_for_line
 from agent_compliance.pipelines.llm_enhance import enhance_review_result
 from agent_compliance.pipelines.llm_review import apply_llm_review_tasks
@@ -322,6 +323,7 @@ def _build_document_payload(normalized: NormalizedDocument) -> dict[str, Any]:
 
 def _build_stage_payload(normalized: NormalizedDocument, review: ReviewResult) -> dict[str, Any]:
     stage_profile = route_procurement_stage(document=normalized, findings=review.findings)
+    classification = classify_procurement_catalog(normalized)
     return {
         "stage_key": stage_profile.stage_key,
         "stage_name": stage_profile.stage_name,
@@ -329,6 +331,10 @@ def _build_stage_payload(normalized: NormalizedDocument, review: ReviewResult) -
         "review_posture": stage_profile.review_posture,
         "primary_users": list(stage_profile.primary_users),
         "output_bias": list(stage_profile.output_bias),
+        "primary_catalog_name": classification.primary_catalog_name,
+        "secondary_catalog_names": list(classification.secondary_catalog_names),
+        "is_mixed_scope": classification.is_mixed_scope,
+        "catalog_confidence": classification.catalog_confidence,
     }
 
 
@@ -4010,6 +4016,38 @@ def _review_buyer_html() -> str:
       gap: 10px;
       margin-top: 12px;
     }
+    .decision-banner {
+      display: grid;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid #e1d4c3;
+      background: linear-gradient(135deg, #fff7ef 0%, #fffdf8 100%);
+    }
+    .decision-banner.high {
+      border-color: #e5b3aa;
+      background: linear-gradient(135deg, #fff1ee 0%, #fff9f7 100%);
+    }
+    .decision-banner.medium {
+      border-color: #e7d2a5;
+      background: linear-gradient(135deg, #fff8ea 0%, #fffdf8 100%);
+    }
+    .decision-banner strong {
+      font-size: 18px;
+      color: var(--ink);
+    }
+    .decision-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .summary-note {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
     .stage-card {
       grid-column: 1 / -1;
       padding: 12px 14px;
@@ -4019,6 +4057,12 @@ def _review_buyer_html() -> str:
       background: #f4f9fd;
       display: grid;
       gap: 6px;
+    }
+    .stage-card .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
     }
     .stat {
       border: 1px solid var(--line);
@@ -4253,6 +4297,10 @@ def _review_buyer_html() -> str:
     .detail-item.action-callout {
       background: #eef6fd;
       border-color: #c8dced;
+    }
+    .detail-item.legal-callout {
+      background: #fff8f1;
+      border-color: #ecd7b7;
     }
     .empty {
       padding: 20px 16px;
@@ -4524,16 +4572,37 @@ def _review_buyer_html() -> str:
       const mediumCount = findings.filter((item) => item.risk_level === 'medium').length;
       const stage = payload.stage || null;
       const bySection = summarizeBySection(findings);
+      const releaseDecision = buildReleaseDecision(findings);
+      const catalogSummary = stage ? [
+        stage.primary_catalog_name || '',
+        stage.is_mixed_scope ? '混合采购' : '',
+        (stage.secondary_catalog_names || []).length ? `次品目：${stage.secondary_catalog_names.slice(0, 2).join(' / ')}` : '',
+      ].filter(Boolean).join(' ｜ ') : '';
       const stageCard = stage ? `
         <div class="stage-card">
           <strong>${escapeHtml(stage.stage_name || '')}</strong>
           <div class="meta">${escapeHtml(stage.stage_goal || '')}</div>
           <div class="meta">审查姿态：${escapeHtml(stage.review_posture || '')}</div>
+          <div class="meta">输出倾向：${escapeHtml((stage.output_bias || []).join(' / ') || '采购人改稿与发布前复核')}</div>
+          <div class="chips">
+            ${stage.primary_catalog_name ? `<span class="badge">${escapeHtml(stage.primary_catalog_name)}</span>` : ''}
+            ${stage.is_mixed_scope ? '<span class="badge medium">混合采购</span>' : ''}
+            ${stage.catalog_confidence ? `<span class="badge">识别置信 ${escapeHtml(String(Math.round(Number(stage.catalog_confidence || 0) * 100)))}%</span>` : ''}
+          </div>
         </div>
       ` : '';
       summaryNode.innerHTML = `
         <h2 style="margin:0 0 10px;">审查摘要</h2>
         <div>${escapeHtml(payload.review.overall_risk_summary || '')}</div>
+        <div class="decision-banner ${escapeHtml(releaseDecision.className)}">
+          <div class="meta">发布前审查建议</div>
+          <strong>${escapeHtml(releaseDecision.title)}</strong>
+          <div class="summary-note">${escapeHtml(releaseDecision.summary)}</div>
+          <div class="decision-meta">
+            <span class="badge ${escapeHtml(releaseDecision.badgeRisk)}">${escapeHtml(releaseDecision.badgeText)}</span>
+            ${catalogSummary ? `<span class="badge">${escapeHtml(catalogSummary)}</span>` : ''}
+          </div>
+        </div>
         <div class="summary-grid">
           ${stageCard}
           ${renderStat('文件', payload.review.document_name)}
@@ -4661,12 +4730,17 @@ def _review_buyer_html() -> str:
         ${isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : ''}
         <span class="badge">${escapeHtml(sectionLabel(finding))}</span>
       `;
+      const authorityText = formatAuthorityText(finding);
+      const reviewText = finding.needs_human_review
+        ? (finding.human_review_reason || '建议采购/法务复核后再决定是否保留当前表述。')
+        : '当前问题更适合直接修改或弱化，不建议原样发布。';
       detailGridNode.innerHTML = `
         <div class="detail-item action-callout"><strong>处理建议</strong><div>${escapeHtml(suggestedAction(finding).label)}${finding.needs_human_review ? ` ｜ ${escapeHtml(finding.human_review_reason || '需采购/法务复核')}` : ''}</div></div>
         <div class="detail-item"><strong>风险说明</strong><div>${escapeHtml(finding.why_it_is_risky || '暂无')}</div></div>
-        <div class="detail-item"><strong>法规依据</strong><div>${escapeHtml(finding.legal_or_policy_basis || finding.primary_authority || '暂无')}</div></div>
+        <div class="detail-item legal-callout"><strong>法规依据</strong><div>${escapeHtml(authorityText || '暂无')}</div></div>
         <div class="detail-item"><strong>适用逻辑</strong><div>${escapeHtml(finding.applicability_logic || '暂无')}</div></div>
         <div class="detail-item"><strong>建议改写</strong><div>${escapeHtml(finding.rewrite_suggestion || '暂无')}</div></div>
+        <div class="detail-item"><strong>复核提示</strong><div>${escapeHtml(reviewText)}</div></div>
         <div class="detail-item"><strong>代表性证据</strong><div>${escapeHtml(finding.source_text || '暂无')}</div></div>
       `;
     }
@@ -4839,6 +4913,46 @@ def _review_buyer_html() -> str:
 
     function riskLabel(level) {
       return ({ high: '高风险', medium: '中风险', low: '低风险' }[level] || level || '未标注');
+    }
+
+    function buildReleaseDecision(findings) {
+      const highCount = findings.filter((item) => item.risk_level === 'high').length;
+      const reviewCount = findings.filter((item) => item.needs_human_review).length;
+      if (highCount >= 3) {
+        return {
+          title: '建议先修改后再发布',
+          summary: '当前存在多条高风险问题，建议先按审查意见改稿，并对边界性条款完成内部复核后再发布。',
+          badgeText: `高风险 ${highCount} 条`,
+          badgeRisk: 'high',
+          className: 'high',
+        };
+      }
+      if (highCount >= 1 || reviewCount >= 3) {
+        return {
+          title: '建议补充论证或复核后发布',
+          summary: '当前存在高风险或多条需复核问题，建议先弱化表述、补必要性论证，并完成采购/法务复核。',
+          badgeText: `需复核 ${reviewCount} 条`,
+          badgeRisk: 'medium',
+          className: 'medium',
+        };
+      }
+      return {
+        title: '建议完成常规复核后发布',
+        summary: '当前主要为中低风险或表述优化问题，建议按页面意见完成常规改稿后再发布。',
+        badgeText: '可进入复核',
+        badgeRisk: 'main',
+        className: 'medium',
+      };
+    }
+
+    function formatAuthorityText(finding) {
+      const parts = [];
+      if (finding.primary_authority) parts.push(`主依据：${finding.primary_authority}`);
+      if (finding.secondary_authorities && finding.secondary_authorities.length) {
+        parts.push(`辅依据：${finding.secondary_authorities.join('；')}`);
+      }
+      if (!parts.length && finding.legal_or_policy_basis) parts.push(finding.legal_or_policy_basis);
+      return parts.join(' ｜ ');
     }
 
     function suggestedAction(finding) {
