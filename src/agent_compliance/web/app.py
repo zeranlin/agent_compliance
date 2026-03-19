@@ -9,7 +9,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
@@ -187,7 +187,7 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
             )
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", content_type)
-            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("Content-Disposition", _build_download_content_disposition(filename))
             self.send_header("Content-Length", str(len(content)))
             self.end_headers()
             self.wfile.write(content)
@@ -263,6 +263,14 @@ def _persist_upload(filename: str, content: bytes) -> Path:
     target = paths.uploads_root / Path(filename).name
     target.write_bytes(content)
     return target
+
+
+def _build_download_content_disposition(filename: str) -> str:
+    ascii_name = "".join(ch if ord(ch) < 128 else "_" for ch in filename)
+    if not ascii_name.strip("._"):
+        ascii_name = "review-export"
+    encoded = quote(filename, safe="")
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"
 
 
 def _web_llm_config(use_llm: bool) -> LLMConfig:
@@ -2335,9 +2343,12 @@ def _review_next_html() -> str:
         }
         const blob = await response.blob();
         const disposition = response.headers.get('Content-Disposition') || '';
+        const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
         const match = disposition.match(/filename=\"?([^\";]+)\"?/);
         const extension = format === 'markdown' ? 'md' : (format === 'xlsx' ? 'xlsx' : 'json');
-        const filename = match ? match[1] : `review-export.${extension}`;
+        const filename = utfMatch
+          ? decodeURIComponent(utfMatch[1])
+          : (match ? match[1] : `review-export.${extension}`);
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -4452,9 +4463,12 @@ def _review_buyer_html() -> str:
         }
         const blob = await response.blob();
         const disposition = response.headers.get('Content-Disposition') || '';
+        const utfMatch = disposition.match(/filename\\*=UTF-8''([^;]+)/i);
         const match = disposition.match(/filename=\\\"?([^\\\";]+)\\\"?/);
         const extension = format === 'markdown' ? 'md' : (format === 'xlsx' ? 'xlsx' : 'json');
-        const filename = match ? match[1] : `review-export.${extension}`;
+        const filename = utfMatch
+          ? decodeURIComponent(utfMatch[1])
+          : (match ? match[1] : `review-export.${extension}`);
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
