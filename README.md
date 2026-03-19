@@ -46,6 +46,7 @@
 - [legal-semantic-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/legal-semantic-layer-design.md)
 - [legal-authority-local-storage-spec.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/legal-authority-local-storage-spec.md)
 - [review-export-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/review-export-design.md)
+- [review-check-progress-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/review-check-progress-design.md)
 - [llm-fast-path-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/llm-fast-path-design.md)
 - [legal-authority-system.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/legal-authority-system.md)
 - [case-library-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/case-library-design.md)

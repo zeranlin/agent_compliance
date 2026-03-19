@@ -157,6 +157,7 @@
 - 面向当前持续调优阶段的 [engine-tuning-checklist.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/engine-tuning-checklist.md)，用于明确哪些 engine 是当前高优先级校准项、误判高发点和跨层联动问题
 - 面向法规条文级语义增强的 [legal-semantic-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/legal-semantic-layer-design.md)，用于正式设计 `legal_clause_index`、`issue_type_authority_map` 和 `legal_authority_reasoner`
 - 面向审查结果交付增强的 [review-export-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/review-export-design.md)，用于统一 `Markdown / Excel / JSON` 三种导出格式，以及 `主问题版 / 完整明细版` 两种导出模式
+- 面向采购人页面动态审查过程展示的 [review-check-progress-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/review-check-progress-design.md)，用于定义 `review-check` 在启用大模型（混合审查）时的进度面板、后端状态字段以及轮询优先于 SSE 的落地顺序
 - 面向规则治理增强的 [rule-governance-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/rule-governance-layer-design.md)，用于定义 `rule_registry`、`rule_priority_profile` 和 `catalog_sensitive_rule_router`
 - 面向大模型混合审查模式的 [llm-fast-path-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/llm-fast-path-design.md)，用于明确“代码审查主骨架 + 大模型关键节点同步介入 + 统一仲裁输出”的主思路
 
