@@ -5,6 +5,7 @@ import re
 import json
 
 from agent_compliance.config import detect_paths
+from agent_compliance.evals.benchmark_regression_reporter import build_benchmark_regression_report
 
 
 def list_benchmark_cases() -> list[dict[str, object]]:
@@ -33,6 +34,7 @@ def benchmark_summary() -> dict[str, str]:
     benchmark_path = paths.repo_root / "docs" / "evals" / "cases" / "starter-benchmark-set.md"
     rubric_path = paths.repo_root / "docs" / "evals" / "rubrics" / "review-rubric.md"
     cases = list_benchmark_cases()
+    latest_gate = _latest_benchmark_gate(paths.repo_root / "docs" / "generated" / "improvement")
     return {
         "benchmark_path": str(benchmark_path),
         "rubric_path": str(rubric_path),
@@ -40,7 +42,8 @@ def benchmark_summary() -> dict[str, str]:
         "case_count": sum(int(item["case_count"]) for item in cases),
         "issue_types_covered": sorted({issue for item in cases for issue in item.get("issue_types", [])}),
         "cases": cases,
-        "latest_benchmark_gate": _latest_benchmark_gate(paths.repo_root / "docs" / "generated" / "improvement"),
+        "latest_benchmark_gate": latest_gate,
+        "benchmark_regression_report": build_benchmark_regression_report(latest_gate),
         "status": "当前可读取本地 benchmark 样本清单与案例数量，后续版本继续接入自动跑分。",
     }
 

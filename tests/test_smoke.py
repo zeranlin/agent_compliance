@@ -28,6 +28,8 @@ class CliSmokeTest(unittest.TestCase):
         self.assertTrue(Path(summary["rubric_path"]).exists())
         self.assertIn("issue_types_covered", summary)
         self.assertIn("geographic_restriction", summary["issue_types_covered"])
+        self.assertIn("benchmark_regression_report", summary)
+        self.assertEqual(summary["benchmark_regression_report"]["stage_name"], "采购需求形成与发布前审查")
 
     def test_rule_scan_returns_json(self) -> None:
         sample = "供应商须在采购人所在地行政区域内设有分公司，否则投标无效。"
