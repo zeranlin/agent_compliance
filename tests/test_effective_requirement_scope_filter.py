@@ -10,8 +10,17 @@ from agent_compliance.pipelines.effective_requirement_scope_filter import (
     REQUIREMENT_SCOPE_FORMAT,
     REQUIREMENT_SCOPE_HINT,
     REQUIREMENT_SCOPE_TEMPLATE,
+    annotate_document_requirement_scope,
     classify_clause_scope,
     classify_requirement_scope,
+)
+from agent_compliance.pipelines.requirement_scope_layer import (
+    EFFECT_REFERENCE_ONLY,
+    EFFECT_STRONG_BINDING,
+    FUNCTION_REFERENCE_NOTE,
+    FUNCTION_SCORING_EVIDENCE,
+    SCOPE_BACKGROUND_TEXT,
+    SCOPE_SCORING_RULE,
 )
 
 
@@ -47,6 +56,43 @@ class EffectiveRequirementScopeFilterTest(unittest.TestCase):
             )
         )
         self.assertEqual(classify_clause_scope(clauses[1]).category, REQUIREMENT_SCOPE_BODY)
+
+    def test_classify_scoring_clause_with_evidence_and_effect_strength(self) -> None:
+        result = classify_requirement_scope(
+            section_path="评标信息-评分项-技术部分-评分因素",
+            text="提供检测报告且检测报告委托单位须为投标人，可得5分。",
+        )
+        self.assertEqual(result.scope_type, SCOPE_SCORING_RULE)
+        self.assertEqual(result.clause_function, FUNCTION_SCORING_EVIDENCE)
+        self.assertEqual(result.effect_strength, EFFECT_STRONG_BINDING)
+        self.assertTrue(result.is_high_weight_requirement)
+
+    def test_classify_note_as_background_reference_only(self) -> None:
+        result = classify_requirement_scope(
+            section_path="第三章 用户需求书-说明",
+            text="说明：以上参数为参考写法，采购人可结合实际调整。",
+        )
+        self.assertEqual(result.scope_type, SCOPE_BACKGROUND_TEXT)
+        self.assertEqual(result.clause_function, FUNCTION_REFERENCE_NOTE)
+        self.assertEqual(result.effect_strength, EFFECT_REFERENCE_ONLY)
+        self.assertFalse(result.is_high_weight_requirement)
+
+    def test_annotate_document_requirement_scope_sets_clause_fields(self) -> None:
+        clauses = split_into_clauses(
+            "\n".join(
+                [
+                    "评标信息",
+                    "评分因素",
+                    "提供检测报告且检测报告委托单位须为投标人，可得5分。",
+                ]
+            )
+        )
+        document = type("Doc", (), {"clauses": clauses})()
+        annotate_document_requirement_scope(document)
+        self.assertEqual(clauses[2].scope_type, SCOPE_SCORING_RULE)
+        self.assertEqual(clauses[2].clause_function, FUNCTION_SCORING_EVIDENCE)
+        self.assertEqual(clauses[2].effect_strength, EFFECT_STRONG_BINDING)
+        self.assertTrue(clauses[2].is_effective_requirement)
 
 
 if __name__ == "__main__":

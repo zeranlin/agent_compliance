@@ -20,6 +20,12 @@ class Clause:
     section_path: str | None = None
     table_or_item_label: str | None = None
     page_hint: str | None = None
+    scope_type: str | None = None
+    clause_function: str | None = None
+    effect_strength: str | None = None
+    is_effective_requirement: bool | None = None
+    is_high_weight_requirement: bool | None = None
+    scope_confidence: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

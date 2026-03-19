@@ -7,8 +7,8 @@ from agent_compliance.knowledge.procurement_catalog import (
     classification_has_catalog_prefix,
     classification_has_domain,
 )
-from agent_compliance.pipelines.effective_requirement_scope_filter import (
-    REQUIREMENT_SCOPE_BODY,
+from agent_compliance.pipelines.requirement_scope_layer import (
+    EFFECT_STRONG_BINDING,
     classify_requirement_scope,
 )
 from agent_compliance.pipelines.review_arbiter import line_ranges_overlap
@@ -114,17 +114,34 @@ def select_representative_evidence(
             source_section=finding.source_section,
             table_or_item_label=finding.table_or_item_label,
             text=part,
-        ).category
-        == REQUIREMENT_SCOPE_BODY
+        ).is_effective_requirement
     ]
     if effective_parts:
         parts = effective_parts
-
     title = finding.problem_title
     keywords = evidence_keywords_for_title(title, classification=classification)
     ranked = sorted(
         OrderedDict.fromkeys(parts),
         key=lambda part: (
+            -int(
+                classify_requirement_scope(
+                    clause_id=finding.clause_id,
+                    section_path=finding.section_path,
+                    source_section=finding.source_section,
+                    table_or_item_label=finding.table_or_item_label,
+                    text=part,
+                ).is_high_weight_requirement
+            ),
+            -int(
+                classify_requirement_scope(
+                    clause_id=finding.clause_id,
+                    section_path=finding.section_path,
+                    source_section=finding.source_section,
+                    table_or_item_label=finding.table_or_item_label,
+                    text=part,
+                ).effect_strength
+                == EFFECT_STRONG_BINDING
+            ),
             -sum(1 for keyword in keywords if keyword in part),
             len(part),
         ),

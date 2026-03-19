@@ -12,10 +12,14 @@ from agent_compliance.analyzers.commercial import apply_commercial_analyzers
 from agent_compliance.analyzers.scoring import apply_scoring_analyzers
 from agent_compliance.analyzers.technical import apply_technical_analyzers
 from agent_compliance.pipelines.confidence_calibrator import apply_confidence_calibrator
-from agent_compliance.pipelines.effective_requirement_scope_filter import (
+from agent_compliance.pipelines.requirement_scope_layer import (
+    annotate_document_requirement_scope,
     classify_requirement_scope,
     filter_effective_requirement_clauses,
+    filter_high_weight_requirement_clauses,
     is_effective_requirement_clause,
+    is_high_weight_requirement_clause,
+    is_substantive_requirement_clause,
 )
 from agent_compliance.pipelines.rewrite_generator import apply_rewrite_generator
 from agent_compliance.pipelines.procurement_stage_router import route_procurement_stage
@@ -65,6 +69,7 @@ from agent_compliance.schemas import Finding, NormalizedDocument, ReviewResult, 
 
 
 def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> ReviewResult:
+    annotate_document_requirement_scope(document)
     classification = classify_procurement_catalog(document)
     grouped_hits = _group_hits(document, _dedupe_hits(hits))
     findings: list[Finding] = []
@@ -1248,7 +1253,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_effective_requirement_clause(clause)
+            if is_substantive_requirement_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1284,7 +1289,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_effective_requirement_clause(clause)
+            if is_substantive_requirement_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1319,7 +1324,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_effective_requirement_clause(clause)
+            if is_substantive_requirement_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1356,7 +1361,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_effective_requirement_clause(clause)
+            if is_substantive_requirement_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1393,7 +1398,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_effective_requirement_clause(clause)
+            if is_substantive_requirement_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1493,7 +1498,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
-            if is_effective_requirement_clause(clause)
+            if is_substantive_requirement_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)

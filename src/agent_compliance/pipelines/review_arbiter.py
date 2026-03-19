@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent_compliance.pipelines.effective_requirement_scope_filter import (
+from agent_compliance.pipelines.requirement_scope_layer import (
     filter_effective_requirement_findings,
 )
 from agent_compliance.knowledge.procurement_catalog import (

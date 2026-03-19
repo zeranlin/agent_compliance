@@ -162,6 +162,7 @@
 - 面向采购人页面动态审查过程展示的 [review-check-progress-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/review-check-progress-design.md)，用于定义 `review-check` 在启用大模型（混合审查）时的进度面板、后端状态字段以及轮询优先于 SSE 的落地顺序
 - 面向正式采购需求正文边界过滤的 [effective-requirement-scope-filter-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/effective-requirement-scope-filter-design.md)，用于区分 `正文 / 模板 / 提示 / 格式`，并把过滤层接回 `review.py + finding_arbiter + evidence_selector`
 - 已形成更完整的 [requirement-scope-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/requirement-scope-layer-design.md)，准备把“有效审查对象识别 + 条款功能识别 + 条款效力分层”升级为统一输入层，后续作为 `mixed_scope_boundary_engine`、`scoring_semantic_consistency_engine`、`commercial_lifecycle_analyzer` 和 `finding_arbiter` 的共享前置语义层
+- `requirement_scope_layer` 第一版已落地到主链，Clause 现在开始携带 `scope_type / clause_function / effect_strength`，并已接入 `review.py + review_arbiter.py + review_evidence.py`；当前主线优先用品目、评分、商务和混合边界相关条款的“有效对象 / 实质功能 / 约束强度”标签来控制输入质量
 - 面向规则治理增强的 [rule-governance-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/rule-governance-layer-design.md)，用于定义 `rule_registry`、`rule_priority_profile` 和 `catalog_sensitive_rule_router`
 - 面向大模型混合审查模式的 [llm-fast-path-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/llm-fast-path-design.md)，用于明确“代码审查主骨架 + 大模型关键节点同步介入 + 统一仲裁输出”的主思路
 
