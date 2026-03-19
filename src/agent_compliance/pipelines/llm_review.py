@@ -33,6 +33,7 @@ class LLMReviewArtifacts:
     added_findings: list[Finding]
     rule_candidates: list[dict[str, object]]
     benchmark_gate: dict[str, object]
+    llm_node_summary: dict[str, object] | None = None
     difference_learning: dict[str, object] | None = None
     candidate_json_path: str | None = None
     candidate_md_path: str | None = None
@@ -44,6 +45,7 @@ class LLMReviewArtifacts:
     def to_dict(self) -> dict[str, object]:
         return {
             "added_findings": [finding.to_dict() for finding in self.added_findings],
+            "llm_node_summary": self.llm_node_summary,
             "rule_candidates": self.rule_candidates,
             "benchmark_gate": self.benchmark_gate,
             "difference_learning": self.difference_learning,
@@ -65,6 +67,7 @@ def apply_llm_review_tasks(
 ) -> tuple[ReviewResult, LLMReviewArtifacts]:
     empty = LLMReviewArtifacts(
         added_findings=[],
+        llm_node_summary={"status": "llm_disabled"},
         rule_candidates=[],
         benchmark_gate={"status": "llm_disabled"},
         difference_learning={"status": "llm_disabled"},
@@ -75,19 +78,49 @@ def apply_llm_review_tasks(
     client = OpenAICompatibleLLMClient(llm_config)
     classification = classify_procurement_catalog(document)
     stage_profile = route_procurement_stage(document=document, findings=review.findings)
-    added_findings: list[Finding] = []
-    added_findings.extend(_run_document_audit_task(document, review, client, classification=classification))
-    added_findings.extend(_run_template_mismatch_task(document, review, client))
-    added_findings.extend(_run_scoring_structure_task(document, review, client))
-    added_findings.extend(_run_commercial_chain_task(document, review, client))
-    added_findings = apply_legal_authority_reasoner(added_findings)
+    document_audit_findings = _dedupe_added_findings(
+        _run_document_audit_task(document, review, client, classification=classification)
+        + _run_template_mismatch_task(document, review, client)
+    )
+    chapter_summary_findings = _dedupe_added_findings(
+        _run_scoring_structure_task(document, review, client)
+        + _run_commercial_chain_task(document, review, client)
+    )
+    added_findings = _dedupe_added_findings([*document_audit_findings, *chapter_summary_findings])
+    legal_reasoned_findings = apply_legal_authority_reasoner(added_findings)
     added_findings = apply_confidence_calibrator(
-        added_findings,
+        legal_reasoned_findings,
         classification=classification,
         stage_profile=stage_profile,
     )
 
-    merged_review = _merge_added_findings(review, added_findings)
+    llm_node_summary = {
+        "status": "ok",
+        "nodes": [
+            {
+                "node": "document_audit_llm",
+                "label": "全文辅助扫描",
+                "finding_count": len(document_audit_findings),
+            },
+            {
+                "node": "chapter_summary_llm",
+                "label": "章节级总结",
+                "finding_count": len(chapter_summary_findings),
+            },
+            {
+                "node": "legal_reasoning_llm",
+                "label": "法规适用逻辑解释",
+                "finding_count": len(added_findings),
+            },
+        ],
+    }
+
+    merged_review = _merge_added_findings(
+        review,
+        added_findings,
+        document=document,
+        classification=classification,
+    )
     rule_candidates = generate_rule_candidates(document, merged_review, added_findings, classification=classification)
     benchmark_gate = run_benchmark_gate(rule_candidates)
     difference_learning = build_difference_learning_loop(
@@ -100,6 +133,7 @@ def apply_llm_review_tasks(
     )
     artifacts = write_improvement_outputs(output_stem, rule_candidates, benchmark_gate, difference_learning)
     artifacts.added_findings = added_findings
+    artifacts.llm_node_summary = llm_node_summary
     artifacts.rule_candidates = rule_candidates
     artifacts.benchmark_gate = benchmark_gate
     artifacts.difference_learning = difference_learning
@@ -696,7 +730,13 @@ def _findings_from_payload(
     return findings
 
 
-def _merge_added_findings(review: ReviewResult, added_findings: list[Finding]) -> ReviewResult:
+def _merge_added_findings(
+    review: ReviewResult,
+    added_findings: list[Finding],
+    *,
+    document: NormalizedDocument | None = None,
+    classification: CatalogClassification | None = None,
+) -> ReviewResult:
     if not added_findings:
         return review
     result = deepcopy(review)
@@ -717,10 +757,10 @@ def _merge_added_findings(review: ReviewResult, added_findings: list[Finding]) -
         if key not in existing_keys:
             result.findings.append(finding)
             existing_keys.add(key)
-    result = reconcile_review_result(result)
+    result = reconcile_review_result(result, document=document, classification=classification)
     result.overall_risk_summary = result.overall_risk_summary.replace(
         "当前结果已接入本地规则映射和引用资料检索，可作为正式审查前的离线初筛与复审输入。",
-        "当前结果已接入本地规则映射、引用资料检索和本地大模型边界判断，可作为正式审查前的离线初筛与复审输入。",
+        "当前结果已接入本地规则映射、引用资料检索和大模型混合审查节点，可作为正式审查前的离线初筛与复审输入。",
     )
     return result
 

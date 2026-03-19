@@ -207,6 +207,11 @@ class LLMIntegrationTest(unittest.TestCase):
 
         self.assertGreaterEqual(len(result.findings), 4)
         self.assertGreaterEqual(len(artifacts.added_findings), 4)
+        self.assertEqual(artifacts.llm_node_summary["status"], "ok")
+        self.assertEqual(
+            [node["node"] for node in artifacts.llm_node_summary["nodes"]],
+            ["document_audit_llm", "chapter_summary_llm", "legal_reasoning_llm"],
+        )
         self.assertGreaterEqual(len(artifacts.rule_candidates), 4)
         self.assertTrue(any(item.get("primary_catalog_name") for item in artifacts.rule_candidates))
         self.assertTrue(any(item.get("primary_domain_key") for item in artifacts.rule_candidates))
@@ -221,7 +226,7 @@ class LLMIntegrationTest(unittest.TestCase):
         self.assertTrue(artifacts.difference_learning.get("primary_domain_key"))
         self.assertIn("profile_high_risk_patterns", artifacts.difference_learning)
         self.assertIn("profile_risk_summary", artifacts.benchmark_gate)
-        self.assertIn("当前结果已接入本地规则映射、引用资料检索和本地大模型边界判断", result.overall_risk_summary)
+        self.assertIn("当前结果已接入本地规则映射、引用资料检索和大模型混合审查节点", result.overall_risk_summary)
 
         for path in [
             artifacts.candidate_json_path,
