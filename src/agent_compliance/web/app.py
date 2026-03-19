@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import subprocess
+import threading
+import time
+import uuid
 from email.parser import BytesParser
 from email.policy import default
 from html import escape as html_escape
@@ -9,7 +12,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
@@ -36,6 +39,49 @@ from agent_compliance.rules.base import RULE_SET_VERSION
 from agent_compliance.schemas import NormalizedDocument, ReviewResult
 
 
+REVIEW_JOB_LOCK = threading.Lock()
+REVIEW_JOBS: dict[str, dict[str, Any]] = {}
+BUYER_PROGRESS_STEPS = (
+    {
+        "key": "parse",
+        "label": "文档解析中",
+        "description": "正在提取正文、章节和表格内容。",
+    },
+    {
+        "key": "base_scan",
+        "label": "基础风险扫描中",
+        "description": "正在识别资格、评分、技术、商务/验收风险。",
+    },
+    {
+        "key": "llm_enhance",
+        "label": "智能增强分析中",
+        "description": "正在补充边界问题、章节主问题和法规解释。",
+    },
+    {
+        "key": "finalize",
+        "label": "结果收束中",
+        "description": "正在去重、合并主问题、整理证据和建议。",
+    },
+    {
+        "key": "done",
+        "label": "审查完成",
+        "description": "可查看问题清单和导出结果。",
+    },
+)
+BUYER_TECHNICAL_STEPS = (
+    {"key": "catalog", "label": "品目识别"},
+    {"key": "rule_scan", "label": "规则扫描"},
+    {"key": "scoring", "label": "评分语义分析"},
+    {"key": "mixed_scope", "label": "混合边界分析"},
+    {"key": "commercial", "label": "商务链路分析"},
+    {"key": "llm_document_audit", "label": "全文辅助扫描"},
+    {"key": "llm_chapter_summary", "label": "章节级总结"},
+    {"key": "llm_legal_reasoning", "label": "法规适用逻辑解释"},
+    {"key": "arbiter", "label": "仲裁归并"},
+    {"key": "evidence", "label": "证据选择"},
+)
+
+
 def run_web_server(host: str = "127.0.0.1", port: int = 8765) -> None:
     server = ThreadingHTTPServer((host, port), ReviewWebHandler)
     print(f"Web UI running at http://{host}:{port}")
@@ -44,7 +90,8 @@ def run_web_server(host: str = "127.0.0.1", port: int = 8765) -> None:
 
 class ReviewWebHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
         if path == "/":
             self._send_html(_index_html())
             return
@@ -68,6 +115,12 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         if path == "/api/rules":
             self._send_json(load_rule_management_payload())
             return
+        if path == "/api/review-status":
+            self._handle_review_status(parsed.query)
+            return
+        if path == "/api/review-result":
+            self._handle_review_result(parsed.query)
+            return
         self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
 
     def do_POST(self) -> None:
@@ -80,6 +133,9 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/rules/decision":
             self._handle_rule_decision()
+            return
+        if path == "/api/review-start":
+            self._handle_review_start()
             return
         if path != "/api/review":
             self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
@@ -199,6 +255,307 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
             self.wfile.write(content)
         except Exception as exc:
             self._send_json({"error": f"导出失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_review_start(self) -> None:
+        try:
+            body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            fields = _parse_multipart(self.headers, body)
+        except Exception as exc:
+            self._send_json({"error": f"请求解析失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        upload = fields.get("file")
+        if not upload or not upload.get("filename"):
+            self._send_json({"error": "缺少上传文件"}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        use_llm = _flag_value(fields.get("use_llm", {}).get("value"))
+        use_cache = _flag_value(fields.get("use_cache", {}).get("value"))
+        source_path = _persist_upload(str(upload["filename"]), bytes(upload["content"]))
+        job_id = _create_review_job(Path(source_path).name, source_path, use_cache=use_cache, use_llm=use_llm)
+        worker = threading.Thread(
+            target=_run_review_job,
+            args=(job_id, source_path, use_cache, use_llm, detect_paths()),
+            daemon=True,
+        )
+        worker.start()
+        self._send_json({"job_id": job_id, "status": "queued"})
+
+    def _handle_review_status(self, query: str) -> None:
+        job_id = parse_qs(query).get("job_id", [""])[0].strip()
+        if not job_id:
+            self._send_json({"error": "缺少 job_id"}, status=HTTPStatus.BAD_REQUEST)
+            return
+        payload = _review_job_status_payload(job_id)
+        if payload is None:
+            self._send_json({"error": "任务不存在"}, status=HTTPStatus.NOT_FOUND)
+            return
+        self._send_json(payload)
+
+    def _handle_review_result(self, query: str) -> None:
+        job_id = parse_qs(query).get("job_id", [""])[0].strip()
+        if not job_id:
+            self._send_json({"error": "缺少 job_id"}, status=HTTPStatus.BAD_REQUEST)
+            return
+        payload = _review_job_result_payload(job_id)
+        if payload is None:
+            self._send_json({"error": "任务不存在"}, status=HTTPStatus.NOT_FOUND)
+            return
+        if payload.get("status") == "failed":
+            self._send_json(payload, status=HTTPStatus.BAD_REQUEST)
+            return
+        if payload.get("status") != "completed":
+            self._send_json(payload, status=HTTPStatus.ACCEPTED)
+            return
+        self._send_json(payload["result"])
+
+
+def _now_ts() -> float:
+    return time.time()
+
+
+def _initial_progress_steps() -> list[dict[str, Any]]:
+    return [dict(item, status="pending") for item in BUYER_PROGRESS_STEPS]
+
+
+def _initial_technical_steps() -> list[dict[str, Any]]:
+    return [dict(item, status="pending") for item in BUYER_TECHNICAL_STEPS]
+
+
+def _create_review_job(filename: str, source_path: Path, *, use_cache: bool, use_llm: bool) -> str:
+    job_id = f"review-{uuid.uuid4().hex[:12]}"
+    stage_profile = route_procurement_stage()
+    now = _now_ts()
+    with REVIEW_JOB_LOCK:
+        REVIEW_JOBS[job_id] = {
+            "job_id": job_id,
+            "status": "queued",
+            "mode": "hybrid" if use_llm else "code",
+            "stage_profile": {
+                "stage_key": stage_profile.stage_key,
+                "stage_name": stage_profile.stage_name,
+                "stage_goal": stage_profile.stage_goal,
+                "review_posture": stage_profile.review_posture,
+                "output_bias": list(stage_profile.output_bias),
+            },
+            "document_name": filename,
+            "source_path": str(source_path),
+            "progress": {
+                "current_step": "parse",
+                "steps": _initial_progress_steps(),
+                "technical_steps": _initial_technical_steps(),
+            },
+            "partial_result_available": False,
+            "last_message": "任务已创建，等待开始。",
+            "started_at": now,
+            "updated_at": now,
+            "result": None,
+            "error": None,
+            "use_cache": use_cache,
+            "use_llm": use_llm,
+        }
+    return job_id
+
+
+def _set_step_status(job: dict[str, Any], step_key: str, status: str) -> None:
+    for step in job["progress"]["steps"]:
+        if step["key"] == step_key:
+            step["status"] = status
+            break
+    for step in job["progress"]["technical_steps"]:
+        if step["key"] == step_key:
+            step["status"] = status
+            break
+
+
+def _mark_review_job(
+    job_id: str,
+    *,
+    status: str | None = None,
+    current_step: str | None = None,
+    message: str | None = None,
+    complete_steps: tuple[str, ...] = (),
+    run_steps: tuple[str, ...] = (),
+    skip_steps: tuple[str, ...] = (),
+    fail_steps: tuple[str, ...] = (),
+    result: dict[str, Any] | None = None,
+    error: str | None = None,
+    partial_result_available: bool | None = None,
+) -> None:
+    with REVIEW_JOB_LOCK:
+        job = REVIEW_JOBS.get(job_id)
+        if job is None:
+            return
+        if status:
+            job["status"] = status
+        if current_step:
+            job["progress"]["current_step"] = current_step
+        for step_key in complete_steps:
+            _set_step_status(job, step_key, "completed")
+        for step_key in run_steps:
+            _set_step_status(job, step_key, "running")
+        for step_key in skip_steps:
+            _set_step_status(job, step_key, "skipped")
+        for step_key in fail_steps:
+            _set_step_status(job, step_key, "failed")
+        if message is not None:
+            job["last_message"] = message
+        if partial_result_available is not None:
+            job["partial_result_available"] = partial_result_available
+        if result is not None:
+            job["result"] = result
+        if error is not None:
+            job["error"] = error
+        job["updated_at"] = _now_ts()
+
+
+def _review_job_status_payload(job_id: str) -> dict[str, Any] | None:
+    with REVIEW_JOB_LOCK:
+        job = REVIEW_JOBS.get(job_id)
+        if job is None:
+            return None
+        return {
+            "job_id": job["job_id"],
+            "status": job["status"],
+            "mode": job["mode"],
+            "stage_profile": job["stage_profile"],
+            "document_name": job["document_name"],
+            "progress": job["progress"],
+            "partial_result_available": job["partial_result_available"],
+            "last_message": job["last_message"],
+            "started_at": job["started_at"],
+            "updated_at": job["updated_at"],
+            "error": job["error"],
+        }
+
+
+def _review_job_result_payload(job_id: str) -> dict[str, Any] | None:
+    with REVIEW_JOB_LOCK:
+        job = REVIEW_JOBS.get(job_id)
+        if job is None:
+            return None
+        return {
+            "job_id": job["job_id"],
+            "status": job["status"],
+            "error": job["error"],
+            "result": job["result"],
+        }
+
+
+def _run_review_job(job_id: str, source_path: Path, use_cache: bool, use_llm: bool, paths) -> None:
+    _mark_review_job(
+        job_id,
+        status="running",
+        current_step="parse",
+        run_steps=("parse",),
+        message="正在解析文档、提取正文、章节和表格内容。",
+    )
+    try:
+        normalized = run_normalize(source_path)
+        _mark_review_job(
+            job_id,
+            current_step="base_scan",
+            complete_steps=("parse", "catalog"),
+            run_steps=("base_scan", "rule_scan", "scoring", "mixed_scope", "commercial"),
+            message="正在进行基础风险扫描，识别资格、评分、技术、商务/验收问题。",
+        )
+
+        reference_snapshot = reference_snapshot_id(paths.repo_root / "docs" / "references")
+        cache_key = build_review_cache_key(
+            file_hash=normalized.file_hash,
+            rule_set_version=RULE_SET_VERSION,
+            reference_snapshot=reference_snapshot,
+            review_pipeline_version=REVIEW_CACHE_VERSION,
+        )
+        review = load_review_cache(cache_key) if use_cache else None
+        cache_used = review is not None
+        if review is None:
+            hits = run_rule_scan(normalized)
+            review = build_review_result(normalized, hits)
+            if use_cache:
+                save_review_cache(
+                    cache_key,
+                    review,
+                    metadata={
+                        "file_hash": normalized.file_hash,
+                        "rule_set_version": RULE_SET_VERSION,
+                        "reference_snapshot": reference_snapshot,
+                        "review_pipeline_version": REVIEW_CACHE_VERSION,
+                    },
+                )
+            base_message = "基础风险扫描完成，正在准备智能增强分析。"
+        else:
+            base_message = "已复用缓存结果，正在准备智能增强分析。"
+        _mark_review_job(
+            job_id,
+            complete_steps=("base_scan", "rule_scan", "scoring", "mixed_scope", "commercial"),
+            message=base_message,
+        )
+
+        llm_config = _web_llm_config(use_llm)
+        llm_completed_steps: tuple[str, ...] = ()
+        if llm_config.enabled:
+            _mark_review_job(
+                job_id,
+                current_step="llm_enhance",
+                run_steps=("llm_enhance", "llm_document_audit", "llm_chapter_summary", "llm_legal_reasoning"),
+                message="正在进行智能增强分析，补充边界问题、章节主问题和法规解释。",
+            )
+            llm_completed_steps = ("llm_enhance", "llm_document_audit", "llm_chapter_summary", "llm_legal_reasoning")
+        else:
+            _mark_review_job(
+                job_id,
+                current_step="finalize",
+                skip_steps=("llm_enhance", "llm_document_audit", "llm_chapter_summary", "llm_legal_reasoning"),
+                message="未启用大模型（混合审查），直接进入结果收束。",
+            )
+
+        review = enhance_review_result(review, llm_config)
+        review, llm_artifacts = apply_llm_review_tasks(
+            normalized,
+            review,
+            llm_config,
+            output_stem=normalized.file_hash[:12],
+        )
+        _mark_review_job(
+            job_id,
+            current_step="finalize",
+            complete_steps=llm_completed_steps,
+            run_steps=("finalize", "arbiter", "evidence"),
+            message="正在收束结果，去重、合并主问题并整理证据。",
+        )
+
+        json_path, md_path = write_review_outputs(review, normalized.file_hash[:12])
+        payload = {
+            "cache": {"enabled": use_cache, "used": cache_used, "key": cache_key},
+            "llm": {
+                "enabled": llm_config.enabled,
+                "base_url": detect_llm_config().base_url,
+                "model": detect_llm_config().model,
+            },
+            "stage": _build_stage_payload(normalized, review),
+            "document": _build_document_payload(normalized),
+            "review": review.to_dict(),
+            "llm_review": llm_artifacts.to_dict(),
+            "outputs": {"json": str(json_path), "markdown": str(md_path)},
+        }
+        _mark_review_job(
+            job_id,
+            status="completed",
+            current_step="done",
+            complete_steps=("finalize", "arbiter", "evidence", "done"),
+            message=f"审查完成：{review.document_name}",
+            result=payload,
+            partial_result_available=False,
+        )
+    except Exception as exc:
+        _mark_review_job(
+            job_id,
+            status="failed",
+            fail_steps=("parse", "base_scan", "llm_enhance", "finalize"),
+            message=f"审查失败：{exc}",
+            error=str(exc),
+        )
 
 
 def _run_review(
@@ -4035,6 +4392,87 @@ def _review_buyer_html() -> str:
       padding: 16px;
       display: none;
     }
+    .progress-panel {
+      display: none;
+      margin-bottom: 16px;
+      padding: 16px;
+      gap: 14px;
+    }
+    .progress-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    .progress-steps {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .progress-step {
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+      display: grid;
+      gap: 6px;
+      min-height: 110px;
+    }
+    .progress-step .step-state {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .progress-step.running {
+      border-color: #8bb6d8;
+      background: #f4f9fd;
+      box-shadow: 0 0 0 2px rgba(31, 95, 139, 0.08);
+    }
+    .progress-step.completed {
+      border-color: #b9dcca;
+      background: #f3fbf7;
+    }
+    .progress-step.failed {
+      border-color: #e5b3aa;
+      background: #fff4f1;
+    }
+    .progress-step.skipped {
+      background: #f7f8fa;
+    }
+    .progress-step strong {
+      font-size: 15px;
+    }
+    .progress-tech {
+      border-top: 1px dashed var(--line);
+      padding-top: 12px;
+      display: grid;
+      gap: 10px;
+    }
+    .progress-tech summary {
+      cursor: pointer;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .progress-tech-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .progress-tech-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      font-size: 13px;
+    }
+    .progress-tech-item .state {
+      color: var(--muted);
+      font-weight: 700;
+    }
     .summary-grid {
       display: grid;
       grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -4354,7 +4792,7 @@ def _review_buyer_html() -> str:
       text-align: center;
     }
     @media (max-width: 1180px) {
-      .hero, .workspace, .summary-grid, .summary-metrics { grid-template-columns: 1fr; }
+      .hero, .workspace, .summary-grid, .summary-metrics, .progress-steps, .progress-tech-grid { grid-template-columns: 1fr; }
       .left-pane {
         position: static;
         max-height: none;
@@ -4474,6 +4912,11 @@ def _review_buyer_html() -> str:
     const exportToolbarNode = document.getElementById('export-toolbar');
     const exportStatusNode = document.getElementById('export-status');
     const statusNode = document.getElementById('status');
+    const progressPanelNode = document.getElementById('progress-panel');
+    const progressMessageNode = document.getElementById('progress-message');
+    const progressModeNode = document.getElementById('progress-mode');
+    const progressStepsNode = document.getElementById('progress-steps');
+    const progressTechGridNode = document.getElementById('progress-tech-grid');
     const summaryNode = document.getElementById('summary');
     const workspaceNode = document.getElementById('workspace');
     const issueListNode = document.getElementById('issue-list');
@@ -4520,18 +4963,82 @@ def _review_buyer_html() -> str:
       event.preventDefault();
       submitBtn.disabled = true;
       openSourceBtn.disabled = true;
-      statusNode.textContent = '正在进行采购需求合规性审查，请稍候...';
+      stopPolling();
+      state.payload = null;
+      state.findings = [];
+      state.filtered = [];
+      state.selectedFindingId = null;
+      state.reviewJobId = '';
+      state.reviewJobStatus = null;
+      statusNode.textContent = '正在创建审查任务，请稍候...';
       summaryNode.style.display = 'none';
       workspaceNode.style.display = 'none';
       exportToolbarNode.style.display = 'none';
+      progressPanelNode.style.display = 'grid';
+      renderProgress(null);
       try {
         const formData = new FormData(form);
-        const response = await fetch('/api/review', { method: 'POST', body: formData });
+        const response = await fetch('/api/review-start', { method: 'POST', body: formData });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || '审查失败');
+        state.reviewJobId = payload.job_id || '';
+        statusNode.textContent = '审查任务已启动，正在动态更新进度...';
+        startPolling();
+      } catch (error) {
+        statusNode.textContent = `失败：${error.message}`;
+        progressMessageNode.textContent = `任务启动失败：${error.message}`;
+        submitBtn.disabled = false;
+        progressModeNode.textContent = '';
+        renderProgress(null);
+        return;
+      } finally {
+      }
+    }
+
+    function startPolling() {
+      stopPolling();
+      state.pollingTimer = window.setInterval(pollReviewStatus, 1000);
+      pollReviewStatus();
+    }
+
+    function stopPolling() {
+      if (state.pollingTimer) {
+        window.clearInterval(state.pollingTimer);
+        state.pollingTimer = null;
+      }
+    }
+
+    async function pollReviewStatus() {
+      if (!state.reviewJobId) return;
+      try {
+        const response = await fetch(`/api/review-status?job_id=${encodeURIComponent(state.reviewJobId)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '获取任务状态失败');
+        state.reviewJobStatus = payload;
+        renderProgress(payload);
+        statusNode.textContent = payload.last_message || '正在审查中...';
+        if (payload.status === 'completed') {
+          stopPolling();
+          await loadReviewResult();
+        } else if (payload.status === 'failed') {
+          stopPolling();
+          submitBtn.disabled = false;
+          statusNode.textContent = payload.error ? `失败：${payload.error}` : '审查失败';
+        }
+      } catch (error) {
+        stopPolling();
+        submitBtn.disabled = false;
+        statusNode.textContent = `审查状态获取失败：${error.message}`;
+      }
+    }
+
+    async function loadReviewResult() {
+      try {
+        const response = await fetch(`/api/review-result?job_id=${encodeURIComponent(state.reviewJobId)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '获取审查结果失败');
         state.payload = payload;
         state.findings = payload.review.findings || [];
-        state.selectedFindingId = null;
         state.collapsedIssueSections = {};
         openSourceBtn.disabled = !payload.document || !payload.document.source_path;
         exportToolbarNode.style.display = 'grid';
@@ -4544,7 +5051,7 @@ def _review_buyer_html() -> str:
         renderDocument();
         workspaceNode.style.display = 'grid';
       } catch (error) {
-        statusNode.textContent = `失败：${error.message}`;
+        statusNode.textContent = `获取审查结果失败：${error.message}`;
       } finally {
         submitBtn.disabled = false;
       }
