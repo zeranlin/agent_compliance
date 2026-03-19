@@ -12,6 +12,7 @@ from agent_compliance.analyzers.commercial import apply_commercial_analyzers
 from agent_compliance.analyzers.scoring import apply_scoring_analyzers
 from agent_compliance.analyzers.technical import apply_technical_analyzers
 from agent_compliance.pipelines.confidence_calibrator import apply_confidence_calibrator
+from agent_compliance.pipelines.procurement_stage_router import route_procurement_stage
 from agent_compliance.pipelines.review_arbiter import (
     apply_finding_arbiter,
     is_qualification_like_finding as _is_qualification_like_finding,
@@ -119,9 +120,14 @@ def reconcile_review_result(
     document: NormalizedDocument | None = None,
     classification: CatalogClassification | None = None,
 ) -> ReviewResult:
+    stage_profile = route_procurement_stage(document=document, findings=review.findings)
     review.findings = apply_finding_arbiter(review.findings, classification=classification)
     review.findings = apply_legal_authority_reasoner(review.findings)
-    review.findings = apply_confidence_calibrator(review.findings, classification=classification)
+    review.findings = apply_confidence_calibrator(
+        review.findings,
+        classification=classification,
+        stage_profile=stage_profile,
+    )
     review.findings = sort_findings(review.findings)
     review.findings = renumber_findings(review.findings)
     review.overall_risk_summary = build_overall_summary(

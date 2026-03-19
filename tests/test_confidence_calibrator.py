@@ -6,6 +6,7 @@ import tests._bootstrap  # noqa: F401
 
 from agent_compliance.knowledge.procurement_catalog import CatalogClassification
 from agent_compliance.pipelines.confidence_calibrator import calibrate_finding_confidence
+from agent_compliance.pipelines.procurement_stage_router import DEFAULT_STAGE_PROFILE
 from agent_compliance.schemas import Finding
 
 
@@ -65,6 +66,37 @@ class ConfidenceCalibratorTest(unittest.TestCase):
             primary_authority="《政府采购需求管理办法》第七条、第九条",
         )
         self.assertEqual(calibrate_finding_confidence(finding), "medium")
+
+    def test_pre_release_stage_keeps_boundary_findings_at_least_medium(self) -> None:
+        finding = Finding(
+            finding_id="F-002A",
+            document_name="sample.docx",
+            problem_title="验收标准表述模糊且需发布前复核",
+            page_hint=None,
+            clause_id="2A",
+            source_section="验收",
+            section_path="验收要求",
+            table_or_item_label=None,
+            text_line_start=2,
+            text_line_end=2,
+            source_text="验收标准以采购人实际使用要求为准。",
+            issue_type="unclear_acceptance_standard",
+            risk_level="medium",
+            severity_score=2,
+            confidence="low",
+            compliance_judgment="needs_human_review",
+            why_it_is_risky="x",
+            impact_on_competition_or_performance="x",
+            legal_or_policy_basis=None,
+            rewrite_suggestion="x",
+            needs_human_review=True,
+            human_review_reason="发布前应明确验收边界。",
+            primary_authority=None,
+        )
+        self.assertEqual(
+            calibrate_finding_confidence(finding, stage_profile=DEFAULT_STAGE_PROFILE),
+            "medium",
+        )
 
     def test_calibrator_uses_catalog_profile_high_risk_patterns(self) -> None:
         finding = Finding(

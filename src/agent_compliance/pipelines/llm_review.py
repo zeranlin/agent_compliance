@@ -15,6 +15,7 @@ from agent_compliance.knowledge.procurement_catalog import (
 )
 from agent_compliance.models.llm_client import ChatMessage, OpenAICompatibleLLMClient
 from agent_compliance.pipelines.confidence_calibrator import apply_confidence_calibrator
+from agent_compliance.pipelines.procurement_stage_router import route_procurement_stage
 from agent_compliance.schemas import Clause, Finding, NormalizedDocument, ReviewResult
 from agent_compliance.pipelines.review import reconcile_review_result
 
@@ -73,13 +74,18 @@ def apply_llm_review_tasks(
 
     client = OpenAICompatibleLLMClient(llm_config)
     classification = classify_procurement_catalog(document)
+    stage_profile = route_procurement_stage(document=document, findings=review.findings)
     added_findings: list[Finding] = []
     added_findings.extend(_run_document_audit_task(document, review, client, classification=classification))
     added_findings.extend(_run_template_mismatch_task(document, review, client))
     added_findings.extend(_run_scoring_structure_task(document, review, client))
     added_findings.extend(_run_commercial_chain_task(document, review, client))
     added_findings = apply_legal_authority_reasoner(added_findings)
-    added_findings = apply_confidence_calibrator(added_findings, classification=classification)
+    added_findings = apply_confidence_calibrator(
+        added_findings,
+        classification=classification,
+        stage_profile=stage_profile,
+    )
 
     merged_review = _merge_added_findings(review, added_findings)
     rule_candidates = generate_rule_candidates(document, merged_review, added_findings, classification=classification)

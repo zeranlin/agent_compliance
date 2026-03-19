@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from agent_compliance.knowledge.catalog_knowledge_profile import catalog_knowledge_profiles_for_classification
 from agent_compliance.knowledge.procurement_catalog import CatalogClassification
+from agent_compliance.pipelines.procurement_stage_router import ProcurementStageProfile, route_procurement_stage
 from agent_compliance.schemas import Finding
 
 
@@ -21,9 +22,15 @@ def apply_confidence_calibrator(
     findings: list[Finding],
     *,
     classification: CatalogClassification | None = None,
+    stage_profile: ProcurementStageProfile | None = None,
 ) -> list[Finding]:
+    stage_profile = stage_profile or route_procurement_stage(findings=findings)
     for finding in findings:
-        finding.confidence = calibrate_finding_confidence(finding, classification=classification)
+        finding.confidence = calibrate_finding_confidence(
+            finding,
+            classification=classification,
+            stage_profile=stage_profile,
+        )
     return findings
 
 
@@ -31,18 +38,60 @@ def calibrate_finding_confidence(
     finding: Finding,
     *,
     classification: CatalogClassification | None = None,
+    stage_profile: ProcurementStageProfile | None = None,
 ) -> str:
     if finding.needs_human_review and finding.issue_type in UNCERTAIN_ISSUE_TYPES:
-        return "medium"
+        return _stage_adjusted_confidence(
+            finding,
+            "medium",
+            stage_profile=stage_profile,
+            classification=classification,
+        )
     if finding.issue_type in {"technical_justification_needed", "template_mismatch", "other"}:
-        return "medium"
+        return _stage_adjusted_confidence(
+            finding,
+            "medium",
+            stage_profile=stage_profile,
+            classification=classification,
+        )
     if finding.primary_authority:
         base = "high" if finding.severity_score >= 2 else "medium"
     elif finding.severity_score >= 3:
         base = "medium"
     else:
         base = finding.confidence or "medium"
-    return _catalog_adjusted_confidence(finding, base, classification=classification)
+    return _stage_adjusted_confidence(
+        finding,
+        base,
+        stage_profile=stage_profile,
+        classification=classification,
+    )
+
+
+def _stage_adjusted_confidence(
+    finding: Finding,
+    base_confidence: str,
+    *,
+    stage_profile: ProcurementStageProfile | None = None,
+    classification: CatalogClassification | None = None,
+) -> str:
+    stage_key = stage_profile.stage_key if stage_profile else None
+    adjusted = base_confidence
+    if stage_key == "pre_release_requirement_review":
+        if (
+            finding.issue_type in {"technical_justification_needed", "ambiguous_requirement", "unclear_acceptance_standard"}
+            and finding.severity_score >= 2
+            and adjusted == "low"
+        ):
+            adjusted = "medium"
+        if (
+            finding.needs_human_review
+            and finding.issue_type in UNCERTAIN_ISSUE_TYPES
+            and finding.severity_score >= 2
+            and adjusted == "low"
+        ):
+            adjusted = "medium"
+    return _catalog_adjusted_confidence(finding, adjusted, classification=classification)
 
 
 def _catalog_adjusted_confidence(
