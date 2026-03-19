@@ -1042,7 +1042,7 @@ def _index_html() -> str:
       </div>
       <div class="toolbar-row">
         <label><input type="checkbox" name="use_cache" /> 启用缓存</label>
-        <label><input type="checkbox" name="use_llm" /> 启用本地模型</label>
+        <label><input type="checkbox" name="use_llm" /> 启用大模型（混合审查）</label>
       </div>
       <div id="status" class="status">等待上传文件</div>
     </form>
@@ -2146,7 +2146,7 @@ def _review_next_html() -> str:
         <form id="review-form">
           <input id="file-input" type="file" name="file" accept=".docx,.pdf,.txt" required />
           <div class="switches">
-            <label class="switch"><input type="checkbox" name="use_llm" checked /> 启用本地模型</label>
+            <label class="switch"><input type="checkbox" name="use_llm" checked /> 启用大模型（混合审查）</label>
             <label class="switch"><input type="checkbox" name="use_cache" /> 启用缓存</label>
           </div>
           <div class="switches">
@@ -2226,7 +2226,7 @@ def _review_next_html() -> str:
               <strong>Difference Learning</strong>
               <span class="badge compact">待运行</span>
             </div>
-            <div class="learning-meta">启用本地模型后，这里会显示本轮自动沉淀的规则、主题分析器、LLM prompt 和 benchmark 优化建议。</div>
+            <div class="learning-meta">启用大模型（混合审查）后，这里会显示本轮自动沉淀的规则、主题分析器、LLM prompt 和 benchmark 优化建议。</div>
           </div>
         </div>
       </section>
@@ -2824,7 +2824,7 @@ def _review_next_html() -> str:
             <strong>Difference Learning</strong>
             <span class="badge compact">未启用</span>
           </div>
-          <div class="learning-meta">启用本地模型后，这里会显示本轮自动沉淀的规则、主题分析器、LLM prompt 和 benchmark 优化建议。</div>
+          <div class="learning-meta">启用大模型（混合审查）后，这里会显示本轮自动沉淀的规则、主题分析器、LLM prompt 和 benchmark 优化建议。</div>
         `;
         return;
       }
@@ -3346,7 +3346,7 @@ def _review_fresh_html() -> str:
           <input type="file" name="file" accept=".docx,.doc,.pdf,.txt,.md,.rtf" required />
           <div class="toolbar-row">
             <label><input type="checkbox" name="use_cache" /> 启用缓存</label>
-            <label><input type="checkbox" name="use_llm" /> 启用本地模型</label>
+            <label><input type="checkbox" name="use_llm" /> 启用大模型（混合审查）</label>
           </div>
           <div class="toolbar-row">
             <button type="submit" id="submit-btn">上传并审查</button>
@@ -4356,7 +4356,7 @@ def _review_buyer_html() -> str:
           <input type="file" name="file" accept=".docx,.doc,.pdf,.txt,.md,.rtf" required />
           <div class="toolbar-row">
             <label><input type="checkbox" name="use_cache" /> 启用缓存</label>
-            <label><input type="checkbox" name="use_llm" /> 启用本地模型</label>
+            <label><input type="checkbox" name="use_llm" /> 启用大模型（混合审查）</label>
           </div>
           <div class="toolbar-row">
             <button type="submit" id="submit-btn">上传并审查</button>
