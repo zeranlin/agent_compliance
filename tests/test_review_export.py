@@ -89,7 +89,13 @@ class ReviewExportTest(unittest.TestCase):
             self._build_review(),
             export_format="json",
             mode="summary",
-            document_payload={"source_path": "/tmp/sample.docx"},
+            document_payload={
+                "source_path": "/tmp/sample.docx",
+                "primary_catalog_name": "信息化平台及系统运维",
+                "secondary_catalog_names": ["设备供货并安装调试"],
+                "is_mixed_scope": True,
+                "catalog_confidence": 0.91,
+            },
         )
         payload = json.loads(content.decode("utf-8"))
         self.assertEqual(content_type, "application/json; charset=utf-8")
@@ -97,6 +103,12 @@ class ReviewExportTest(unittest.TestCase):
         self.assertEqual(len(payload["findings"]), 1)
         self.assertEqual(payload["review_summary"]["procurement_stage_name"], "采购需求形成与发布前审查")
         self.assertEqual(payload["export_meta"]["export_intent"], "采购人改稿与发布前复核优先")
+        self.assertEqual(payload["review_summary"]["release_recommendation"], "建议先修改后再发布")
+        self.assertEqual(payload["document"]["primary_catalog_name"], "信息化平台及系统运维")
+        self.assertTrue(payload["document"]["is_mixed_scope"])
+        self.assertEqual(payload["findings"][0]["handling_order"], 1)
+        self.assertTrue(payload["findings"][0]["is_main_issue"])
+        self.assertEqual(payload["findings"][0]["processing_recommendation"], "建议弱化表述")
         self.assertEqual(payload["findings"][0]["chapter_group"], "评分")
         self.assertEqual(payload["findings"][0]["primary_authority"], "政府采购需求管理办法")
 
@@ -122,6 +134,11 @@ class ReviewExportTest(unittest.TestCase):
             self._build_review(),
             export_format="xlsx",
             mode="summary",
+            document_payload={
+                "primary_catalog_name": "信息化平台及系统运维",
+                "secondary_catalog_names": ["设备供货并安装调试"],
+                "is_mixed_scope": True,
+            },
         )
         self.assertEqual(content_type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         self.assertTrue(filename.endswith("-summary.xlsx"))
@@ -132,11 +149,15 @@ class ReviewExportTest(unittest.TestCase):
         self.assertEqual(summary_sheet["A1"].value, "文档名称")
         self.assertEqual(summary_sheet["A4"].value, "审查阶段")
         self.assertEqual(summary_sheet["B4"].value, "采购需求形成与发布前审查")
-        self.assertEqual(detail_sheet["A1"].value, "问题标题")
+        self.assertEqual(summary_sheet["A5"].value, "发布建议")
+        self.assertEqual(summary_sheet["B6"].value, "信息化平台及系统运维")
+        self.assertEqual(detail_sheet["A1"].value, "处理顺序")
         self.assertEqual(detail_sheet.max_row, 2)
         self.assertEqual(detail_sheet.freeze_panes, "A2")
         self.assertIsNotNone(detail_sheet.auto_filter.ref)
-        self.assertIn("主观分档", str(detail_sheet["A2"].value))
+        self.assertEqual(detail_sheet["B2"].value, "是")
+        self.assertEqual(detail_sheet["C2"].value, "建议弱化表述")
+        self.assertIn("主观分档", str(detail_sheet["D2"].value))
 
     def test_write_export_output_persists_file_under_generated_exports(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -235,17 +235,21 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
             export_format = str(payload.get("format", "json")).strip().lower()
             mode = str(payload.get("mode", "summary")).strip().lower()
             review = ReviewResult.from_dict(review_payload)
+            document_payload = payload.get("document") if isinstance(payload.get("document"), dict) else None
+            stage_payload = payload.get("stage") if isinstance(payload.get("stage"), dict) else None
+            if document_payload is not None and stage_payload:
+                document_payload = {**document_payload, **stage_payload}
             content, content_type, filename = export_review_bytes(
                 review,
                 export_format=export_format,
                 mode=mode,
-                document_payload=payload.get("document") if isinstance(payload.get("document"), dict) else None,
+                document_payload=document_payload,
             )
             write_export_output(
                 review,
                 export_format=export_format,
                 mode=mode,
-                document_payload=payload.get("document") if isinstance(payload.get("document"), dict) else None,
+                document_payload=document_payload,
             )
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", content_type)
@@ -2725,6 +2729,7 @@ def _review_next_html() -> str:
           body: JSON.stringify({
             review: state.payload.review,
             document: state.payload.document,
+            stage: state.payload.stage,
             format,
             mode,
           }),
@@ -5180,6 +5185,7 @@ def _review_buyer_html() -> str:
           body: JSON.stringify({
             review: state.payload.review,
             document: state.payload.document,
+            stage: state.payload.stage,
             format,
             mode,
           }),

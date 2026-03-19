@@ -12,6 +12,14 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 from agent_compliance.config import detect_paths
 from agent_compliance.pipelines.procurement_stage_router import route_procurement_stage
+from agent_compliance.pipelines.rewrite_generator import (
+    ACTION_DIRECT,
+    ACTION_JUSTIFY,
+    ACTION_PREFIXES,
+    ACTION_REVIEW,
+    ACTION_SOFTEN,
+    determine_suggested_action,
+)
 from agent_compliance.schemas import Finding, ReviewResult
 
 
@@ -32,7 +40,7 @@ def export_review_bytes(
         content = render_export_markdown(review, mode=normalized_mode, document_payload=document_payload).encode("utf-8")
         return content, "text/markdown; charset=utf-8", build_export_filename(review.document_name, normalized_mode, "md")
     if normalized_format == "xlsx":
-        content = render_export_xlsx(review, mode=normalized_mode)
+        content = render_export_xlsx(review, mode=normalized_mode, document_payload=document_payload)
         return content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", build_export_filename(review.document_name, normalized_mode, "xlsx")
     raise ValueError(f"不支持的导出格式：{export_format}")
 
@@ -74,6 +82,7 @@ def build_export_payload(
         "low_risk_count": sum(1 for item in findings if item.risk_level == "low"),
         "procurement_stage_name": stage_profile.stage_name,
         "procurement_stage_goal": stage_profile.stage_goal,
+        "release_recommendation": _release_recommendation(review, findings=findings),
     }
     document = {
         "document_name": review.document_name,
@@ -81,6 +90,10 @@ def build_export_payload(
         "normalized_text_path": (document_payload or {}).get("normalized_text_path"),
         "review_scope": review.review_scope,
         "jurisdiction": review.jurisdiction,
+        "primary_catalog_name": (document_payload or {}).get("primary_catalog_name"),
+        "secondary_catalog_names": (document_payload or {}).get("secondary_catalog_names", []),
+        "is_mixed_scope": bool((document_payload or {}).get("is_mixed_scope")),
+        "catalog_confidence": (document_payload or {}).get("catalog_confidence"),
     }
     return {
         "document": document,
@@ -92,7 +105,15 @@ def build_export_payload(
             "export_timestamp": datetime.now().isoformat(timespec="seconds"),
             "generated_by": "agent_compliance.review_export",
         },
-        "findings": [_serialize_finding(item, mode=mode) for item in findings],
+        "findings": [
+            _serialize_finding(
+                item,
+                mode=mode,
+                handling_order=index,
+                stage_profile=stage_profile,
+            )
+            for index, item in enumerate(findings, start=1)
+        ],
         "items_for_human_review": review.items_for_human_review,
         "review_limitations": review.review_limitations,
     }
@@ -116,9 +137,18 @@ def render_export_markdown(
         f"- 审查阶段：`{stage_profile.stage_name}`",
         f"- 导出模式：`{'主问题版' if mode == 'summary' else '完整明细版'}`",
         "- 导出意图：`采购人改稿与发布前复核优先`",
+        f"- 发布建议：`{_release_recommendation(review, findings=findings)}`",
     ]
     if document_payload:
         lines.append(f"- 原文件：`{document_payload.get('source_path', '')}`")
+        if document_payload.get("primary_catalog_name"):
+            lines.append(f"- 主品目：`{document_payload.get('primary_catalog_name')}`")
+        if document_payload.get("secondary_catalog_names"):
+            lines.append(
+                f"- 次品目：`{'、'.join(document_payload.get('secondary_catalog_names') or [])}`"
+            )
+        if document_payload.get("is_mixed_scope"):
+            lines.append("- 混合采购：`是`")
     lines.extend(
         [
             "",
@@ -167,13 +197,13 @@ def build_export_filename(document_name: str, mode: str, extension: str) -> str:
     return f"{stem}-{suffix}.{extension}"
 
 
-def render_export_xlsx(review: ReviewResult, *, mode: str) -> bytes:
+def render_export_xlsx(review: ReviewResult, *, mode: str, document_payload: dict[str, Any] | None = None) -> bytes:
     workbook = Workbook()
     summary_sheet = workbook.active
     summary_sheet.title = "审查摘要"
-    _write_summary_sheet(summary_sheet, review, mode=mode)
+    _write_summary_sheet(summary_sheet, review, mode=mode, document_payload=document_payload)
     detail_sheet = workbook.create_sheet("主问题" if mode == "summary" else "完整明细")
-    rows = build_excel_rows(review, mode=mode)
+    rows = build_excel_rows(review, mode=mode, document_payload=document_payload)
     for row in rows:
         detail_sheet.append(row)
     _style_detail_sheet(detail_sheet)
@@ -182,9 +212,13 @@ def render_export_xlsx(review: ReviewResult, *, mode: str) -> bytes:
     return buffer.getvalue()
 
 
-def build_excel_rows(review: ReviewResult, *, mode: str) -> list[list[Any]]:
+def build_excel_rows(review: ReviewResult, *, mode: str, document_payload: dict[str, Any] | None = None) -> list[list[Any]]:
     findings = _pick_findings(review.findings, mode)
+    stage_profile = route_procurement_stage(findings=review.findings)
     header = [
+        "处理顺序",
+        "是否主问题",
+        "处理建议",
         "问题标题",
         "章节",
         "风险等级",
@@ -205,8 +239,12 @@ def build_excel_rows(review: ReviewResult, *, mode: str) -> list[list[Any]]:
     ]
     rows: list[list[Any]] = [header]
     for finding in findings:
+        action = determine_suggested_action(finding, stage_profile=stage_profile)
         rows.append(
             [
+                len(rows),
+                "是" if _is_main_issue(finding) else "否",
+                _action_label(action),
                 finding.problem_title,
                 _chapter_group(finding),
                 finding.risk_level,
@@ -229,7 +267,7 @@ def build_excel_rows(review: ReviewResult, *, mode: str) -> list[list[Any]]:
     return rows
 
 
-def _write_summary_sheet(sheet, review: ReviewResult, *, mode: str) -> None:
+def _write_summary_sheet(sheet, review: ReviewResult, *, mode: str, document_payload: dict[str, Any] | None = None) -> None:
     findings = _pick_findings(review.findings, mode)
     stage_profile = route_procurement_stage(findings=review.findings)
     summary_rows = [
@@ -237,6 +275,13 @@ def _write_summary_sheet(sheet, review: ReviewResult, *, mode: str) -> None:
         ["审查范围", review.review_scope],
         ["审查时间", review.review_timestamp],
         ["审查阶段", stage_profile.stage_name],
+        ["发布建议", _release_recommendation(review, findings=findings)],
+        ["主品目", (document_payload or {}).get("primary_catalog_name") or "未识别"],
+        [
+            "次品目",
+            "；".join((document_payload or {}).get("secondary_catalog_names") or []) or "无",
+        ],
+        ["是否混合采购", "是" if (document_payload or {}).get("is_mixed_scope") else "否"],
         ["导出模式", "主问题版" if mode == "summary" else "完整明细版"],
         ["导出意图", "采购人改稿与发布前复核优先"],
         ["风险摘要", review.overall_risk_summary],
@@ -334,11 +379,24 @@ def _full_location(finding: Finding) -> str:
     return " | ".join(part for part in parts if part) or "未定位"
 
 
-def _serialize_finding(finding: Finding, *, mode: str) -> dict[str, Any]:
+def _serialize_finding(
+    finding: Finding,
+    *,
+    mode: str,
+    handling_order: int | None = None,
+    stage_profile=None,
+) -> dict[str, Any]:
     base = finding.to_dict()
+    action = determine_suggested_action(
+        finding,
+        stage_profile=stage_profile or route_procurement_stage(findings=[finding]),
+    )
     if mode == "summary":
         return {
             "finding_id": base["finding_id"],
+            "handling_order": handling_order,
+            "is_main_issue": _is_main_issue(finding),
+            "processing_recommendation": _action_label(action),
             "problem_title": base["problem_title"],
             "chapter_group": _chapter_group(finding),
             "risk_level": base["risk_level"],
@@ -362,4 +420,33 @@ def _serialize_finding(finding: Finding, *, mode: str) -> dict[str, Any]:
             "issue_type": base["issue_type"],
             "finding_origin": base.get("finding_origin", "rule"),
         }
+    base["handling_order"] = handling_order
+    base["is_main_issue"] = _is_main_issue(finding)
+    base["processing_recommendation"] = _action_label(action)
     return base
+
+
+def _action_label(action: str) -> str:
+    if action == ACTION_DIRECT:
+        return "建议直接修改"
+    if action == ACTION_SOFTEN:
+        return "建议弱化表述"
+    if action == ACTION_JUSTIFY:
+        return "建议补充必要性论证"
+    if action == ACTION_REVIEW:
+        return "建议采购/法务复核"
+    prefix = ACTION_PREFIXES.get(action, "")
+    return prefix.rstrip("：") or action
+
+
+def _release_recommendation(review: ReviewResult, *, findings: list[Finding] | None = None) -> str:
+    findings = findings or review.findings
+    stage_profile = route_procurement_stage(findings=review.findings)
+    actions = [determine_suggested_action(item, stage_profile=stage_profile) for item in findings]
+    has_high_risk = any(item.risk_level == "high" for item in findings)
+    has_justify_or_review = any(action in {ACTION_JUSTIFY, ACTION_REVIEW} for action in actions)
+    if has_high_risk:
+        return "建议先修改后再发布"
+    if has_justify_or_review or review.items_for_human_review:
+        return "建议补充论证或复核后发布"
+    return "建议完成常规复核后发布"

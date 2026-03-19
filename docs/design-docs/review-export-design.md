@@ -125,6 +125,10 @@
 - `source_path` 或 `source_name`
 - `review_scope`
 - `jurisdiction`
+- `primary_catalog_name`
+- `secondary_catalog_names`
+- `is_mixed_scope`
+- `catalog_confidence`
 
 ### `review_summary`
 
@@ -139,6 +143,7 @@
 - `is_mixed_scope`
 - `procurement_stage_name`
 - `procurement_stage_goal`
+- `release_recommendation`
 
 ### `export_meta`
 
@@ -176,13 +181,13 @@
 - `primary_authority`
 - `secondary_authorities`
 - `applicability_logic`
+- `processing_recommendation`
+- `handling_order`
+- `is_main_issue`
 - `rewrite_suggestion`
 - `needs_human_review`
 - `human_review_reason`
 - `issue_type`
-- `primary_catalog_name`
-- `primary_domain_key`
-- `is_mixed_scope`
 
 说明：
 - `representative_evidence` 使用证据层输出，不直接等于 `source_text`
@@ -218,13 +223,12 @@
 - `primary_authority`
 - `secondary_authorities`
 - `applicability_logic`
+- `processing_recommendation`
+- `handling_order`
+- `is_main_issue`
 - `rewrite_suggestion`
 - `needs_human_review`
 - `human_review_reason`
-- `primary_catalog_name`
-- `secondary_catalog_names`
-- `primary_domain_key`
-- `is_mixed_scope`
 - `source_type`
   - 规则命中 / 结构分析 / 全文辅助扫描 / 仲裁保留
 
@@ -232,31 +236,36 @@
 
 Excel 第一版建议固定为以下列顺序：
 
-1. 问题标题
-2. 章节
-3. 风险等级
-4. 置信度
-5. 合规判断
-6. 位置
-7. 页码提示
-8. 原文摘录
-9. 风险说明
-10. 法规依据
-11. 主依据
-12. 辅依据
-13. 适用逻辑
-14. 修改建议
-15. 是否需复核
-16. 复核原因
-17. 问题类型
-18. 主品目
-19. 审查领域
-20. 混合采购
+1. 处理顺序
+2. 是否主问题
+3. 处理建议
+4. 问题标题
+5. 章节
+6. 风险等级
+7. 置信度
+8. 合规判断
+9. 位置
+10. 页码提示
+11. 原文摘录
+12. 风险说明
+13. 法规依据
+14. 主依据
+15. 辅依据
+16. 适用逻辑
+17. 修改建议
+18. 是否需复核
+19. 复核原因
+20. 问题类型
 
 说明：
 - `位置` 推荐由 `section_path + clause_id + table_or_item_label` 组合
 - 主问题版 Excel 使用 `representative_evidence`
 - 明细版 Excel 使用 `source_text`
+- `处理建议` 默认统一为：
+  - `建议直接修改`
+  - `建议弱化表述`
+  - `建议补充必要性论证`
+  - `建议采购/法务复核`
 
 ## Markdown 导出结构建议
 
