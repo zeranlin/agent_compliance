@@ -3798,6 +3798,9 @@ def _review_fresh_html() -> str:
       riskMode: 'all',
       sectionMode: 'all',
       collapsedIssueSections: {},
+      reviewJobId: '',
+      reviewJobStatus: null,
+      pollingTimer: null,
     };
 
     const form = document.getElementById('review-form');
@@ -3886,6 +3889,69 @@ def _review_fresh_html() -> str:
       } catch (error) {
         statusNode.textContent = `打开原文件失败：${error.message}`;
       }
+    }
+
+    function renderProgress(job) {
+      const progress = job && job.progress ? job.progress : null;
+      const steps = progress && Array.isArray(progress.steps) ? progress.steps : defaultProgressSteps();
+      const technicalSteps = progress && Array.isArray(progress.technical_steps) ? progress.technical_steps : defaultTechnicalSteps();
+      progressModeNode.textContent = job
+        ? `${job.mode === 'hybrid' ? '已启用大模型（混合审查）' : '纯代码审查'} ｜ 当前阶段：${(job.stage_profile && job.stage_profile.stage_name) || '采购需求形成与发布前审查'}`
+        : '';
+      progressMessageNode.textContent = job
+        ? (job.last_message || '正在推进审查任务...')
+        : '上传文件并启动审查后，这里会动态展示当前进度。';
+      progressStepsNode.innerHTML = steps.map((step) => `
+        <div class="progress-step ${escapeHtml(step.status || 'pending')}">
+          <div class="step-state">${escapeHtml(stepStatusLabel(step.status))}</div>
+          <div>
+            <strong>${escapeHtml(step.label || '')}</strong>
+            <div class="meta">${escapeHtml(step.description || '')}</div>
+          </div>
+        </div>
+      `).join('');
+      progressTechGridNode.innerHTML = technicalSteps.map((step) => `
+        <div class="progress-tech-item">
+          <span>${escapeHtml(step.label || '')}</span>
+          <span class="state">${escapeHtml(stepStatusLabel(step.status))}</span>
+        </div>
+      `).join('');
+    }
+
+    function defaultProgressSteps() {
+      return [
+        { key: 'parse', label: '文档解析中', description: '正在提取正文、章节和表格内容。', status: 'pending' },
+        { key: 'base_scan', label: '基础风险扫描中', description: '正在识别资格、评分、技术、商务/验收风险。', status: 'pending' },
+        { key: 'llm_enhance', label: '智能增强分析中', description: '正在补充边界问题、章节主问题和法规解释。', status: 'pending' },
+        { key: 'finalize', label: '结果收束中', description: '正在去重、合并主问题、整理证据和建议。', status: 'pending' },
+        { key: 'done', label: '审查完成', description: '可查看问题清单和导出结果。', status: 'pending' },
+      ];
+    }
+
+    function defaultTechnicalSteps() {
+      return [
+        { key: 'catalog', label: '品目识别', status: 'pending' },
+        { key: 'rule_scan', label: '规则扫描', status: 'pending' },
+        { key: 'scoring', label: '评分语义分析', status: 'pending' },
+        { key: 'mixed_scope', label: '混合边界分析', status: 'pending' },
+        { key: 'commercial', label: '商务链路分析', status: 'pending' },
+        { key: 'llm_document_audit', label: '全文辅助扫描', status: 'pending' },
+        { key: 'llm_chapter_summary', label: '章节级总结', status: 'pending' },
+        { key: 'llm_legal_reasoning', label: '法规适用逻辑解释', status: 'pending' },
+        { key: 'arbiter', label: '仲裁归并', status: 'pending' },
+        { key: 'evidence', label: '证据选择', status: 'pending' },
+      ];
+    }
+
+    function stepStatusLabel(status) {
+      return ({
+        pending: '等待中',
+        queued: '等待中',
+        running: '进行中',
+        completed: '已完成',
+        skipped: '已跳过',
+        failed: '失败',
+      }[status]) || '等待中';
     }
 
     function renderSummary() {
@@ -5130,6 +5196,69 @@ def _review_buyer_html() -> str:
       } catch (error) {
         statusNode.textContent = `打开原文件失败：${error.message}`;
       }
+    }
+
+    function renderProgress(job) {
+      const progress = job && job.progress ? job.progress : null;
+      const steps = progress && Array.isArray(progress.steps) ? progress.steps : defaultProgressSteps();
+      const technicalSteps = progress && Array.isArray(progress.technical_steps) ? progress.technical_steps : defaultTechnicalSteps();
+      progressModeNode.textContent = job
+        ? `${job.mode === 'hybrid' ? '已启用大模型（混合审查）' : '纯代码审查'} ｜ 当前阶段：${(job.stage_profile && job.stage_profile.stage_name) || '采购需求形成与发布前审查'}`
+        : '';
+      progressMessageNode.textContent = job
+        ? (job.last_message || '正在推进审查任务...')
+        : '上传文件并启动审查后，这里会动态展示当前进度。';
+      progressStepsNode.innerHTML = steps.map((step) => `
+        <div class="progress-step ${escapeHtml(step.status || 'pending')}">
+          <div class="step-state">${escapeHtml(stepStatusLabel(step.status))}</div>
+          <div>
+            <strong>${escapeHtml(step.label || '')}</strong>
+            <div class="meta">${escapeHtml(step.description || '')}</div>
+          </div>
+        </div>
+      `).join('');
+      progressTechGridNode.innerHTML = technicalSteps.map((step) => `
+        <div class="progress-tech-item">
+          <span>${escapeHtml(step.label || '')}</span>
+          <span class="state">${escapeHtml(stepStatusLabel(step.status))}</span>
+        </div>
+      `).join('');
+    }
+
+    function defaultProgressSteps() {
+      return [
+        { key: 'parse', label: '文档解析中', description: '正在提取正文、章节和表格内容。', status: 'pending' },
+        { key: 'base_scan', label: '基础风险扫描中', description: '正在识别资格、评分、技术、商务/验收风险。', status: 'pending' },
+        { key: 'llm_enhance', label: '智能增强分析中', description: '正在补充边界问题、章节主问题和法规解释。', status: 'pending' },
+        { key: 'finalize', label: '结果收束中', description: '正在去重、合并主问题、整理证据和建议。', status: 'pending' },
+        { key: 'done', label: '审查完成', description: '可查看问题清单和导出结果。', status: 'pending' },
+      ];
+    }
+
+    function defaultTechnicalSteps() {
+      return [
+        { key: 'catalog', label: '品目识别', status: 'pending' },
+        { key: 'rule_scan', label: '规则扫描', status: 'pending' },
+        { key: 'scoring', label: '评分语义分析', status: 'pending' },
+        { key: 'mixed_scope', label: '混合边界分析', status: 'pending' },
+        { key: 'commercial', label: '商务链路分析', status: 'pending' },
+        { key: 'llm_document_audit', label: '全文辅助扫描', status: 'pending' },
+        { key: 'llm_chapter_summary', label: '章节级总结', status: 'pending' },
+        { key: 'llm_legal_reasoning', label: '法规适用逻辑解释', status: 'pending' },
+        { key: 'arbiter', label: '仲裁归并', status: 'pending' },
+        { key: 'evidence', label: '证据选择', status: 'pending' },
+      ];
+    }
+
+    function stepStatusLabel(status) {
+      return ({
+        pending: '等待中',
+        queued: '等待中',
+        running: '进行中',
+        completed: '已完成',
+        skipped: '已跳过',
+        failed: '失败',
+      }[status]) || '等待中';
     }
 
     function renderSummary() {
