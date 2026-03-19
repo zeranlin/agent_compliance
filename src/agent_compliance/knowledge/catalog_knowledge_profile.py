@@ -21,6 +21,9 @@ class CatalogKnowledgeProfile:
     reasonable_requirements: tuple[str, ...]
     high_risk_patterns: tuple[str, ...]
     common_mismatch_clues: tuple[str, ...]
+    domain_mismatch_markers: tuple[str, ...]
+    template_scope_markers: tuple[str, ...]
+    mixed_scope_markers: tuple[str, ...]
     boundary_notes: str
     related_issue_types: tuple[str, ...]
     preferred_analyzers: tuple[str, ...]
@@ -38,6 +41,9 @@ def load_catalog_knowledge_profiles() -> tuple[CatalogKnowledgeProfile, ...]:
             reasonable_requirements=tuple(item.get("reasonable_requirements", [])),
             high_risk_patterns=tuple(item.get("high_risk_patterns", [])),
             common_mismatch_clues=tuple(item.get("common_mismatch_clues", [])),
+            domain_mismatch_markers=tuple(item.get("domain_mismatch_markers", item.get("common_mismatch_clues", []))),
+            template_scope_markers=tuple(item.get("template_scope_markers", [])),
+            mixed_scope_markers=tuple(item.get("mixed_scope_markers", [])),
             boundary_notes=item.get("boundary_notes", ""),
             related_issue_types=tuple(item.get("related_issue_types", [])),
             preferred_analyzers=tuple(item.get("preferred_analyzers", [])),
@@ -67,3 +73,30 @@ def catalog_knowledge_profiles_for_classification(
         profiles.append(profile)
         seen.add(profile.catalog_id)
     return tuple(profiles)
+
+
+def catalog_domain_mismatch_markers_for_classification(
+    classification: CatalogClassification | None,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.domain_mismatch_markers)
+    return tuple(dict.fromkeys(values))
+
+
+def catalog_template_scope_markers_for_classification(
+    classification: CatalogClassification | None,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.template_scope_markers)
+    return tuple(dict.fromkeys(values))
+
+
+def catalog_mixed_scope_markers_for_classification(
+    classification: CatalogClassification | None,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.mixed_scope_markers)
+    return tuple(dict.fromkeys(values))

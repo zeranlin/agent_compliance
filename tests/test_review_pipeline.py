@@ -68,6 +68,35 @@ class ReviewPipelineTest(unittest.TestCase):
             )
         )
 
+    def test_review_adds_sports_mixed_scope_theme_for_lightweight_smart_features(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：2025年省级全民健身工程（多功能运动场项目）",
+                "多功能运动场",
+                "围网、硅PU面层和体育比赛用灯等运动场设施应满足采购需求。",
+                "提供二维码报修系统，支持OTA远程升级。",
+                "支持智能显示联动。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sports-mixed.docx",
+            document_name="2025年省级全民健身工程（多功能运动场项目）.docx",
+            file_hash="sports-mixed",
+            normalized_text_path="/tmp/sports-mixed.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertTrue(
+            any(
+                finding.problem_title == "体育器材及运动场设施叠加轻量智能化功能，边界需进一步论证"
+                for finding in review.findings
+            )
+        )
+
     def test_representative_evidence_prefers_catalog_relevant_keywords(self) -> None:
         text = "\n".join(
             [

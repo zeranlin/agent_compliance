@@ -34,6 +34,11 @@ from agent_compliance.pipelines.review_evidence import (
 )
 from agent_compliance.knowledge.references_index import ReferenceRecord, find_references
 from agent_compliance.knowledge.legal_authority_reasoner import apply_legal_authority_reasoner
+from agent_compliance.knowledge.catalog_knowledge_profile import (
+    catalog_domain_mismatch_markers_for_classification,
+    catalog_mixed_scope_markers_for_classification,
+    catalog_template_scope_markers_for_classification,
+)
 from agent_compliance.knowledge.procurement_catalog import (
     CatalogClassification,
     classification_has_catalog_prefix,
@@ -1181,9 +1186,11 @@ def _add_mixed_scope_boundary_theme_finding(
         or "家具采购场景叠加资产定位和智能管理系统义务，边界不清" in existing_titles
         or "物业服务场景叠加自动化系统和软件著作权评分，边界不清" in existing_titles
         or "标识标牌及宣传印制服务叠加设备保障和信息化支撑内容，边界不清" in existing_titles
+        or "体育器材及运动场设施叠加轻量智能化功能，边界需进一步论证" in existing_titles
     ):
         return findings
     domain = _effective_domain_key(document, classification)
+    profile_mixed_markers = catalog_mixed_scope_markers_for_classification(classification)
     if domain == "medical_tcm_mixed":
         clauses = [
             clause
@@ -1315,6 +1322,17 @@ def _add_mixed_scope_boundary_theme_finding(
         impact = "可能将设备供货以外的信息系统接口建设和碳足迹管理义务一并压给供应商，抬高履约门槛并增加争议风险。"
         rewrite = "建议将设备供货、医院信息系统接口配合和碳足迹管理分开表述；与本次设备采购不直接相关的系统开放、持续对接和碳足迹报告义务应删除或单列采购。"
         review_reason = "需结合设备联网需求、医院现有信息系统接口边界和碳足迹管理职责判断相关义务是否应并入本次设备采购范围。"
+    elif domain == "sports_facility_goods":
+        markers = profile_mixed_markers or ("二维码报修系统", "OTA远程升级", "智能显示", "远程升级")
+        clauses = [clause for clause in document.clauses if any(marker in clause.text for marker in markers)]
+        title = "体育器材及运动场设施叠加轻量智能化功能，边界需进一步论证"
+        rationale = (
+            "文件在体育器材及运动场设施采购中叠加了二维码报修、OTA远程升级、智能显示等轻量智能化功能。"
+            "当器材供货、场地设施安装与数字化功能一并写入同一采购范围时，容易使采购边界从货物安装扩张到附加的信息化建设能力。"
+        )
+        impact = "可能把运动场器材供货安装以外的智能化支撑能力整体转化为履约要求或竞争门槛。"
+        rewrite = "建议将体育器材及场地设施供货安装与轻量智能化功能分开表述；如确需保留，应说明业务必要性、边界和验收责任。"
+        review_reason = "需结合项目是否仅为器材与场地设施建设，还是确需包含报修、升级和智能显示等数字化功能判断边界是否合理。"
     else:
         return findings
     if len(clauses) < 2:
@@ -1370,6 +1388,7 @@ def _add_template_domain_theme_finding(
         return findings
     domain = _effective_domain_key(document, classification)
     mismatch_markers = _domain_mismatch_markers(domain, classification=classification)
+    template_scope_markers = catalog_template_scope_markers_for_classification(classification)
     mixed_scope_markers = ("软件端口", "医院信息系统", "HIS", "PACS", "LIS", "数据交换", "碳足迹", "盘查报告", "改进报告")
     clauses = []
     for clause in document.clauses:
@@ -1379,7 +1398,8 @@ def _add_template_domain_theme_finding(
             continue
         if not any(marker in clause.text for marker in mismatch_markers):
             continue
-        if not any(marker in clause.text for marker in ("保洁", "芯片", "系统", "安防", "设施维修", "特种设备", "垃圾", "实际需求为准", "平台", "接口", "软件")):
+        scope_markers = template_scope_markers or ("保洁", "芯片", "系统", "安防", "设施维修", "特种设备", "垃圾", "实际需求为准", "平台", "接口", "软件")
+        if not any(marker in clause.text for marker in scope_markers):
             continue
         if domain == "medical_device_goods" and any(marker in clause.text for marker in mixed_scope_markers):
             continue
@@ -1814,6 +1834,7 @@ def _domain_mismatch_markers(domain: str, classification: CatalogClassification 
         "furniture_goods": ("资产定位", "定位管理标签模块", "蓝牙", "UWB", "资产管理读写基站", "智能芯片", "碳足迹", "无缝对接"),
     }
     markers = list(mapping.get(domain, mapping["general"]))
+    markers.extend(catalog_domain_mismatch_markers_for_classification(classification))
     if classification_has_catalog_prefix(classification, "C160"):
         markers.extend(("软件", "平台", "接口", "软件著作权"))
     if classification_has_catalog_prefix(classification, "C2307") or classification_has_catalog_prefix(classification, "C2309"):
