@@ -6,8 +6,10 @@ from typing import Any, Callable
 
 from agent_compliance.knowledge.catalog_knowledge_profile import (
     catalog_core_delivery_capabilities_for_classification,
+    catalog_scoring_evidence_markers_for_classification,
     catalog_scoring_mismatch_markers_for_classification,
     catalog_scoring_risk_markers_for_classification,
+    catalog_scoring_theme_markers_for_classification,
 )
 from agent_compliance.knowledge.procurement_catalog import (
     CatalogClassification,
@@ -629,6 +631,8 @@ def _add_scoring_semantic_consistency_theme_finding(
     profile_mismatch_markers = catalog_scoring_mismatch_markers_for_classification(catalog_classification)
     profile_scoring_risk_markers = catalog_scoring_risk_markers_for_classification(catalog_classification)
     profile_core_capabilities = catalog_core_delivery_capabilities_for_classification(catalog_classification)
+    profile_theme_markers = catalog_scoring_theme_markers_for_classification(catalog_classification)
+    profile_evidence_markers = catalog_scoring_evidence_markers_for_classification(catalog_classification)
     scoring_markers = (
         "工程案例",
         "CMA",
@@ -658,6 +662,8 @@ def _add_scoring_semantic_consistency_theme_finding(
         "公众责任险",
         "高级餐饮业职业经理人",
         "食品安全管理员",
+        *profile_theme_markers,
+        *profile_evidence_markers,
         *profile_mismatch_markers,
         *profile_scoring_risk_markers,
     )
@@ -696,6 +702,12 @@ def _add_scoring_semantic_consistency_theme_finding(
     profile_risk_hits = sum(
         1 for clause in clauses if any(marker in clause.text for marker in profile_scoring_risk_markers)
     )
+    profile_theme_hits = sum(
+        1 for clause in clauses if any(marker in clause.text for marker in profile_theme_markers)
+    )
+    profile_evidence_hits = sum(
+        1 for clause in clauses if any(marker in clause.text for marker in profile_evidence_markers)
+    )
     core_capability_hits = sum(
         1
         for clause in document.clauses
@@ -705,13 +717,27 @@ def _add_scoring_semantic_consistency_theme_finding(
         hit_categories.add("profile_mismatch")
     if profile_risk_hits >= 2:
         hit_categories.add("profile_scoring_risk")
+    if profile_evidence_hits >= 2 and profile_theme_hits == 0:
+        hit_categories.add("profile_theme_drift")
     if len(clauses) < 2 or (
-        len(hit_categories) < 2 and not (profile_mismatch_hits >= 2 and core_capability_hits == 0)
+        len(hit_categories) < 2 and not (
+            (profile_mismatch_hits >= 2 and core_capability_hits == 0)
+            or (profile_evidence_hits >= 2 and profile_theme_hits == 0)
+        )
     ):
         return findings
     focus_hint = ""
     if profile_core_capabilities:
         focus_hint = f" 当前品目更应围绕{_format_category_list(list(profile_core_capabilities[:3]))}等核心履约能力设置评分。"
+    theme_hint = ""
+    if profile_theme_markers and profile_evidence_markers:
+        theme_hint = (
+            f" 当前品目评分更适合围绕{_format_category_list(list(profile_theme_markers[:3]))}等主题展开，"
+            f"并优先采用{_format_category_list(list(profile_evidence_markers[:3]))}等能直接证明履约能力的证据。"
+        )
+    evidence_rewrite_hint = ""
+    if profile_evidence_markers:
+        evidence_rewrite_hint = f" 优先采用{_format_category_list(list(profile_evidence_markers[:3]))}等与当前评分主题直接对应的证明材料。"
     findings.append(
         build_theme_finding(
             document=document,
@@ -725,11 +751,15 @@ def _add_scoring_semantic_consistency_theme_finding(
             why_it_is_risky=(
                 "多个评分项在名称上分别对应方案、商务、认证或团队能力，但实际计分内容却混入工程案例、检测证明形式、一般经营指标、企业称号或跨领域证书。"
                 "当评分项名称、评分内容和评分证据之间不一致时，评审重心会明显偏离项目实际履约能力。"
-                f"{focus_hint}"
+                f"{focus_hint}{theme_hint}"
             ),
             impact_on_competition_or_performance="可能把与评分主题无关或与标的不匹配的材料转化为得分点，扭曲整张评分表的评审逻辑。",
             legal_or_policy_basis="政府采购需求管理办法（财政部）；综合评分法边界分析（中国政府采购网）",
-            rewrite_suggestion="建议逐项校正评分项名称、评分内容与评分证据之间的对应关系，删除与评分主题不一致的案例、证明形式、企业经营指标和跨领域证书，并把评分重心收回到当前品目的核心交付、实施组织和履约保障能力。",
+            rewrite_suggestion=(
+                "建议逐项校正评分项名称、评分内容与评分证据之间的对应关系，删除与评分主题不一致的案例、证明形式、企业经营指标和跨领域证书，"
+                "并把评分重心收回到当前品目的核心交付、实施组织和履约保障能力。"
+                f"{evidence_rewrite_hint}"
+            ),
             needs_human_review=True,
             human_review_reason="需结合每个评分项的评审目标、取证方式和项目履约重点判断其名称、内容和证据是否保持一致。",
             finding_origin="analyzer",

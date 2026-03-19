@@ -239,6 +239,7 @@
   - 评分引擎已开始按真实评分表结构识别 `技术部分评分PT`、`商务部分评分PB`、`评审项` 等表达，不再只依赖 `评标信息` 或简单 `评分` 标签
   - 品目知识画像已进入第二阶段，开始提供可执行的 `domain_mismatch_markers`、`template_scope_markers`、`mixed_scope_markers`，并直接参与错位判断、模板残留判断和混合采购边界判断
   - 品目知识画像已继续补入 `core_delivery_capabilities`、`scoring_risk_markers`、`scoring_mismatch_markers`，评分引擎开始直接按品目核心履约能力与高风险评分信号判断评分主题是否漂移
+  - 品目知识画像已进入第三阶段，继续补入 `scoring_theme_markers`、`scoring_evidence_markers`，评分引擎开始同时判断“该品目应评什么”和“该用什么证据来评”，从而更稳定识别评分主题漂移和证据漂移
   - 品目知识画像已继续补入 `commercial_lifecycle_markers`，商务引擎开始按品目场景收紧付款、验收、责任和到场响应的关键线索，减少通用关键词对商务总问题的过度放大
   - 品目知识画像已继续下沉到 `document_audit_llm`、`confidence_calibrator` 和 benchmark/difference learning：全文辅助扫描提示词会显式带出品目画像高风险和边界提示，置信度校准会结合当前品目画像做轻量升降权，benchmark 与差异学习结果也开始汇总当前场景的画像高风险模式
 

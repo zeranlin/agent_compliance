@@ -23,6 +23,8 @@ class CatalogKnowledgeProfile:
     high_risk_patterns: tuple[str, ...]
     scoring_risk_markers: tuple[str, ...]
     scoring_mismatch_markers: tuple[str, ...]
+    scoring_theme_markers: tuple[str, ...]
+    scoring_evidence_markers: tuple[str, ...]
     commercial_lifecycle_markers: tuple[str, ...]
     common_mismatch_clues: tuple[str, ...]
     domain_mismatch_markers: tuple[str, ...]
@@ -47,6 +49,8 @@ def load_catalog_knowledge_profiles() -> tuple[CatalogKnowledgeProfile, ...]:
             high_risk_patterns=tuple(item.get("high_risk_patterns", [])),
             scoring_risk_markers=tuple(item.get("scoring_risk_markers", item.get("high_risk_patterns", []))),
             scoring_mismatch_markers=tuple(item.get("scoring_mismatch_markers", item.get("domain_mismatch_markers", item.get("common_mismatch_clues", [])))),
+            scoring_theme_markers=tuple(item.get("scoring_theme_markers", item.get("core_delivery_capabilities", item.get("reasonable_requirements", [])))),
+            scoring_evidence_markers=tuple(item.get("scoring_evidence_markers", [])),
             commercial_lifecycle_markers=tuple(item.get("commercial_lifecycle_markers", [])),
             common_mismatch_clues=tuple(item.get("common_mismatch_clues", [])),
             domain_mismatch_markers=tuple(item.get("domain_mismatch_markers", item.get("common_mismatch_clues", []))),
@@ -134,6 +138,24 @@ def catalog_scoring_mismatch_markers_for_classification(
     values: list[str] = []
     for profile in catalog_knowledge_profiles_for_classification(classification):
         values.extend(profile.scoring_mismatch_markers)
+    return tuple(dict.fromkeys(values))
+
+
+def catalog_scoring_theme_markers_for_classification(
+    classification: CatalogClassification | None,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.scoring_theme_markers)
+    return tuple(dict.fromkeys(values))
+
+
+def catalog_scoring_evidence_markers_for_classification(
+    classification: CatalogClassification | None,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.scoring_evidence_markers)
     return tuple(dict.fromkeys(values))
 
 

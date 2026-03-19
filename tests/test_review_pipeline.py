@@ -176,6 +176,38 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("核心履约能力", target.why_it_is_risky)
         self.assertIn("核心交付、实施组织和履约保障能力", target.rewrite_suggestion)
 
+    def test_scoring_semantic_consistency_uses_theme_and_evidence_profiles(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医院导视标识和宣传印刷服务",
+                "评标信息",
+                "评分项一：投标人具有软件著作权登记证书得20分。",
+                "评分项二：投标人具有IT服务管理体系认证得20分。",
+                "评分项三：投标人承诺系统端口无缝对接得20分。",
+                "评分项四：投标人具备设计方案和打样方案的得5分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/signage-theme-evidence.docx",
+            document_name="医院导视标识和宣传印刷服务.docx",
+            file_hash="signage-theme-evidence",
+            normalized_text_path="/tmp/signage-theme-evidence.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        target = next(
+            (finding for finding in review.findings if finding.problem_title == "评分项名称、内容和评分证据之间不一致"),
+            None,
+        )
+        self.assertIsNotNone(target)
+        assert target is not None
+        self.assertIn("评分更适合围绕设计制作", target.why_it_is_risky)
+        self.assertIn("优先采用设计方案", target.rewrite_suggestion)
+
     def test_review_result_uses_local_references_and_dedupes_hits(self) -> None:
         text = "\n".join(
             [

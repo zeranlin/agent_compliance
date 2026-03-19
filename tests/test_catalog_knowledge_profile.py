@@ -8,11 +8,13 @@ from agent_compliance.knowledge.catalog_knowledge_profile import (
     catalog_commercial_lifecycle_markers_for_classification,
     catalog_core_delivery_capabilities_for_classification,
     catalog_domain_mismatch_markers_for_classification,
+    catalog_scoring_evidence_markers_for_classification,
     catalog_mixed_scope_markers_for_classification,
     catalog_knowledge_profile_by_catalog_id,
     catalog_knowledge_profiles_for_classification,
     catalog_scoring_mismatch_markers_for_classification,
     catalog_scoring_risk_markers_for_classification,
+    catalog_scoring_theme_markers_for_classification,
     catalog_template_scope_markers_for_classification,
     load_catalog_knowledge_profiles,
 )
@@ -31,6 +33,8 @@ class CatalogKnowledgeProfileTest(unittest.TestCase):
         self.assertIn("供货质量", furniture.core_delivery_capabilities)
         self.assertIn("智能管理边界外扩", furniture.high_risk_patterns)
         self.assertIn("生产设备", furniture.scoring_risk_markers)
+        self.assertIn("供货质量", furniture.scoring_theme_markers)
+        self.assertIn("供货方案", furniture.scoring_evidence_markers)
         self.assertTrue(furniture.boundary_notes)
         sports = catalog_knowledge_profile_by_catalog_id("CAT-SPORTS")
         self.assertIsNotNone(sports)
@@ -66,6 +70,8 @@ class CatalogKnowledgeProfileTest(unittest.TestCase):
         self.assertIn("园区保洁", catalog_template_scope_markers_for_classification(classification))
         self.assertIn("药品供货", catalog_core_delivery_capabilities_for_classification(classification))
         self.assertIn("信息化管理系统", catalog_scoring_risk_markers_for_classification(classification))
+        self.assertIn("药品供货", catalog_scoring_theme_markers_for_classification(classification))
+        self.assertIn("配送方案", catalog_scoring_evidence_markers_for_classification(classification))
         self.assertIn("36个月", catalog_commercial_lifecycle_markers_for_classification(classification))
 
     def test_strategy_profile_consumes_catalog_knowledge(self) -> None:
@@ -112,6 +118,8 @@ class CatalogKnowledgeProfileTest(unittest.TestCase):
         self.assertIn("交通部交工验收", markers)
         scoring_markers = catalog_scoring_mismatch_markers_for_classification(classification)
         self.assertIn("软件著作权", scoring_markers)
+        self.assertIn("设计制作", catalog_scoring_theme_markers_for_classification(classification))
+        self.assertIn("设计方案", catalog_scoring_evidence_markers_for_classification(classification))
 
 
 if __name__ == "__main__":
