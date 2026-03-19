@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
+from io import BytesIO
+from pathlib import Path
+from unittest.mock import patch
+
+from openpyxl import load_workbook
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.pipelines.review_export import export_review_bytes
+from agent_compliance.pipelines.review_export import export_review_bytes, write_export_output
 from agent_compliance.schemas import Finding, ReviewResult
 
 
@@ -106,6 +112,44 @@ class ReviewExportTest(unittest.TestCase):
         self.assertIn("F-001 多个方案评分项大量使用主观分档且缺少量化锚点", markdown)
         self.assertIn("法规依据：主依据：政府采购需求管理办法", markdown)
         self.assertIn("适用逻辑：技术证明材料应与履约验证需要相匹配。", markdown)
+
+    def test_summary_xlsx_export_contains_header_and_main_issue(self) -> None:
+        content, content_type, filename = export_review_bytes(
+            self._build_review(),
+            export_format="xlsx",
+            mode="summary",
+        )
+        self.assertEqual(content_type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        self.assertTrue(filename.endswith("-summary.xlsx"))
+        workbook = load_workbook(BytesIO(content))
+        sheet = workbook.active
+        self.assertEqual(sheet["A1"].value, "问题标题")
+        self.assertEqual(sheet.max_row, 2)
+        self.assertIn("主观分档", str(sheet["A2"].value))
+
+    def test_write_export_output_persists_file_under_generated_exports(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            generated_root = repo_root / "docs" / "generated"
+            generated_root.mkdir(parents=True, exist_ok=True)
+            app_paths = type(
+                "AppPathsLike",
+                (),
+                {
+                    "generated_root": generated_root,
+                },
+            )()
+            with patch("agent_compliance.pipelines.review_export.detect_paths", return_value=app_paths):
+                path = write_export_output(
+                    self._build_review(),
+                    export_format="json",
+                    mode="summary",
+                    document_payload={"source_path": "/tmp/sample.docx"},
+                )
+            self.assertTrue(path.exists())
+            self.assertIn("/docs/generated/exports/", str(path))
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(len(payload["findings"]), 1)
 
 
 if __name__ == "__main__":

@@ -2,9 +2,14 @@ from __future__ import annotations
 
 import json
 import re
+from io import BytesIO
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
+from openpyxl import Workbook
+
+from agent_compliance.config import detect_paths
 from agent_compliance.schemas import Finding, ReviewResult
 
 
@@ -24,7 +29,31 @@ def export_review_bytes(
     if normalized_format == "markdown":
         content = render_export_markdown(review, mode=normalized_mode, document_payload=document_payload).encode("utf-8")
         return content, "text/markdown; charset=utf-8", build_export_filename(review.document_name, normalized_mode, "md")
+    if normalized_format == "xlsx":
+        content = render_export_xlsx(review, mode=normalized_mode)
+        return content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", build_export_filename(review.document_name, normalized_mode, "xlsx")
     raise ValueError(f"不支持的导出格式：{export_format}")
+
+
+def write_export_output(
+    review: ReviewResult,
+    *,
+    export_format: str,
+    mode: str,
+    document_payload: dict[str, Any] | None = None,
+) -> Path:
+    content, _content_type, filename = export_review_bytes(
+        review,
+        export_format=export_format,
+        mode=mode,
+        document_payload=document_payload,
+    )
+    paths = detect_paths()
+    export_root = paths.generated_root / "exports" / datetime.now().strftime("%Y-%m-%d")
+    export_root.mkdir(parents=True, exist_ok=True)
+    target = export_root / filename
+    target.write_bytes(content)
+    return target
 
 
 def build_export_payload(
@@ -127,6 +156,68 @@ def build_export_filename(document_name: str, mode: str, extension: str) -> str:
     stem = re.sub(r"\.(docx|pdf|txt|md|json)$", "", stem, flags=re.IGNORECASE)
     suffix = "summary" if mode == "summary" else "full"
     return f"{stem}-{suffix}.{extension}"
+
+
+def render_export_xlsx(review: ReviewResult, *, mode: str) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "主问题" if mode == "summary" else "完整明细"
+    rows = build_excel_rows(review, mode=mode)
+    for row in rows:
+        sheet.append(row)
+    for column in sheet.columns:
+        max_len = max(len(str(cell.value or "")) for cell in column)
+        sheet.column_dimensions[column[0].column_letter].width = min(max(max_len + 2, 12), 48)
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def build_excel_rows(review: ReviewResult, *, mode: str) -> list[list[Any]]:
+    findings = _pick_findings(review.findings, mode)
+    header = [
+        "问题标题",
+        "章节",
+        "风险等级",
+        "置信度",
+        "合规判断",
+        "位置",
+        "页码提示",
+        "原文摘录" if mode == "full" else "代表性证据",
+        "风险说明",
+        "法规依据",
+        "主依据",
+        "辅依据",
+        "适用逻辑",
+        "修改建议",
+        "是否需复核",
+        "复核原因",
+        "问题类型",
+    ]
+    rows: list[list[Any]] = [header]
+    for finding in findings:
+        rows.append(
+            [
+                finding.problem_title,
+                _chapter_group(finding),
+                finding.risk_level,
+                finding.confidence,
+                finding.compliance_judgment,
+                _full_location(finding),
+                finding.page_hint or "",
+                finding.source_text,
+                finding.why_it_is_risky,
+                finding.legal_or_policy_basis or "",
+                finding.primary_authority or "",
+                "；".join(finding.secondary_authorities or []),
+                finding.applicability_logic or "",
+                finding.rewrite_suggestion,
+                "是" if finding.needs_human_review else "否",
+                finding.human_review_reason or "",
+                finding.issue_type,
+            ]
+        )
+    return rows
 
 
 def _pick_findings(findings: list[Finding], mode: str) -> list[Finding]:

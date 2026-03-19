@@ -25,7 +25,7 @@ from agent_compliance.improvement.rule_management import load_rule_management_pa
 from agent_compliance.parsers.pagination import page_hint_for_line
 from agent_compliance.pipelines.llm_enhance import enhance_review_result
 from agent_compliance.pipelines.llm_review import apply_llm_review_tasks
-from agent_compliance.pipelines.review_export import export_review_bytes
+from agent_compliance.pipelines.review_export import export_review_bytes, write_export_output
 from agent_compliance.pipelines.normalize import run_normalize
 from agent_compliance.pipelines.render import write_review_outputs
 from agent_compliance.pipelines.review import build_review_result
@@ -169,6 +169,12 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
             mode = str(payload.get("mode", "summary")).strip().lower()
             review = ReviewResult.from_dict(review_payload)
             content, content_type, filename = export_review_bytes(
+                review,
+                export_format=export_format,
+                mode=mode,
+                document_payload=payload.get("document") if isinstance(payload.get("document"), dict) else None,
+            )
+            write_export_output(
                 review,
                 export_format=export_format,
                 mode=mode,
@@ -2082,6 +2088,8 @@ def _review_next_html() -> str:
         <div id="export-toolbar" class="hero-actions" style="display:none;">
           <button type="button" class="secondary" data-export-format="markdown" data-export-mode="summary">导出 Markdown（主问题版）</button>
           <button type="button" class="secondary" data-export-format="markdown" data-export-mode="full">导出 Markdown（完整明细版）</button>
+          <button type="button" class="secondary" data-export-format="xlsx" data-export-mode="summary">导出 Excel（主问题版）</button>
+          <button type="button" class="secondary" data-export-format="xlsx" data-export-mode="full">导出 Excel（完整明细版）</button>
           <button type="button" class="secondary" data-export-format="json" data-export-mode="summary">导出 JSON（主问题版）</button>
           <button type="button" class="secondary" data-export-format="json" data-export-mode="full">导出 JSON（完整明细版）</button>
         </div>
@@ -2267,7 +2275,8 @@ def _review_next_html() -> str:
         const blob = await response.blob();
         const disposition = response.headers.get('Content-Disposition') || '';
         const match = disposition.match(/filename=\"?([^\";]+)\"?/);
-        const filename = match ? match[1] : `review-export.${format === 'markdown' ? 'md' : 'json'}`;
+        const extension = format === 'markdown' ? 'md' : (format === 'xlsx' ? 'xlsx' : 'json');
+        const filename = match ? match[1] : `review-export.${extension}`;
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;

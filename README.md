@@ -74,7 +74,8 @@
 - 默认地址：[http://127.0.0.1:8765](http://127.0.0.1:8765)
 - 当前支持上传文件、启用缓存/本地模型开关、查看审查摘要和 findings 列表；对 `docx` 会优先按段落/表格结构渲染原文，并按 finding 跳转定位到对应位置
 - 当前已补入规则管理区，可查看正式规则数量、候选规则、benchmark gate 状态，并记录“确认入库 / 暂缓 / 忽略”决策
-- `review-next` 已开始支持审查结果导出，第一阶段提供 `Markdown / JSON` 和 `主问题版 / 完整明细版`
+- `review-next` 已开始支持审查结果导出，当前提供 `Markdown / Excel / JSON` 和 `主问题版 / 完整明细版`
+- 导出产物会同步写入 `docs/generated/exports/`
 
 本地引用资料：
 - [法规依据本地引用库](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/legal-authorities/README.md)
