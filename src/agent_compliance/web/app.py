@@ -3017,6 +3017,29 @@ def _review_fresh_html() -> str:
     }
     .summary-grid {
       display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .summary-topline {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .document-brief {
+      display: grid;
+      gap: 8px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
+    .document-brief strong {
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .summary-metrics {
+      display: grid;
       grid-template-columns: repeat(6, minmax(0, 1fr));
       gap: 10px;
       margin-top: 12px;
@@ -4074,6 +4097,10 @@ def _review_buyer_html() -> str:
     }
     .stat .label { color: var(--muted); font-size: 12px; }
     .stat .value { margin-top: 8px; font-size: 20px; font-weight: 800; }
+    .stat.primary {
+      background: linear-gradient(180deg, #f6fbff 0%, #ffffff 100%);
+      border-color: #c8dced;
+    }
     .workspace {
       display: none;
       grid-template-columns: 420px minmax(0, 1fr);
@@ -4327,7 +4354,7 @@ def _review_buyer_html() -> str:
       text-align: center;
     }
     @media (max-width: 1180px) {
-      .hero, .workspace, .summary-grid { grid-template-columns: 1fr; }
+      .hero, .workspace, .summary-grid, .summary-metrics { grid-template-columns: 1fr; }
       .left-pane {
         position: static;
         max-height: none;
@@ -4621,11 +4648,17 @@ def _review_buyer_html() -> str:
             ${catalogSummary ? `<span class="badge">${escapeHtml(catalogSummary)}</span>` : ''}
           </div>
         </div>
-        <div class="summary-grid">
+        <div class="summary-topline">
           ${stageCard}
-          ${renderStat('文件', payload.review.document_name)}
-          ${renderStat('主问题', mainCount)}
-          ${renderStat('高风险', highCount)}
+          <div class="document-brief">
+            <div class="meta">当前文件</div>
+            <strong title="${escapeHtml(payload.review.document_name)}">${escapeHtml(payload.review.document_name)}</strong>
+            <div class="meta">当前页面优先按采购人发布前改稿与复核使用习惯组织结果，先看建议，再定位原文。</div>
+          </div>
+        </div>
+        <div class="summary-metrics">
+          ${renderStat('主问题', mainCount, true)}
+          ${renderStat('高风险', highCount, true)}
           ${renderStat('中风险', mediumCount)}
           ${renderStat('资格主问题', bySection.qualification)}
           ${renderStat('评分主问题', bySection.scoring)}
@@ -4636,8 +4669,8 @@ def _review_buyer_html() -> str:
       summaryNode.style.display = 'block';
     }
 
-    function renderStat(label, value) {
-      return `<div class="stat"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(String(value))}</div></div>`;
+    function renderStat(label, value, primary = false) {
+      return `<div class="stat ${primary ? 'primary' : ''}"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(String(value))}</div></div>`;
     }
 
     function renderToolbarState() {
