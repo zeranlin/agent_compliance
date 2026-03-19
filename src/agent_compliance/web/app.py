@@ -1347,6 +1347,8 @@ def _index_html() -> str:
     function sortFindings(findings) {
       const priority = { high: 0, medium: 1, low: 2, none: 3 };
       return [...findings].sort((left, right) => {
+        const treatmentDiff = treatmentPriority(left).rank - treatmentPriority(right).rank;
+        if (treatmentDiff !== 0) return treatmentDiff;
         const levelDiff = (priority[left.risk_level] ?? 9) - (priority[right.risk_level] ?? 9);
         if (levelDiff !== 0) return levelDiff;
         const lineDiff = (left.text_line_start || 0) - (right.text_line_start || 0);
@@ -4174,6 +4176,11 @@ def _review_buyer_html() -> str:
     .badge.main { background: rgba(31, 111, 95, 0.12); color: var(--success); }
     .badge:not(.high):not(.medium):not(.main) { background: #edf4fb; color: var(--accent); }
     .mini-pill { background: #eef3f8; color: var(--muted); font-weight: 600; }
+    .mini-pill.priority {
+      background: #e7f0fa;
+      color: var(--accent);
+      font-weight: 800;
+    }
     .mini-pill.action-direct { background: rgba(163, 61, 34, 0.12); color: var(--high); }
     .mini-pill.action-soften { background: rgba(143, 103, 20, 0.12); color: var(--medium); }
     .mini-pill.action-justify { background: rgba(31, 95, 139, 0.12); color: var(--accent); }
@@ -4208,7 +4215,13 @@ def _review_buyer_html() -> str:
     }
     .doc-block.active {
       background: var(--active);
-      border-color: #f0c98a;
+      border-color: #ef9c67;
+      box-shadow: 0 0 0 2px rgba(214, 105, 38, 0.14);
+    }
+    .doc-block.active p,
+    .doc-block.active td {
+      color: #8e2f12;
+      font-weight: 600;
     }
     .doc-block p {
       margin: 0;
@@ -4247,8 +4260,9 @@ def _review_buyer_html() -> str:
     .doc-line:first-child { border-top: 0; }
     .doc-line.active {
       background: var(--active);
-      border-top-color: #f0c98a;
-      border-bottom: 1px solid #f0c98a;
+      border-top-color: #ef9c67;
+      border-bottom: 1px solid #ef9c67;
+      box-shadow: inset 4px 0 0 #d66926;
     }
     .doc-line-number {
       text-align: right;
@@ -4261,6 +4275,10 @@ def _review_buyer_html() -> str:
       word-break: break-word;
       line-height: 1.7;
       font-size: 14px;
+    }
+    .doc-line.active .doc-line-text {
+      color: #8e2f12;
+      font-weight: 600;
     }
     .detail-pane {
       border-top: 1px solid var(--line);
@@ -4696,6 +4714,7 @@ def _review_buyer_html() -> str:
     function renderIssueCard(finding) {
       const active = finding.finding_id === state.selectedFindingId ? 'active' : '';
       const action = suggestedAction(finding);
+      const priority = treatmentPriority(finding);
       return `
         <article class="issue-card ${escapeHtml(finding.risk_level || '')} ${active}" data-finding-id="${escapeHtml(finding.finding_id)}">
           <div class="issue-title">${escapeHtml(finding.problem_title || '')}</div>
@@ -4705,6 +4724,7 @@ def _review_buyer_html() -> str:
             <span class="badge">${escapeHtml(sectionLabel(finding))}</span>
           </div>
           <div class="mini-meta">
+            <span class="mini-pill priority">处理顺序 ${escapeHtml(priority.order)}</span>
             <span class="mini-pill">位置 ${escapeHtml(compactLocation(finding))}</span>
             <span class="mini-pill ${escapeHtml(action.className)}">${escapeHtml(action.label)}</span>
           </div>
@@ -4953,6 +4973,19 @@ def _review_buyer_html() -> str:
       }
       if (!parts.length && finding.legal_or_policy_basis) parts.push(finding.legal_or_policy_basis);
       return parts.join(' ｜ ');
+    }
+
+    function treatmentPriority(finding) {
+      if (finding.risk_level === 'high' && !finding.needs_human_review) {
+        return { order: '01', rank: 1 };
+      }
+      if (finding.risk_level === 'high' || finding.needs_human_review) {
+        return { order: '02', rank: 2 };
+      }
+      if (suggestedAction(finding).className === 'action-justify') {
+        return { order: '03', rank: 3 };
+      }
+      return { order: '04', rank: 4 };
     }
 
     function suggestedAction(finding) {
