@@ -121,7 +121,7 @@ def reconcile_review_result(
 ) -> ReviewResult:
     review.findings = apply_finding_arbiter(review.findings, classification=classification)
     review.findings = apply_legal_authority_reasoner(review.findings)
-    review.findings = apply_confidence_calibrator(review.findings)
+    review.findings = apply_confidence_calibrator(review.findings, classification=classification)
     review.findings = sort_findings(review.findings)
     review.findings = renumber_findings(review.findings)
     review.overall_risk_summary = build_overall_summary(

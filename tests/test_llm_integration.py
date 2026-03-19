@@ -219,6 +219,8 @@ class LLMIntegrationTest(unittest.TestCase):
         self.assertEqual(artifacts.difference_learning["status"], "ok")
         self.assertTrue(artifacts.difference_learning.get("primary_catalog_name"))
         self.assertTrue(artifacts.difference_learning.get("primary_domain_key"))
+        self.assertIn("profile_high_risk_patterns", artifacts.difference_learning)
+        self.assertIn("profile_risk_summary", artifacts.benchmark_gate)
         self.assertIn("当前结果已接入本地规则映射、引用资料检索和本地大模型边界判断", result.overall_risk_summary)
 
         for path in [
@@ -240,12 +242,14 @@ class LLMIntegrationTest(unittest.TestCase):
                     "primary_catalog_name": "信息系统集成实施服务",
                     "primary_domain_key": "information_system",
                     "primary_authority": "《政府采购需求管理办法》第二十一条",
+                    "profile_high_risk_patterns": ["系统接口边界外扩"],
                 },
                 {
                     "candidate_rule_id": "CAND-002",
                     "issue_type": "unknown_issue_type",
                     "primary_catalog_name": "物业管理服务",
                     "primary_domain_key": "property_service",
+                    "profile_high_risk_patterns": ["月度考核与付款绑定"],
                 },
             ]
         )
@@ -256,6 +260,7 @@ class LLMIntegrationTest(unittest.TestCase):
         self.assertEqual(gate["catalog_scene_summary"][0]["candidate_count"], 1)
         self.assertEqual(len(gate["domain_summary"]), 2)
         self.assertEqual(len(gate["authority_summary"]), 1)
+        self.assertEqual(len(gate["profile_risk_summary"]), 2)
 
     def test_llm_added_fragment_is_arbitrated_under_existing_theme_finding(self) -> None:
         text = "\n".join(
@@ -504,6 +509,8 @@ class LLMIntegrationTest(unittest.TestCase):
         )
         self.assertIn("主品目更接近", prompt)
         self.assertIn("官方品目映射", prompt)
+        self.assertIn("品目画像高风险", prompt)
+        self.assertIn("品目边界提示", prompt)
         if classification.secondary_catalog_names:
             self.assertIn("次品目候选", prompt)
 

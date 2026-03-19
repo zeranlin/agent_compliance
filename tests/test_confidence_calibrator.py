@@ -4,6 +4,7 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
+from agent_compliance.knowledge.procurement_catalog import CatalogClassification
 from agent_compliance.pipelines.confidence_calibrator import calibrate_finding_confidence
 from agent_compliance.schemas import Finding
 
@@ -64,6 +65,48 @@ class ConfidenceCalibratorTest(unittest.TestCase):
             primary_authority="《政府采购需求管理办法》第七条、第九条",
         )
         self.assertEqual(calibrate_finding_confidence(finding), "medium")
+
+    def test_calibrator_uses_catalog_profile_high_risk_patterns(self) -> None:
+        finding = Finding(
+            finding_id="F-003",
+            document_name="sports.docx",
+            problem_title="技术评分权重过高且负偏离、专项检测加分进一步放大结构失衡",
+            page_hint=None,
+            clause_id="3",
+            source_section="评分",
+            section_path="评标信息",
+            table_or_item_label=None,
+            text_line_start=3,
+            text_line_end=3,
+            source_text="技术部分满分78分，价格部分满分10分，提供CMA或CNAS检测报告得分。",
+            issue_type="scoring_structure_imbalance",
+            risk_level="high",
+            severity_score=2,
+            confidence="medium",
+            compliance_judgment="potentially_problematic",
+            why_it_is_risky="命中体育器材及运动场设施画像中的技术评分过高与专项检测报告加分高风险模式。",
+            impact_on_competition_or_performance="x",
+            legal_or_policy_basis=None,
+            rewrite_suggestion="x",
+            needs_human_review=False,
+            human_review_reason=None,
+        )
+        classification = CatalogClassification(
+            primary_catalog="CAT-SPORTS",
+            primary_catalog_name="体育器材及运动场设施",
+            primary_domain_key="sports_facility_goods",
+            secondary_catalogs=(),
+            secondary_catalog_names=(),
+            primary_mapped_catalog_codes=("A0321",),
+            primary_mapped_catalog_prefixes=("A0321",),
+            secondary_mapped_catalog_codes=(),
+            secondary_mapped_catalog_prefixes=(),
+            category_type="mixed",
+            catalog_confidence=0.9,
+            is_mixed_scope=False,
+            catalog_evidence=("全民健身",),
+        )
+        self.assertEqual(calibrate_finding_confidence(finding, classification=classification), "high")
 
 
 if __name__ == "__main__":

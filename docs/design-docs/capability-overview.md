@@ -215,6 +215,7 @@
   - 品目知识画像已补入“技术评分过高、负偏离扣分过重、专项检测报告加分、轻量智能化边界外扩、品牌定向痕迹”等运动场高风险模式
   - 评分引擎已开始按真实评分表结构识别 `技术部分评分PT`、`商务部分评分PB`、`评审项` 等表达，不再只依赖 `评标信息` 或简单 `评分` 标签
   - 品目知识画像已进入第二阶段，开始提供可执行的 `domain_mismatch_markers`、`template_scope_markers`、`mixed_scope_markers`，并直接参与错位判断、模板残留判断和混合采购边界判断
+  - 品目知识画像已继续下沉到 `document_audit_llm`、`confidence_calibrator` 和 benchmark/difference learning：全文辅助扫描提示词会显式带出品目画像高风险和边界提示，置信度校准会结合当前品目画像做轻量升降权，benchmark 与差异学习结果也开始汇总当前场景的画像高风险模式
 
 相关设计：
 - [legal-authority-system.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/legal-authority-system.md)

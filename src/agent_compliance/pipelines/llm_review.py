@@ -7,6 +7,7 @@ from pathlib import Path
 
 from agent_compliance.config import LLMConfig, detect_paths
 from agent_compliance.evals.runner import benchmark_summary
+from agent_compliance.knowledge.catalog_knowledge_profile import catalog_knowledge_profiles_for_classification
 from agent_compliance.knowledge.legal_authority_reasoner import apply_legal_authority_reasoner
 from agent_compliance.knowledge.procurement_catalog import (
     CatalogClassification,
@@ -78,7 +79,7 @@ def apply_llm_review_tasks(
     added_findings.extend(_run_scoring_structure_task(document, review, client))
     added_findings.extend(_run_commercial_chain_task(document, review, client))
     added_findings = apply_legal_authority_reasoner(added_findings)
-    added_findings = apply_confidence_calibrator(added_findings)
+    added_findings = apply_confidence_calibrator(added_findings, classification=classification)
 
     merged_review = _merge_added_findings(review, added_findings)
     rule_candidates = generate_rule_candidates(document, merged_review, added_findings, classification=classification)
@@ -141,6 +142,8 @@ def generate_rule_candidates(
                 "secondary_catalog_names": classification.secondary_catalog_names if classification else [],
                 "secondary_mapped_catalog_codes": classification.secondary_mapped_catalog_codes if classification else [],
                 "is_mixed_scope": classification.is_mixed_scope if classification else False,
+                "profile_high_risk_patterns": _classification_profile_high_risk_patterns(classification),
+                "profile_boundary_notes": _classification_profile_boundary_notes(classification),
             }
         )
     return candidates
@@ -154,6 +157,7 @@ def run_benchmark_gate(rule_candidates: list[dict[str, object]]) -> dict[str, ob
     scene_counts: dict[str, int] = {}
     domain_counts: dict[str, int] = {}
     authority_counts: dict[str, int] = {}
+    profile_risk_counts: dict[str, int] = {}
     for item in rule_candidates:
         issue_type = str(item["issue_type"])
         status = "covered" if issue_type in covered else "needs_benchmark"
@@ -168,6 +172,10 @@ def run_benchmark_gate(rule_candidates: list[dict[str, object]]) -> dict[str, ob
         primary_authority = str(item.get("primary_authority") or "")
         if primary_authority:
             authority_counts[primary_authority] = authority_counts.get(primary_authority, 0) + 1
+        for risk in item.get("profile_high_risk_patterns", []) or []:
+            risk_text = str(risk).strip()
+            if risk_text:
+                profile_risk_counts[risk_text] = profile_risk_counts.get(risk_text, 0) + 1
         results.append(
             {
                 "candidate_rule_id": item["candidate_rule_id"],
@@ -199,6 +207,10 @@ def run_benchmark_gate(rule_candidates: list[dict[str, object]]) -> dict[str, ob
         "authority_summary": [
             {"primary_authority": key, "candidate_count": count}
             for key, count in sorted(authority_counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
+        "profile_risk_summary": [
+            {"risk_pattern": key, "candidate_count": count}
+            for key, count in sorted(profile_risk_counts.items(), key=lambda item: (-item[1], item[0]))
         ],
         "results": results,
         "status": "ok" if len(rule_candidates) == 0 or pass_count == len(rule_candidates) else "needs_attention",
@@ -255,6 +267,8 @@ def build_difference_learning_loop(
     analyzer_suggestions: list[dict[str, object]] = []
     prompt_suggestions: list[dict[str, object]] = []
     benchmark_suggestions: list[dict[str, object]] = []
+    profile_high_risk_patterns = _classification_profile_high_risk_patterns(classification)
+    profile_boundary_notes = _classification_profile_boundary_notes(classification)
 
     if "scoring_content_mismatch" in issue_types:
         rule_suggestions.append(
@@ -272,7 +286,8 @@ def build_difference_learning_loop(
         prompt_suggestions.append(
             {
                 "target": "llm_review.scoring_structure",
-                "suggestion": "要求模型优先判断评分项名称、评分证据和计分目的是否一致，并结合当前主品目区分哪些证书、案例和证明材料属于错位内容。",
+                "suggestion": "要求模型优先判断评分项名称、评分证据和计分目的是否一致，并结合当前主品目区分哪些证书、案例和证明材料属于错位内容。"
+                + (_profile_suffix(profile_high_risk_patterns) if profile_high_risk_patterns else ""),
             }
         )
     if "template_mismatch" in issue_types or any("混合采购场景" in finding.problem_title for finding in added_findings):
@@ -285,7 +300,8 @@ def build_difference_learning_loop(
         prompt_suggestions.append(
             {
                 "target": "llm_review.document_audit",
-                "suggestion": "要求模型先结合主品目、官方品目映射和混合采购标记识别主标的，再判断自动化设备、系统接口和扩展服务是否超出当前采购边界。",
+                "suggestion": "要求模型先结合主品目、官方品目映射和混合采购标记识别主标的，再判断自动化设备、系统接口和扩展服务是否超出当前采购边界。"
+                + (_boundary_suffix(profile_boundary_notes) if profile_boundary_notes else ""),
             }
         )
     if any(
@@ -342,6 +358,8 @@ def build_difference_learning_loop(
         "secondary_catalog_names": classification.secondary_catalog_names if classification else [],
         "secondary_mapped_catalog_codes": classification.secondary_mapped_catalog_codes if classification else [],
         "is_mixed_scope": classification.is_mixed_scope if classification else False,
+        "profile_high_risk_patterns": profile_high_risk_patterns,
+        "profile_boundary_notes": profile_boundary_notes,
         "added_issue_types": issue_types,
         "added_finding_count": len(added_findings),
         "rule_candidate_count": len(rule_candidates),
@@ -554,8 +572,9 @@ def _build_task_prompt(
         f"任务: {task_name}",
         f"文件: {document.document_name}",
         f"采购标的摘要: {_document_domain_summary(document, classification=classification)}",
-        "已存在 findings 摘要:",
     ]
+    lines.extend(_catalog_profile_prompt_lines(classification))
+    lines.append("已存在 findings 摘要:")
     for finding in review.findings[:15]:
         lines.append(f"- {finding.finding_id}: {finding.problem_title} | {finding.issue_type} | {finding.source_text[:80]}")
     lines.extend(
@@ -920,6 +939,17 @@ def _render_benchmark_gate(benchmark_gate: dict[str, object]) -> str:
                 f"- `{item.get('primary_authority') or '未生成法规主依据'}`: `{item.get('candidate_count', 0)}`"
             )
         lines.append("")
+    profile_risk_summary = benchmark_gate.get("profile_risk_summary", [])
+    if isinstance(profile_risk_summary, list) and profile_risk_summary:
+        lines.append("## Profile Risk Summary")
+        lines.append("")
+        for item in profile_risk_summary:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                f"- `{item.get('risk_pattern') or 'unknown'}`: `{item.get('candidate_count', 0)}`"
+            )
+        lines.append("")
     for item in benchmark_gate.get("results", []):
         lines.append(
             f"- {item['candidate_rule_id']} | `{item['issue_type']}` | `{item['status']}` | "
@@ -936,9 +966,17 @@ def _render_difference_learning(difference_learning: dict[str, object]) -> str:
     lines.append(f"- primary_catalog_name: `{difference_learning.get('primary_catalog_name')}`")
     lines.append(f"- primary_domain_key: `{difference_learning.get('primary_domain_key')}`")
     lines.append(f"- primary_mapped_catalog_codes: `{', '.join(difference_learning.get('primary_mapped_catalog_codes', []))}`")
+    lines.append(f"- profile_high_risk_patterns: `{', '.join(difference_learning.get('profile_high_risk_patterns', []))}`")
     lines.append(f"- added_finding_count: `{difference_learning.get('added_finding_count', 0)}`")
     lines.append(f"- rule_candidate_count: `{difference_learning.get('rule_candidate_count', 0)}`")
     lines.append("")
+    boundary_notes = difference_learning.get("profile_boundary_notes", [])
+    if boundary_notes:
+        lines.append("## Profile Boundary Notes")
+        lines.append("")
+        for note in boundary_notes:
+            lines.append(f"- {note}")
+        lines.append("")
     lines.append("## Suggestions")
     lines.append("")
     suggestions = difference_learning.get("suggestions", {})
@@ -989,6 +1027,53 @@ def _document_domain_summary(
     if any(token in text for token in ("柴油发电机", "发电机组", "机电设备", "安装调试")):
         return "当前文件主标的更接近柴油发电机组供货及安装类项目。"
     return "当前文件主标的需要结合候选条款进一步判断。"
+
+
+def _catalog_profile_prompt_lines(
+    classification: CatalogClassification | None,
+) -> list[str]:
+    profiles = catalog_knowledge_profiles_for_classification(classification)
+    if not profiles:
+        return []
+    risk_patterns: list[str] = []
+    boundary_notes: list[str] = []
+    for profile in profiles:
+        risk_patterns.extend(profile.high_risk_patterns[:4])
+        if profile.boundary_notes:
+            boundary_notes.append(profile.boundary_notes)
+    lines: list[str] = []
+    if risk_patterns:
+        lines.append(f"品目画像高风险: {', '.join(list(dict.fromkeys(risk_patterns))[:8])}")
+    if boundary_notes:
+        lines.append(f"品目边界提示: {' '.join(list(dict.fromkeys(boundary_notes))[:2])}")
+    return lines
+
+
+def _classification_profile_high_risk_patterns(
+    classification: CatalogClassification | None,
+) -> list[str]:
+    patterns: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        patterns.extend(profile.high_risk_patterns)
+    return list(dict.fromkeys(patterns))[:12]
+
+
+def _classification_profile_boundary_notes(
+    classification: CatalogClassification | None,
+) -> list[str]:
+    notes: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        if profile.boundary_notes:
+            notes.append(profile.boundary_notes)
+    return list(dict.fromkeys(notes))[:4]
+
+
+def _profile_suffix(profile_high_risk_patterns: list[str]) -> str:
+    return f" 当前品目画像高风险还包括：{', '.join(profile_high_risk_patterns[:4])}。"
+
+
+def _boundary_suffix(profile_boundary_notes: list[str]) -> str:
+    return f" 当前品目边界提示：{' '.join(profile_boundary_notes[:1])}"
 
 
 def _find_clause_by_id(document: NormalizedDocument, clause_id: str) -> Clause | None:
