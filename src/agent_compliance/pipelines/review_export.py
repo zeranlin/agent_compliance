@@ -11,6 +11,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from agent_compliance.config import detect_paths
+from agent_compliance.pipelines.procurement_stage_router import route_procurement_stage
 from agent_compliance.schemas import Finding, ReviewResult
 
 
@@ -64,12 +65,15 @@ def build_export_payload(
     document_payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     findings = _pick_findings(review.findings, mode)
+    stage_profile = route_procurement_stage(findings=review.findings)
     summary = {
         "overall_risk_summary": review.overall_risk_summary,
         "finding_count": len(findings),
         "high_risk_count": sum(1 for item in findings if item.risk_level == "high"),
         "medium_risk_count": sum(1 for item in findings if item.risk_level == "medium"),
         "low_risk_count": sum(1 for item in findings if item.risk_level == "low"),
+        "procurement_stage_name": stage_profile.stage_name,
+        "procurement_stage_goal": stage_profile.stage_goal,
     }
     document = {
         "document_name": review.document_name,
@@ -84,6 +88,7 @@ def build_export_payload(
         "export_meta": {
             "export_format": "json",
             "export_mode": mode,
+            "export_intent": "采购人改稿与发布前复核优先",
             "export_timestamp": datetime.now().isoformat(timespec="seconds"),
             "generated_by": "agent_compliance.review_export",
         },
@@ -100,6 +105,7 @@ def render_export_markdown(
     document_payload: dict[str, Any] | None = None,
 ) -> str:
     findings = _pick_findings(review.findings, mode)
+    stage_profile = route_procurement_stage(findings=review.findings)
     lines = [
         f"# {review.document_name} 审查结果导出",
         "",
@@ -107,7 +113,9 @@ def render_export_markdown(
         "",
         f"- 审查范围：`{review.review_scope}`",
         f"- 审查时间：`{review.review_timestamp}`",
+        f"- 审查阶段：`{stage_profile.stage_name}`",
         f"- 导出模式：`{'主问题版' if mode == 'summary' else '完整明细版'}`",
+        "- 导出意图：`采购人改稿与发布前复核优先`",
     ]
     if document_payload:
         lines.append(f"- 原文件：`{document_payload.get('source_path', '')}`")
@@ -223,11 +231,14 @@ def build_excel_rows(review: ReviewResult, *, mode: str) -> list[list[Any]]:
 
 def _write_summary_sheet(sheet, review: ReviewResult, *, mode: str) -> None:
     findings = _pick_findings(review.findings, mode)
+    stage_profile = route_procurement_stage(findings=review.findings)
     summary_rows = [
         ["文档名称", review.document_name],
         ["审查范围", review.review_scope],
         ["审查时间", review.review_timestamp],
+        ["审查阶段", stage_profile.stage_name],
         ["导出模式", "主问题版" if mode == "summary" else "完整明细版"],
+        ["导出意图", "采购人改稿与发布前复核优先"],
         ["风险摘要", review.overall_risk_summary],
         ["问题数量", len(findings)],
         ["高风险数量", sum(1 for item in findings if item.risk_level == "high")],

@@ -23,6 +23,11 @@
 - Web `/review-next`
 - 后续规则管理页、benchmark 页面上的结果复用
 
+当前导出默认服务场景：
+- 采购需求形成与发布前审查
+- 采购人改稿
+- 发布前复核与留痕
+
 本方案暂不优先覆盖：
 - 精美 Word/PDF 自动排版报告
 - 多模板自由编排
@@ -132,6 +137,8 @@
 - `primary_catalog_name`
 - `primary_domain_key`
 - `is_mixed_scope`
+- `procurement_stage_name`
+- `procurement_stage_goal`
 
 ### `export_meta`
 
@@ -141,6 +148,7 @@
 - `export_timestamp`
 - `generated_by`
 - `review_result_version`
+- `export_intent`
 
 ### `findings`
 

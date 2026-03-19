@@ -104,6 +104,8 @@ class ProcurementCatalogTest(unittest.TestCase):
         analyzer_order = build_analyzer_execution_order([], document=document, classification=classification)
 
         self.assertEqual(strategy.primary_catalog_name, "信息化平台及系统运维")
+        self.assertEqual(strategy.procurement_stage_name, "采购需求形成与发布前审查")
+        self.assertIn("改稿复核", strategy.procurement_stage_goal)
         self.assertIn("scoring", strategy.preferred_analyzer_groups)
         self.assertIn("commercial", strategy.preferred_analyzer_groups)
         self.assertEqual(analyzer_order[0], "scoring")

@@ -95,6 +95,8 @@ class ReviewExportTest(unittest.TestCase):
         self.assertEqual(content_type, "application/json; charset=utf-8")
         self.assertTrue(filename.endswith("-summary.json"))
         self.assertEqual(len(payload["findings"]), 1)
+        self.assertEqual(payload["review_summary"]["procurement_stage_name"], "采购需求形成与发布前审查")
+        self.assertEqual(payload["export_meta"]["export_intent"], "采购人改稿与发布前复核优先")
         self.assertEqual(payload["findings"][0]["chapter_group"], "评分")
         self.assertEqual(payload["findings"][0]["primary_authority"], "政府采购需求管理办法")
 
@@ -109,6 +111,8 @@ class ReviewExportTest(unittest.TestCase):
         self.assertEqual(content_type, "text/markdown; charset=utf-8")
         self.assertTrue(filename.endswith("-full.md"))
         self.assertIn("# sample.docx 审查结果导出", markdown)
+        self.assertIn("审查阶段：`采购需求形成与发布前审查`", markdown)
+        self.assertIn("导出意图：`采购人改稿与发布前复核优先`", markdown)
         self.assertIn("F-001 多个方案评分项大量使用主观分档且缺少量化锚点", markdown)
         self.assertIn("法规依据：主依据：政府采购需求管理办法", markdown)
         self.assertIn("适用逻辑：技术证明材料应与履约验证需要相匹配。", markdown)
@@ -126,6 +130,8 @@ class ReviewExportTest(unittest.TestCase):
         summary_sheet = workbook["审查摘要"]
         detail_sheet = workbook["主问题"]
         self.assertEqual(summary_sheet["A1"].value, "文档名称")
+        self.assertEqual(summary_sheet["A4"].value, "审查阶段")
+        self.assertEqual(summary_sheet["B4"].value, "采购需求形成与发布前审查")
         self.assertEqual(detail_sheet["A1"].value, "问题标题")
         self.assertEqual(detail_sheet.max_row, 2)
         self.assertEqual(detail_sheet.freeze_panes, "A2")

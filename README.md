@@ -87,6 +87,7 @@
 - `review-next` 已开始支持审查结果导出，当前提供 `Markdown / Excel / JSON` 和 `主问题版 / 完整明细版`
 - 导出产物会同步写入 `docs/generated/exports/`
 - Excel 导出已包含摘要页、冻结首行、自动筛选和按风险等级着色，便于业务和法务直接复核
+- 当前导出默认按“采购需求形成与发布前审查”场景组织，优先服务采购人改稿和发布前复核
 
 本地引用资料：
 - [法规依据本地引用库](https://github.com/zeranlin/agent_compliance/blob/main/docs/references/legal-authorities/README.md)

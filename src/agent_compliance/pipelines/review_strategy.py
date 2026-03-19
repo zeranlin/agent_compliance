@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from agent_compliance.knowledge.catalog_knowledge_profile import catalog_knowledge_profiles_for_classification
 from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classify_procurement_catalog, load_procurement_catalogs
+from agent_compliance.pipelines.procurement_stage_router import ProcurementStageProfile, route_procurement_stage
 from agent_compliance.schemas import Finding, NormalizedDocument
 
 
@@ -19,6 +20,11 @@ class DocumentRiskProfile:
 
 @dataclass
 class DocumentStrategyProfile:
+    procurement_stage_key: str
+    procurement_stage_name: str
+    procurement_stage_goal: str
+    procurement_stage_posture: str
+    procurement_stage_output_bias: tuple[str, ...]
     procurement_mode: str
     domain_hint: str
     primary_focus: tuple[str, ...]
@@ -50,6 +56,8 @@ def build_overall_summary(
         f"本地离线审查共形成 {len(findings)} 条去重 findings，其中高风险 {high} 条、中风险 {medium} 条。"
         " 当前结果已接入本地规则映射和引用资料检索，可作为正式审查前的离线初筛与复审输入。"
     )
+    if strategy.procurement_stage_name:
+        summary += f" 当前审查阶段定位为{strategy.procurement_stage_name}。"
     if strategy.procurement_mode:
         summary += f" 当前文件识别为{strategy.procurement_mode}，主标的提示为{strategy.domain_hint}。"
     if strategy.primary_catalog_name:
@@ -114,6 +122,7 @@ def build_document_strategy_profile(
     classification: CatalogClassification | None = None,
 ) -> DocumentStrategyProfile:
     classification = classification or (classify_procurement_catalog(document) if document is not None else None)
+    stage_profile = route_procurement_stage(document=document, findings=findings)
     if not findings:
         domain = classification.primary_domain_key if classification is not None else "general"
         procurement_mode = "综合型政府采购项目"
@@ -131,10 +140,15 @@ def build_document_strategy_profile(
             procurement_mode = "信息化或数字化服务项目"
             domain_hint = "平台建设、系统对接或持续运维类"
         return DocumentStrategyProfile(
-            procurement_mode,
-            domain_hint,
-            ("综合条款",),
-            ("综合条款", "文件级风险画像"),
+            procurement_stage_key=stage_profile.stage_key,
+            procurement_stage_name=stage_profile.stage_name,
+            procurement_stage_goal=stage_profile.stage_goal,
+            procurement_stage_posture=stage_profile.review_posture,
+            procurement_stage_output_bias=stage_profile.output_bias,
+            procurement_mode=procurement_mode,
+            domain_hint=domain_hint,
+            primary_focus=("综合条款",),
+            review_route=("综合条款", "文件级风险画像"),
             primary_catalog_id=classification.primary_catalog if classification else "",
             primary_catalog_name=classification.primary_catalog_name if classification else "",
             secondary_catalog_names=classification.secondary_catalog_names if classification else (),
@@ -212,6 +226,11 @@ def build_document_strategy_profile(
     review_route = tuple(dict.fromkeys([*primary_focus, "文件级风险画像"]))
 
     return DocumentStrategyProfile(
+        procurement_stage_key=stage_profile.stage_key,
+        procurement_stage_name=stage_profile.stage_name,
+        procurement_stage_goal=stage_profile.stage_goal,
+        procurement_stage_posture=stage_profile.review_posture,
+        procurement_stage_output_bias=stage_profile.output_bias,
         procurement_mode=procurement_mode,
         domain_hint=domain_hint,
         primary_focus=primary_focus,
