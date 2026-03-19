@@ -23,7 +23,7 @@ from agent_compliance.cache.review_cache import (
     reference_snapshot_id,
     save_review_cache,
 )
-from agent_compliance.config import LLMConfig, detect_llm_config, detect_paths
+from agent_compliance.config import LLMConfig, detect_llm_config, detect_paths, detect_tender_parser_mode
 from agent_compliance.improvement.rule_management import load_rule_management_payload, save_rule_decision
 from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog
 from agent_compliance.parsers.pagination import page_hint_for_line
@@ -158,7 +158,14 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         paths = detect_paths()
         source_path = _persist_upload(str(upload["filename"]), bytes(upload["content"]))
         normalized = run_normalize(source_path)
-        review, llm_artifacts, cache_key, cache_used = _run_review(normalized, use_cache=use_cache, use_llm=use_llm, paths=paths)
+        parser_mode = str(fields.get("tender_parser_mode", {}).get("value") or detect_tender_parser_mode()).strip().lower()
+        review, llm_artifacts, cache_key, cache_used = _run_review(
+            normalized,
+            use_cache=use_cache,
+            use_llm=use_llm,
+            parser_mode=parser_mode,
+            paths=paths,
+        )
         json_path, md_path = write_review_outputs(review, normalized.file_hash[:12])
 
         self._send_json(
@@ -169,6 +176,7 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
                     "base_url": detect_llm_config().base_url,
                     "model": detect_llm_config().model,
                 },
+                "parser": {"mode": parser_mode, "enabled": parser_mode != "off"},
                 "stage": _build_stage_payload(normalized, review),
                 "document": _build_document_payload(normalized),
                 "review": review.to_dict(),
@@ -275,15 +283,22 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
 
         use_llm = _flag_value(fields.get("use_llm", {}).get("value"))
         use_cache = _flag_value(fields.get("use_cache", {}).get("value"))
+        parser_mode = str(fields.get("tender_parser_mode", {}).get("value") or detect_tender_parser_mode()).strip().lower()
         source_path = _persist_upload(str(upload["filename"]), bytes(upload["content"]))
-        job_id = _create_review_job(Path(source_path).name, source_path, use_cache=use_cache, use_llm=use_llm)
+        job_id = _create_review_job(
+            Path(source_path).name,
+            source_path,
+            use_cache=use_cache,
+            use_llm=use_llm,
+            parser_mode=parser_mode,
+        )
         worker = threading.Thread(
             target=_run_review_job,
-            args=(job_id, source_path, use_cache, use_llm, detect_paths()),
+            args=(job_id, source_path, use_cache, use_llm, parser_mode, detect_paths()),
             daemon=True,
         )
         worker.start()
-        self._send_json({"job_id": job_id, "status": "queued"})
+        self._send_json({"job_id": job_id, "status": "queued", "parser": {"mode": parser_mode, "enabled": parser_mode != "off"}})
 
     def _handle_review_status(self, query: str) -> None:
         job_id = parse_qs(query).get("job_id", [""])[0].strip()
@@ -326,7 +341,7 @@ def _initial_technical_steps() -> list[dict[str, Any]]:
     return [dict(item, status="pending") for item in BUYER_TECHNICAL_STEPS]
 
 
-def _create_review_job(filename: str, source_path: Path, *, use_cache: bool, use_llm: bool) -> str:
+def _create_review_job(filename: str, source_path: Path, *, use_cache: bool, use_llm: bool, parser_mode: str) -> str:
     job_id = f"review-{uuid.uuid4().hex[:12]}"
     stage_profile = route_procurement_stage()
     now = _now_ts()
@@ -357,6 +372,7 @@ def _create_review_job(filename: str, source_path: Path, *, use_cache: bool, use
             "error": None,
             "use_cache": use_cache,
             "use_llm": use_llm,
+            "parser_mode": parser_mode,
         }
     return job_id
 
@@ -422,6 +438,7 @@ def _review_job_status_payload(job_id: str) -> dict[str, Any] | None:
             "job_id": job["job_id"],
             "status": job["status"],
             "mode": job["mode"],
+            "parser": {"mode": job.get("parser_mode", "off"), "enabled": job.get("parser_mode", "off") != "off"},
             "stage_profile": job["stage_profile"],
             "document_name": job["document_name"],
             "progress": job["progress"],
@@ -446,7 +463,7 @@ def _review_job_result_payload(job_id: str) -> dict[str, Any] | None:
         }
 
 
-def _run_review_job(job_id: str, source_path: Path, use_cache: bool, use_llm: bool, paths) -> None:
+def _run_review_job(job_id: str, source_path: Path, use_cache: bool, use_llm: bool, parser_mode: str, paths) -> None:
     _mark_review_job(
         job_id,
         status="running",
@@ -469,6 +486,7 @@ def _run_review_job(job_id: str, source_path: Path, use_cache: bool, use_llm: bo
             file_hash=normalized.file_hash,
             rule_set_version=RULE_SET_VERSION,
             reference_snapshot=reference_snapshot,
+            parser_mode=parser_mode,
             review_pipeline_version=REVIEW_CACHE_VERSION,
         )
         review = load_review_cache(cache_key) if use_cache else None
@@ -481,7 +499,7 @@ def _run_review_job(job_id: str, source_path: Path, use_cache: bool, use_llm: bo
                 run_steps=("scoring", "mixed_scope", "commercial"),
                 message="正在扫描评分条款，并分析混合边界和商务链条。",
             )
-            review = build_review_result(normalized, hits)
+            review = build_review_result(normalized, hits, parser_mode=parser_mode)
             if use_cache:
                 save_review_cache(
                     cache_key,
@@ -490,6 +508,7 @@ def _run_review_job(job_id: str, source_path: Path, use_cache: bool, use_llm: bo
                         "file_hash": normalized.file_hash,
                         "rule_set_version": RULE_SET_VERSION,
                         "reference_snapshot": reference_snapshot,
+                        "parser_mode": parser_mode,
                         "review_pipeline_version": REVIEW_CACHE_VERSION,
                     },
                 )
@@ -559,6 +578,7 @@ def _run_review_job(job_id: str, source_path: Path, use_cache: bool, use_llm: bo
                 "base_url": detect_llm_config().base_url,
                 "model": detect_llm_config().model,
             },
+            "parser": {"mode": parser_mode, "enabled": parser_mode != "off"},
             "stage": _build_stage_payload(normalized, review),
             "document": _build_document_payload(normalized),
             "review": review.to_dict(),
@@ -589,6 +609,7 @@ def _run_review(
     *,
     use_cache: bool,
     use_llm: bool,
+    parser_mode: str,
     paths,
 ) -> tuple[Any, str, bool]:
     reference_snapshot = reference_snapshot_id(paths.repo_root / "docs" / "references")
@@ -596,13 +617,14 @@ def _run_review(
         file_hash=normalized.file_hash,
         rule_set_version=RULE_SET_VERSION,
         reference_snapshot=reference_snapshot,
+        parser_mode=parser_mode,
         review_pipeline_version=REVIEW_CACHE_VERSION,
     )
     review = load_review_cache(cache_key) if use_cache else None
     cache_used = review is not None
     if review is None:
         hits = run_rule_scan(normalized)
-        review = build_review_result(normalized, hits)
+        review = build_review_result(normalized, hits, parser_mode=parser_mode)
         if use_cache:
             save_review_cache(
                 cache_key,
@@ -611,6 +633,7 @@ def _run_review(
                     "file_hash": normalized.file_hash,
                     "rule_set_version": RULE_SET_VERSION,
                     "reference_snapshot": reference_snapshot,
+                    "parser_mode": parser_mode,
                     "review_pipeline_version": REVIEW_CACHE_VERSION,
                 },
             )

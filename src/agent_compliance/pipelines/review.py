@@ -13,7 +13,6 @@ from agent_compliance.analyzers.scoring import apply_scoring_analyzers
 from agent_compliance.analyzers.technical import apply_technical_analyzers
 from agent_compliance.pipelines.confidence_calibrator import apply_confidence_calibrator
 from agent_compliance.pipelines.requirement_scope_layer import (
-    annotate_document_requirement_scope,
     classify_requirement_scope,
     filter_effective_requirement_clauses,
     filter_high_weight_requirement_clauses,
@@ -21,11 +20,8 @@ from agent_compliance.pipelines.requirement_scope_layer import (
     is_high_weight_requirement_clause,
     is_substantive_requirement_clause,
 )
-from agent_compliance.pipelines.tender_document_risk_scope_layer import (
-    annotate_tender_document_risk_scope,
-    is_core_risk_scope_clause,
-    is_supporting_or_core_risk_scope_clause,
-)
+from agent_compliance.pipelines.tender_document_parser import prepare_review_document
+from agent_compliance.pipelines.tender_document_risk_scope_layer import is_core_risk_scope_clause, is_supporting_or_core_risk_scope_clause
 from agent_compliance.pipelines.rewrite_generator import apply_rewrite_generator
 from agent_compliance.pipelines.procurement_stage_router import route_procurement_stage
 from agent_compliance.pipelines.review_arbiter import (
@@ -73,9 +69,13 @@ from agent_compliance.pipelines.review_strategy import (
 from agent_compliance.schemas import Finding, NormalizedDocument, ReviewResult, RuleHit, utc_now_iso
 
 
-def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> ReviewResult:
-    annotate_tender_document_risk_scope(document)
-    annotate_document_requirement_scope(document)
+def build_review_result(
+    document: NormalizedDocument,
+    hits: list[RuleHit],
+    *,
+    parser_mode: str | None = None,
+) -> ReviewResult:
+    document, _structured = prepare_review_document(document, parser_mode=parser_mode)
     classification = classify_procurement_catalog(document)
     grouped_hits = _group_hits(document, _dedupe_hits(hits))
     findings: list[Finding] = []

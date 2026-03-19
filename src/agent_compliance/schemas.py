@@ -91,6 +91,66 @@ class NormalizedDocument:
 
 
 @dataclass
+class StructuredTenderSection:
+    section_id: str
+    document_structure_type: str
+    risk_scope: str
+    title: str | None
+    clause_ids: list[str]
+    clause_count: int
+    effective_clause_count: int
+    high_weight_clause_count: int
+    scope_reasons: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "StructuredTenderSection":
+        return cls(**payload)
+
+
+@dataclass
+class StructuredTenderDocument:
+    source_path: str
+    document_name: str
+    parser_mode: str
+    section_count: int
+    sections: list[StructuredTenderSection]
+    core_section_count: int
+    supporting_section_count: int
+    out_of_scope_section_count: int
+    created_at: str = field(default_factory=utc_now_iso)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_path": self.source_path,
+            "document_name": self.document_name,
+            "parser_mode": self.parser_mode,
+            "section_count": self.section_count,
+            "sections": [section.to_dict() for section in self.sections],
+            "core_section_count": self.core_section_count,
+            "supporting_section_count": self.supporting_section_count,
+            "out_of_scope_section_count": self.out_of_scope_section_count,
+            "created_at": self.created_at,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "StructuredTenderDocument":
+        return cls(
+            source_path=payload["source_path"],
+            document_name=payload["document_name"],
+            parser_mode=payload["parser_mode"],
+            section_count=payload["section_count"],
+            sections=[StructuredTenderSection.from_dict(item) for item in payload["sections"]],
+            core_section_count=payload["core_section_count"],
+            supporting_section_count=payload["supporting_section_count"],
+            out_of_scope_section_count=payload["out_of_scope_section_count"],
+            created_at=payload.get("created_at", utc_now_iso()),
+        )
+
+
+@dataclass
 class RuleHit:
     rule_hit_id: str
     rule_id: str

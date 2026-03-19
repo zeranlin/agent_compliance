@@ -50,6 +50,7 @@
 - [effective-requirement-scope-filter-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/effective-requirement-scope-filter-design.md)
 - [requirement-scope-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/requirement-scope-layer-design.md)
 - [tender-document-risk-scope-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/tender-document-risk-scope-layer-design.md)
+- [tender-document-parser-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/tender-document-parser-design.md)
 - [llm-fast-path-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/llm-fast-path-design.md)
 - [legal-authority-system.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/legal-authority-system.md)
 - [case-library-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/case-library-design.md)
@@ -69,10 +70,16 @@
 - `PYTHONPATH=src python3 -m agent_compliance normalize <file>`
 - `PYTHONPATH=src python3 -m agent_compliance scan-rules <file> --json`
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json`
+- `PYTHONPATH=src python3 -m agent_compliance review <file> --json --tender-parser-mode assist`
 - `PYTHONPATH=src python3 -m agent_compliance web`
 
 测试阶段默认关闭 review 缓存；如需复用缓存，可显式加：
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-cache`
+
+招标文件独立解析器当前已支持可配置前置：
+- 环境变量：`AGENT_COMPLIANCE_TENDER_PARSER_MODE=off|assist|required`
+- CLI：`--tender-parser-mode off|assist|required`
+- 当前推荐先使用 `assist`
 
 本地大模型兜底接口已预留，默认关闭；如需显式启用：
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-llm`

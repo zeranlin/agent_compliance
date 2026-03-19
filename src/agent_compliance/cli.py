@@ -11,7 +11,7 @@ from agent_compliance.cache.review_cache import (
     reference_snapshot_id,
     save_review_cache,
 )
-from agent_compliance.config import LLMConfig, detect_llm_config, detect_paths
+from agent_compliance.config import LLMConfig, detect_llm_config, detect_paths, detect_tender_parser_mode
 from agent_compliance.evals.runner import benchmark_summary
 from agent_compliance.pipelines.llm_enhance import enhance_review_result
 from agent_compliance.pipelines.llm_review import apply_llm_review_tasks
@@ -43,6 +43,12 @@ def build_parser() -> argparse.ArgumentParser:
     review_parser.add_argument("--use-llm", action="store_true")
     review_parser.add_argument("--llm-base-url", default=None)
     review_parser.add_argument("--llm-model", default=None)
+    review_parser.add_argument(
+        "--tender-parser-mode",
+        choices=("off", "assist", "required"),
+        default=None,
+        help="Configure whether to front-load the independent tender document parser",
+    )
 
     eval_parser = subparsers.add_parser("eval", help="Show benchmark entry points")
     eval_parser.add_argument("--json", action="store_true")
@@ -75,11 +81,13 @@ def main(argv: list[str] | None = None) -> int:
         paths = detect_paths()
         normalized = run_normalize(args.file)
         llm_config = _resolved_llm_config(args)
+        parser_mode = args.tender_parser_mode or detect_tender_parser_mode()
         reference_snapshot = reference_snapshot_id(paths.repo_root / "docs" / "references")
         cache_key = build_review_cache_key(
             file_hash=normalized.file_hash,
             rule_set_version=RULE_SET_VERSION,
             reference_snapshot=reference_snapshot,
+            parser_mode=parser_mode,
             review_pipeline_version=REVIEW_CACHE_VERSION,
         )
         review = None
@@ -90,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
             cache_used = review is not None
         if review is None:
             hits = run_rule_scan(normalized)
-            review = build_review_result(normalized, hits)
+            review = build_review_result(normalized, hits, parser_mode=parser_mode)
             if cache_enabled:
                 save_review_cache(
                     cache_key,
@@ -99,6 +107,7 @@ def main(argv: list[str] | None = None) -> int:
                         "file_hash": normalized.file_hash,
                         "rule_set_version": RULE_SET_VERSION,
                         "reference_snapshot": reference_snapshot,
+                        "parser_mode": parser_mode,
                         "review_pipeline_version": REVIEW_CACHE_VERSION,
                     },
                 )
@@ -119,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
                 "base_url": llm_config.base_url,
                 "model": llm_config.model,
             },
+            "parser": {"mode": parser_mode, "enabled": parser_mode != "off"},
             "llm_review": llm_artifacts.to_dict(),
             "outputs": {"json": str(json_path), "markdown": str(md_path)},
         }

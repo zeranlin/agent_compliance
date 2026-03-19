@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+VALID_TENDER_PARSER_MODES = {"off", "assist", "required"}
+
 
 @dataclass(frozen=True)
 class AppPaths:
@@ -48,6 +50,14 @@ def detect_llm_config() -> LLMConfig:
         api_key=os.getenv("AGENT_COMPLIANCE_LLM_API_KEY"),
         timeout_seconds=int(os.getenv("AGENT_COMPLIANCE_LLM_TIMEOUT_SECONDS", "60")),
     )
+
+
+def detect_tender_parser_mode(default: str = "off") -> str:
+    _load_local_env()
+    value = (os.getenv("AGENT_COMPLIANCE_TENDER_PARSER_MODE") or default).strip().lower()
+    if value not in VALID_TENDER_PARSER_MODES:
+        return default
+    return value
 
 
 def _env_flag(name: str, *, default: bool) -> bool:

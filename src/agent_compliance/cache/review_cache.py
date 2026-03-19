@@ -27,10 +27,11 @@ def build_review_cache_key(
     file_hash: str,
     rule_set_version: str,
     reference_snapshot: str,
+    parser_mode: str = "off",
     review_pipeline_version: str = REVIEW_CACHE_VERSION,
 ) -> str:
     digest = hashlib.sha256()
-    for value in (file_hash, rule_set_version, reference_snapshot, review_pipeline_version):
+    for value in (file_hash, rule_set_version, reference_snapshot, parser_mode, review_pipeline_version):
         digest.update(value.encode("utf-8"))
     return digest.hexdigest()[:16]
 

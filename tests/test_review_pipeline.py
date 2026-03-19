@@ -2899,6 +2899,33 @@ class ReviewPipelineTest(unittest.TestCase):
         titles = {finding.problem_title for finding in review.findings}
         self.assertIn("评分项中存在与标的域不匹配的证书认证或模板内容", titles)
 
+    def test_review_pipeline_supports_assist_parser_mode(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：2025年省级全民健身工程（多功能运动场项目）",
+                "评标信息",
+                "技术部分满分78分。",
+                "价格部分满分10分。",
+                "每一项负偏离扣2分，扣完为止。",
+                "提供CMA或CNAS检测报告的，每提供1项得2分。",
+                "围网、硅PU面层和体育比赛用灯等运动场设施应满足采购需求。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/parser-assist.docx",
+            document_name="parser-assist.docx",
+            file_hash="parser-assist",
+            normalized_text_path="/tmp/parser-assist.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document), parser_mode="assist")
+        self.assertTrue(review.findings)
+        self.assertIn("技术评分权重过高且负偏离、专项检测加分进一步放大结构失衡", {finding.problem_title for finding in review.findings})
+        self.assertTrue(any(finding.document_structure_type for finding in review.findings))
+
 
 if __name__ == "__main__":
     unittest.main()
