@@ -153,6 +153,39 @@ class ReviewPipelineTest(unittest.TestCase):
             )
         )
 
+    def test_review_ignores_hint_and_format_text_for_medical_mixed_scope_theme(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：[BACG2025000096-A]深圳市宝安区中心医院胃肠镜类设备采购项目",
+                "第三章 用户需求书",
+                "本项目为胃肠镜类设备采购，供应商负责设备供货、安装、调试和验收。",
+                "提供开机培训和售后保修服务。",
+                "第四章 投标文件组成要求及格式",
+                "特别警示条款：投标文件制作工具会记录文件创建标识码。",
+                "深圳政府采购智慧平台提示：如有方案表述中有出现类似可实现、实现、可支持、支持等描述，均应提供佐证。",
+                "政府采购投标及履约承诺函",
+                "供应商承诺免费开放软件端口、完成医院信息系统对接并提交碳足迹盘查报告。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/medical-scope-filter.docx",
+            document_name="[BACG2025000096-A]深圳市宝安区中心医院胃肠镜类设备采购项目.docx",
+            file_hash="medical-scope-filter",
+            normalized_text_path="/tmp/medical-scope-filter.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertFalse(
+            any(
+                finding.problem_title == "设备采购场景叠加信息化接口和碳足迹义务，边界不清"
+                for finding in review.findings
+            )
+        )
+
     def test_review_prefers_hard_mismatch_over_equipment_only_in_signage_scope(self) -> None:
         text = "\n".join(
             [
@@ -226,6 +259,36 @@ class ReviewPipelineTest(unittest.TestCase):
         )
         excerpt = select_representative_evidence(finding, classification=classification)
         self.assertIn("软件著作权", excerpt)
+
+    def test_representative_evidence_filters_out_hint_text(self) -> None:
+        finding = Finding(
+            finding_id="F-001",
+            document_name="test.docx",
+            problem_title="设备采购场景叠加信息化接口和碳足迹义务，边界不清",
+            page_hint=None,
+            clause_id="c-1",
+            source_section="第三章 用户需求书",
+            section_path="第三章 用户需求书-用户需求书",
+            table_or_item_label=None,
+            text_line_start=1,
+            text_line_end=9,
+            source_text="本项目为胃肠镜类设备采购，供应商负责设备供货、安装、调试和验收。；特别警示条款：投标文件制作工具会记录文件创建标识码。",
+            issue_type="template_mismatch",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="potentially_problematic",
+            why_it_is_risky="x",
+            impact_on_competition_or_performance="x",
+            legal_or_policy_basis=None,
+            rewrite_suggestion="x",
+            needs_human_review=True,
+            human_review_reason="x",
+            finding_origin="analyzer",
+        )
+        excerpt = select_representative_evidence(finding)
+        self.assertIn("设备供货、安装、调试和验收", excerpt)
+        self.assertNotIn("文件创建标识码", excerpt)
 
     def test_scoring_semantic_consistency_uses_catalog_profile_markers(self) -> None:
         text = "\n".join(

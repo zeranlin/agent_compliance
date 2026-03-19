@@ -7,6 +7,10 @@ from agent_compliance.knowledge.procurement_catalog import (
     classification_has_catalog_prefix,
     classification_has_domain,
 )
+from agent_compliance.pipelines.effective_requirement_scope_filter import (
+    REQUIREMENT_SCOPE_BODY,
+    classify_requirement_scope,
+)
 from agent_compliance.pipelines.review_arbiter import line_ranges_overlap
 from agent_compliance.schemas import Finding
 
@@ -101,6 +105,20 @@ def select_representative_evidence(
     parts = [part.strip() for part in source_text.split("；") if part.strip()]
     if len(parts) <= 1:
         return clip_excerpt(source_text, limit=78)
+    effective_parts = [
+        part
+        for part in parts
+        if classify_requirement_scope(
+            clause_id=finding.clause_id,
+            section_path=finding.section_path,
+            source_section=finding.source_section,
+            table_or_item_label=finding.table_or_item_label,
+            text=part,
+        ).category
+        == REQUIREMENT_SCOPE_BODY
+    ]
+    if effective_parts:
+        parts = effective_parts
 
     title = finding.problem_title
     keywords = evidence_keywords_for_title(title, classification=classification)

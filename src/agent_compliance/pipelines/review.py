@@ -12,6 +12,11 @@ from agent_compliance.analyzers.commercial import apply_commercial_analyzers
 from agent_compliance.analyzers.scoring import apply_scoring_analyzers
 from agent_compliance.analyzers.technical import apply_technical_analyzers
 from agent_compliance.pipelines.confidence_calibrator import apply_confidence_calibrator
+from agent_compliance.pipelines.effective_requirement_scope_filter import (
+    classify_requirement_scope,
+    filter_effective_requirement_clauses,
+    is_effective_requirement_clause,
+)
 from agent_compliance.pipelines.rewrite_generator import apply_rewrite_generator
 from agent_compliance.pipelines.procurement_stage_router import route_procurement_stage
 from agent_compliance.pipelines.review_arbiter import (
@@ -66,6 +71,15 @@ def build_review_result(document: NormalizedDocument, hits: list[RuleHit]) -> Re
     for index, group in enumerate(grouped_hits, start=1):
         hit = group.primary_hit
         clause = _find_clause(document, hit)
+        scope = classify_requirement_scope(
+            clause_id=hit.matched_clause_id,
+            section_path=clause.section_path if clause else None,
+            source_section=clause.source_section if clause else hit.source_section,
+            table_or_item_label=clause.table_or_item_label if clause else None,
+            text=clause.text if clause else hit.matched_text,
+        )
+        if scope.category != "body":
+            continue
         references = find_references(
             reference_ids=group.reference_ids,
             rule_ids=group.rule_ids,
@@ -780,7 +794,8 @@ def _add_commercial_acceptance_fee_shift_theme_finding(
     ]
     if not clauses:
         return findings
-    findings.append(
+    _append_theme_finding(
+        findings,
         _build_theme_finding(
             document=document,
             clauses=clauses,
@@ -800,7 +815,7 @@ def _add_commercial_acceptance_fee_shift_theme_finding(
             needs_human_review=True,
             human_review_reason="需结合验收流程、送检触发条件和责任分担规则判断相关费用转嫁安排是否合理。",
             finding_origin="analyzer",
-        )
+        ),
     )
     return findings
 
@@ -830,7 +845,8 @@ def _add_liability_imbalance_theme_finding(
     ]
     if not clauses:
         return findings
-    findings.append(
+    _append_theme_finding(
+        findings,
         _build_theme_finding(
             document=document,
             clauses=clauses,
@@ -850,7 +866,7 @@ def _add_liability_imbalance_theme_finding(
             needs_human_review=True,
             human_review_reason="需结合合同责任分配、违约情形和损失承担规则判断相关后果设置是否与项目实际履约风险相匹配。",
             finding_origin="analyzer",
-        )
+        ),
     )
     return findings
 
@@ -914,7 +930,8 @@ def _add_payment_evaluation_chain_finding(
     ]
     if len(clauses) < 3 or not evaluation_clauses:
         return findings
-    findings.append(
+    _append_theme_finding(
+        findings,
         _build_theme_finding(
             document=document,
             clauses=clauses,
@@ -934,7 +951,7 @@ def _add_payment_evaluation_chain_finding(
             needs_human_review=True,
             human_review_reason="需结合合同文本、财政支付流程和履约考核制度判断付款与评价绑定的范围、比例和标准是否合理。",
             finding_origin="analyzer",
-        )
+        ),
     )
     return findings
 
@@ -1068,7 +1085,8 @@ def _add_commercial_lifecycle_theme_finding(
     acceptance_clauses = [clause for clause in focused_clauses if any(marker in clause.text for marker in ("验收", "送检", "检测", "监理", "复检", "终验", "专家评审"))]
     if len(focused_clauses) < 3 or not responsibility_clauses or not acceptance_clauses:
         return findings
-    findings.append(
+    _append_theme_finding(
+        findings,
         _build_theme_finding(
             document=document,
             clauses=focused_clauses,
@@ -1088,7 +1106,7 @@ def _add_commercial_lifecycle_theme_finding(
             needs_human_review=True,
             human_review_reason="需结合财政支付节点、验收流程和售后服务模式判断全链路责任配置是否超过项目实际履约需要。",
             finding_origin="analyzer",
-        )
+        ),
     )
     return findings
 
@@ -1122,7 +1140,8 @@ def _add_qualification_domain_theme_finding(
         clauses = [clause for clause in clauses if "特种设备安全管理和作业人员证书" not in clause.text]
     if not clauses:
         return findings
-    findings.append(
+    _append_theme_finding(
+        findings,
         _build_theme_finding(
             document=document,
             clauses=clauses,
@@ -1142,7 +1161,7 @@ def _add_qualification_domain_theme_finding(
             needs_human_review=True,
             human_review_reason="需结合项目主标的、行业许可边界和实际履约场景判断该类资质是否确有必要。",
             finding_origin="analyzer",
-        )
+        ),
     )
     return findings
 
@@ -1165,7 +1184,8 @@ def _add_scoring_domain_theme_finding(
     ]
     if len(clauses) < 1:
         return findings
-    findings.append(
+    _append_theme_finding(
+        findings,
         _build_theme_finding(
             document=document,
             clauses=clauses,
@@ -1185,7 +1205,7 @@ def _add_scoring_domain_theme_finding(
             needs_human_review=True,
             human_review_reason="需结合项目主标的、评分主题和具体证书用途判断该类内容是否属于明显错位或仍有合理业务关联。",
             finding_origin="analyzer",
-        )
+        ),
     )
     return findings
 
@@ -1226,6 +1246,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
+            if is_effective_requirement_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1261,6 +1282,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
+            if is_effective_requirement_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1295,6 +1317,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
+            if is_effective_requirement_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1331,6 +1354,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
+            if is_effective_requirement_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1367,6 +1391,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
+            if is_effective_requirement_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1394,6 +1419,7 @@ def _add_mixed_scope_boundary_theme_finding(
         clauses = [
             clause
             for clause in document.clauses
+            if is_effective_requirement_clause(clause)
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
         out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
@@ -1420,7 +1446,8 @@ def _add_mixed_scope_boundary_theme_finding(
         return findings
     if len(clauses) < 2:
         return findings
-    findings.append(
+    _append_theme_finding(
+        findings,
         _build_theme_finding(
             document=document,
             clauses=clauses,
@@ -1437,7 +1464,7 @@ def _add_mixed_scope_boundary_theme_finding(
             needs_human_review=True,
             human_review_reason=review_reason,
             finding_origin="analyzer",
-        )
+        ),
     )
     return findings
 
@@ -1521,7 +1548,8 @@ def _add_template_domain_theme_finding(
         clauses.append(clause)
     if len(clauses) < 1:
         return findings
-    findings.append(
+    _append_theme_finding(
+        findings,
         _build_theme_finding(
             document=document,
             clauses=clauses,
@@ -1541,7 +1569,7 @@ def _add_template_domain_theme_finding(
             needs_human_review=True,
             human_review_reason="需结合项目主标的、业务边界和合同范围判断该条款是否属于模板错贴或确有必要的扩展义务。",
             finding_origin="analyzer",
-        )
+        ),
     )
     return findings
 
@@ -1604,7 +1632,8 @@ def _add_geographic_tendency_findings(document: NormalizedDocument, findings: li
     ]
     if not clauses:
         return findings
-    findings.append(
+    _append_theme_finding(
+        findings,
         _build_theme_finding(
             document=document,
             clauses=clauses,
@@ -1624,7 +1653,7 @@ def _add_geographic_tendency_findings(document: NormalizedDocument, findings: li
             needs_human_review=True,
             human_review_reason="需结合故障等级、运维场景和响应时限必要性判断相关驻场或短时响应要求是否确有业务依据。",
             finding_origin="analyzer",
-        )
+        ),
     )
     return findings
 
@@ -1643,7 +1672,8 @@ def _add_acceptance_boundary_findings(document: NormalizedDocument, findings: li
     ]
     if not clauses:
         return findings
-    findings.append(
+    _append_theme_finding(
+        findings,
         _build_theme_finding(
             document=document,
             clauses=clauses,
@@ -1663,7 +1693,7 @@ def _add_acceptance_boundary_findings(document: NormalizedDocument, findings: li
             needs_human_review=True,
             human_review_reason="需结合项目验收流程、检测安排和责任划分规则判断各验收环节边界是否明确。",
             finding_origin="analyzer",
-        )
+        ),
     )
     return findings
 
@@ -1681,7 +1711,8 @@ def _add_liability_balance_findings(document: NormalizedDocument, findings: list
     ]
     if not clauses:
         return findings
-    findings.append(
+    _append_theme_finding(
+        findings,
         _build_theme_finding(
             document=document,
             clauses=clauses,
@@ -1701,7 +1732,7 @@ def _add_liability_balance_findings(document: NormalizedDocument, findings: list
             needs_human_review=True,
             human_review_reason="需结合合同风险分配、赔偿边界和违约责任比例判断相关责任条款是否明显失衡。",
             finding_origin="analyzer",
-        )
+        ),
     )
     return findings
 
@@ -1719,7 +1750,8 @@ def _add_industry_appropriateness_findings(document: NormalizedDocument, finding
     ]
     if len(clauses) < 2:
         return findings
-    findings.append(
+    _append_theme_finding(
+        findings,
         _build_theme_finding(
             document=document,
             clauses=clauses,
@@ -1739,7 +1771,7 @@ def _add_industry_appropriateness_findings(document: NormalizedDocument, finding
             needs_human_review=True,
             human_review_reason="需结合采购标的行业属性和具体证书、标准用途判断相关内容是否属于明显错位或仍具合理关联。",
             finding_origin="analyzer",
-        )
+        ),
     )
     return findings
 
@@ -1834,44 +1866,7 @@ def _is_substantive_commercial_clause(clause) -> bool:
 
 
 def _is_template_instruction_clause(clause) -> bool:
-    text = " ".join(
-        part
-        for part in (
-            clause.section_path or "",
-            clause.source_section or "",
-            clause.table_or_item_label or "",
-            clause.text or "",
-        )
-        if part
-    )
-    return any(
-        marker in text
-        for marker in (
-            "投标文件组成要求及格式",
-            "中小企业声明函",
-            "残疾人福利性单位声明函",
-            "监狱企业声明函",
-            "政府采购投标及履约承诺函",
-            "投标及履约承诺函",
-            "编制指引",
-            "填写说明",
-            "格式自定",
-            "声明函",
-            "承诺函",
-            "政府采购违法行为风险知悉确认书",
-            "特别警示条款",
-            "投标书编制软件",
-            "深圳政府采购智慧平台",
-            "投标文件制作工具",
-            "文件创建标识码",
-            "信息公开部分的内容到此为止",
-            "投标文件附件（信息不公开部分）",
-            "投标人情况及资格证明文件",
-            "投标文件组成：",
-            "投标文件正文（信息公开部分）",
-            "如有方案表述中有出现类似可实现、实现、可支持、支持等描述",
-        )
-    )
+    return not is_effective_requirement_clause(clause)
 
 
 def _is_explanatory_summary_clause(clause) -> bool:
@@ -1977,8 +1972,11 @@ def _build_theme_finding(
     needs_human_review: bool,
     human_review_reason: str | None,
     finding_origin: str,
-) -> Finding:
+) -> Finding | None:
     ordered = sorted(clauses, key=lambda clause: (clause.line_start, clause.line_end))
+    ordered = filter_effective_requirement_clauses(ordered)
+    if not ordered:
+        return None
     first = ordered[0]
     source_text = "；".join(
         list(OrderedDict.fromkeys(clause.text for clause in ordered if clause.text))[:3]
@@ -2008,6 +2006,11 @@ def _build_theme_finding(
         human_review_reason=human_review_reason,
         finding_origin=finding_origin,
     )
+
+
+def _append_theme_finding(findings: list[Finding], candidate: Finding | None) -> None:
+    if candidate is not None:
+        findings.append(candidate)
 
 
 def _apply_theme_splitter_and_summarizer(

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from agent_compliance.pipelines.effective_requirement_scope_filter import (
+    filter_effective_requirement_findings,
+)
 from agent_compliance.knowledge.procurement_catalog import (
     CatalogClassification,
     classification_has_catalog_prefix,
@@ -33,6 +36,7 @@ def apply_finding_arbiter(
     *,
     classification: CatalogClassification | None = None,
 ) -> list[Finding]:
+    findings = filter_effective_requirement_findings(findings)
     theme_findings = [finding for finding in findings if finding.finding_origin == "analyzer"]
     theme_findings = _drop_overbroad_theme_findings(theme_findings)
     if not theme_findings:

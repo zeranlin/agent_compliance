@@ -160,6 +160,7 @@
 - 面向法规条文级语义增强的 [legal-semantic-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/legal-semantic-layer-design.md)，用于正式设计 `legal_clause_index`、`issue_type_authority_map` 和 `legal_authority_reasoner`
 - 面向审查结果交付增强的 [review-export-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/review-export-design.md)，用于统一 `Markdown / Excel / JSON` 三种导出格式，以及 `主问题版 / 完整明细版` 两种导出模式
 - 面向采购人页面动态审查过程展示的 [review-check-progress-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/review-check-progress-design.md)，用于定义 `review-check` 在启用大模型（混合审查）时的进度面板、后端状态字段以及轮询优先于 SSE 的落地顺序
+- 面向正式采购需求正文边界过滤的 [effective-requirement-scope-filter-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/effective-requirement-scope-filter-design.md)，用于区分 `正文 / 模板 / 提示 / 格式`，并把过滤层接回 `review.py + finding_arbiter + evidence_selector`
 - 面向规则治理增强的 [rule-governance-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/rule-governance-layer-design.md)，用于定义 `rule_registry`、`rule_priority_profile` 和 `catalog_sensitive_rule_router`
 - 面向大模型混合审查模式的 [llm-fast-path-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/llm-fast-path-design.md)，用于明确“代码审查主骨架 + 大模型关键节点同步介入 + 统一仲裁输出”的主思路
 
@@ -248,6 +249,7 @@
 - 混合边界引擎已继续收紧为“正文核心交付线索 + 至少两个越界信号”共同成立后再上浮，减少单个系统词或标题命中带来的边界误报
 - 品目知识画像已继续细分 `mixed_scope_support_markers`、`mixed_scope_hard_mismatch_markers`，混合边界引擎开始区分“轻量数字化配套”与“真正越界叠加”：仅有少量轻量配套信号时不再轻易上浮主问题，出现系统端口、无缝对接、软件著作权、碳足迹等硬越界信号时会更稳定触发边界风险。
 - 品目知识画像已继续下沉到 `document_audit_llm`、`confidence_calibrator` 和 benchmark/difference learning：全文辅助扫描提示词会显式带出品目画像高风险和边界提示，置信度校准会结合当前品目画像做轻量升降权，benchmark 与差异学习结果也开始汇总当前场景的画像高风险模式
+- 主链已新增 `effective_requirement_scope_filter` 第一版，开始把 `正文 / 模板 / 提示 / 格式` 分开处理，并在 `review.py + finding_arbiter + review_evidence` 中过滤非正式采购需求文本，减少平台警示、格式说明和承诺模板对主问题与证据摘录的污染
 
 相关设计：
 - [legal-authority-system.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/legal-authority-system.md)
