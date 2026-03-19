@@ -38,13 +38,6 @@ def apply_commercial_analyzers(
         is_substantive_commercial_clause=is_substantive_commercial_clause,
         catalog_classification=catalog_classification,
     )
-    findings = _add_commercial_lifecycle_theme_finding(
-        document,
-        findings,
-        build_theme_finding=build_theme_finding,
-        is_substantive_commercial_clause=is_substantive_commercial_clause,
-        catalog_classification=catalog_classification,
-    )
     findings = _add_commercial_financing_burden_theme_finding(
         document,
         findings,
@@ -66,6 +59,13 @@ def apply_commercial_analyzers(
         catalog_classification=catalog_classification,
     )
     findings = _add_liability_imbalance_theme_finding(
+        document,
+        findings,
+        build_theme_finding=build_theme_finding,
+        is_substantive_commercial_clause=is_substantive_commercial_clause,
+        catalog_classification=catalog_classification,
+    )
+    findings = _add_commercial_lifecycle_theme_finding(
         document,
         findings,
         build_theme_finding=build_theme_finding,
@@ -504,6 +504,23 @@ def _add_commercial_lifecycle_theme_finding(
     is_medical_goods = classification_has_domain(catalog_classification, "medical_device_goods") or classification_has_catalog_prefix(
         catalog_classification, "A0232"
     )
+    specific_titles = {
+        finding.problem_title
+        for finding in findings
+        if finding.finding_origin == "analyzer"
+    }
+    if "考核扣罚、满意度评价与解除合同后果叠加偏重" in specific_titles:
+        return findings
+    if "付款条件与履约评价结果深度绑定且评价标准开放" in specific_titles and (
+        {
+            "验收送检、检测和专家评审费用整体转嫁给供应商",
+            "商务责任和违约后果设置明显偏重",
+            "商务条款设置异常资金占用安排",
+            "交货期限设置异常或明显失真",
+        }
+        & specific_titles
+    ):
+        return findings
     clauses = [
         clause
         for clause in document.clauses

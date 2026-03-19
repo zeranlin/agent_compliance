@@ -1206,6 +1206,7 @@ def _add_mixed_scope_boundary_theme_finding(
     profile_mixed_markers = catalog_mixed_scope_markers_for_classification(classification)
     profile_core_markers = catalog_mixed_scope_core_markers_for_classification(classification)
     profile_out_of_scope_markers = catalog_mixed_scope_out_of_scope_markers_for_classification(classification)
+    min_out_of_scope_hits = 2
     if domain == "medical_tcm_mixed":
         mixed_markers = profile_out_of_scope_markers or (
             "信息化管理系统",
@@ -1223,7 +1224,8 @@ def _add_mixed_scope_boundary_theme_finding(
             for clause in document.clauses
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
-        if not any(any(marker in clause.text for marker in mixed_markers) for clause in clauses) or not any(
+        out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
+        if len(out_of_scope_hits) < min_out_of_scope_hits or not any(
             any(marker in clause.text for marker in core_markers) for clause in clauses
         ):
             return findings
@@ -1252,7 +1254,8 @@ def _add_mixed_scope_boundary_theme_finding(
             for clause in document.clauses
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
-        if not any(any(marker in clause.text for marker in mixed_markers) for clause in clauses) or not any(
+        out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
+        if len(out_of_scope_hits) < min_out_of_scope_hits or not any(
             any(marker in clause.text for marker in core_markers) for clause in clauses
         ):
             return findings
@@ -1280,7 +1283,8 @@ def _add_mixed_scope_boundary_theme_finding(
             for clause in document.clauses
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
-        if not any(any(marker in clause.text for marker in mixed_markers) for clause in clauses) or not any(
+        out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
+        if len(out_of_scope_hits) < min_out_of_scope_hits or not any(
             any(marker in clause.text for marker in core_markers) for clause in clauses
         ):
             return findings
@@ -1310,7 +1314,8 @@ def _add_mixed_scope_boundary_theme_finding(
             for clause in document.clauses
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
-        if not any(any(marker in clause.text for marker in mixed_markers) for clause in clauses) or not any(
+        out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
+        if len(out_of_scope_hits) < min_out_of_scope_hits or not any(
             any(marker in clause.text for marker in core_markers) for clause in clauses
         ):
             return findings
@@ -1340,10 +1345,11 @@ def _add_mixed_scope_boundary_theme_finding(
             for clause in document.clauses
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
+        out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
         has_core_context = any(any(marker in clause.text for marker in core_markers) for clause in clauses) or any(
             marker in document.document_name for marker in core_markers
         )
-        if not any(any(marker in clause.text for marker in mixed_markers) for clause in clauses) or not has_core_context:
+        if len(out_of_scope_hits) < min_out_of_scope_hits or not has_core_context:
             return findings
         title = "设备采购场景叠加信息化接口和碳足迹义务，边界不清"
         rationale = (
@@ -1361,12 +1367,12 @@ def _add_mixed_scope_boundary_theme_finding(
             for clause in document.clauses
             if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
-        has_mixed = any(any(marker in clause.text for marker in mixed_markers) for clause in clauses)
+        out_of_scope_hits = _collect_marker_hits(clauses, mixed_markers)
         has_core_in_body = any(
             any(marker in clause.text for marker in core_markers) and not clause.text.startswith("项目名称")
             for clause in clauses
         )
-        if not has_mixed or not has_core_in_body:
+        if len(out_of_scope_hits) < min_out_of_scope_hits or not has_core_in_body:
             return findings
         title = "体育器材及运动场设施叠加轻量智能化功能，边界需进一步论证"
         rationale = (
@@ -1400,6 +1406,15 @@ def _add_mixed_scope_boundary_theme_finding(
         )
     )
     return findings
+
+
+def _collect_marker_hits(clauses, markers: tuple[str, ...]) -> tuple[str, ...]:
+    hits: list[str] = []
+    for clause in clauses:
+        for marker in markers:
+            if marker in clause.text:
+                hits.append(marker)
+    return tuple(dict.fromkeys(hits))
 
 
 def _prefer_dominant_commercial_section(clauses):

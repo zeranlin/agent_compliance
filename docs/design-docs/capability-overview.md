@@ -242,6 +242,7 @@
 - 品目知识画像已进入第三阶段，继续补入 `scoring_theme_markers`、`scoring_evidence_markers`，评分引擎开始同时判断“该品目应评什么”和“该用什么证据来评”，从而更稳定识别评分主题漂移和证据漂移
 - 品目知识画像已继续补入 `commercial_lifecycle_markers`，商务引擎开始按品目场景收紧付款、验收、责任和到场响应的关键线索，减少通用关键词对商务总问题的过度放大
 - 品目知识画像已继续补入 `mixed_scope_core_markers`、`mixed_scope_out_of_scope_markers`，混合边界引擎开始要求“核心交付线索 + 越界线索”同时成立后才上浮主问题，降低轻量智能化词汇对混合采购误报的放大
+- 混合边界引擎已继续收紧为“正文核心交付线索 + 至少两个越界信号”共同成立后再上浮，减少单个系统词或标题命中带来的边界误报
 - 品目知识画像已继续下沉到 `document_audit_llm`、`confidence_calibrator` 和 benchmark/difference learning：全文辅助扫描提示词会显式带出品目画像高风险和边界提示，置信度校准会结合当前品目画像做轻量升降权，benchmark 与差异学习结果也开始汇总当前场景的画像高风险模式
 
 相关设计：
@@ -333,6 +334,7 @@
 - 当前已开始落地 `commercial_lifecycle_analyzer`，可从付款、验收、复检、售后到场和责任承担全链路识别整体偏重供应商承担的履约后果链。
 - 当前已继续增强 `commercial_lifecycle_analyzer`，开始结合品目画像里的商务链路线索，在物业、设备安装、医疗设备等场景下更稳地挑选付款、验收、责任与到场响应的关键条款，并避免无关章节噪声放大全链路主题。
 - 当前已继续增强 `commercial_lifecycle_analyzer`，在物业和餐饮等服务场景下可单独上浮“考核扣罚、满意度评价与解除合同后果叠加偏重”，并配合仲裁层压掉过宽的商务全链路总主题。
+- 当前已继续增强 `commercial_lifecycle_analyzer`，当更具体的付款链、考核扣罚、费用转嫁、责任失衡等商务子主题已成立时，会优先保留这些更利于改稿的子问题，并进一步抑制过宽的“履约全链路”总主题。
 - 当前已开始落地 `evidence_selector`，可按主问题语义优先挑选更像人工会引用的代表性摘录，而不再仅按前两段原文截取。
 - 当前已开始落地 `difference_learning_loop`，启用本地模型后会额外生成结构化学习建议，分别反哺规则、主题分析器、LLM prompt 和 benchmark。
 - 本地模型新增的边界问题会自动沉淀成 `rule_candidate`，而不是只停留在一次性 finding 中
