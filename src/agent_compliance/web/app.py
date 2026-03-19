@@ -25,6 +25,7 @@ from agent_compliance.improvement.rule_management import load_rule_management_pa
 from agent_compliance.parsers.pagination import page_hint_for_line
 from agent_compliance.pipelines.llm_enhance import enhance_review_result
 from agent_compliance.pipelines.llm_review import apply_llm_review_tasks
+from agent_compliance.pipelines.procurement_stage_router import route_procurement_stage
 from agent_compliance.pipelines.review_export import export_review_bytes, write_export_output
 from agent_compliance.pipelines.normalize import run_normalize
 from agent_compliance.pipelines.render import write_review_outputs
@@ -103,6 +104,7 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
                     "base_url": detect_llm_config().base_url,
                     "model": detect_llm_config().model,
                 },
+                "stage": _build_stage_payload(normalized, review),
                 "document": _build_document_payload(normalized),
                 "review": review.to_dict(),
                 "llm_review": llm_artifacts.to_dict(),
@@ -300,6 +302,18 @@ def _build_document_payload(normalized: NormalizedDocument) -> dict[str, Any]:
             payload["render_mode"] = "docx_blocks"
             payload["blocks"] = blocks
     return payload
+
+
+def _build_stage_payload(normalized: NormalizedDocument, review: ReviewResult) -> dict[str, Any]:
+    stage_profile = route_procurement_stage(document=normalized, findings=review.findings)
+    return {
+        "stage_key": stage_profile.stage_key,
+        "stage_name": stage_profile.stage_name,
+        "stage_goal": stage_profile.stage_goal,
+        "review_posture": stage_profile.review_posture,
+        "primary_users": list(stage_profile.primary_users),
+        "output_bias": list(stage_profile.output_bias),
+    }
 
 
 def _build_docx_blocks(source_path: Path, lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -2242,7 +2256,8 @@ def _review_next_html() -> str:
         state.collapsedIssueSections = {};
         openSourceBtn.disabled = !payload.document || !payload.document.source_path;
         exportToolbarNode.style.display = 'flex';
-        runMetaNode.textContent = `已完成审查：${payload.review.document_name}；缓存 ${payload.cache.used ? '命中' : '未命中'}；本地模型 ${payload.llm.enabled ? '已启用' : '未启用'}。`;
+        const stageName = payload.stage && payload.stage.stage_name ? payload.stage.stage_name : '采购需求形成与发布前审查';
+        runMetaNode.textContent = `已完成审查：${payload.review.document_name}；当前按“${stageName}”口径生成结果；缓存 ${payload.cache.used ? '命中' : '未命中'}；本地模型 ${payload.llm.enabled ? '已启用' : '未启用'}。`;
         render();
       } catch (error) {
         exportToolbarNode.style.display = 'none';
@@ -2325,7 +2340,17 @@ def _review_next_html() -> str:
       const findings = state.findings;
       const metrics = summarizeFindings(findings);
       const sectionMetrics = summarizeBySection(findings);
+      const stage = state.payload ? state.payload.stage : null;
+      const stageCard = stage ? `
+        <div class="stage-card">
+          <strong>${escapeHtml(stage.stage_name || '采购需求形成与发布前审查')}</strong>
+          <div class="meta">${escapeHtml(stage.stage_goal || '')}</div>
+          <div class="meta">审查姿态：${escapeHtml(stage.review_posture || '')}</div>
+          <div class="meta">输出倾向：${escapeHtml((stage.output_bias || []).join(' / ') || '')}</div>
+        </div>
+      ` : '';
       summaryGridNode.innerHTML = `
+        ${stageCard}
         ${renderMetric('当前状态', state.payload ? '已完成' : '待运行')}
         ${renderMetric('主问题', metrics.main)}
         ${renderMetric('保留明细', metrics.detail)}
@@ -2902,6 +2927,22 @@ def _review_fresh_html() -> str:
       grid-template-columns: repeat(6, minmax(0, 1fr));
       gap: 10px;
       margin-top: 12px;
+    }
+    .stage-card {
+      grid-column: 1 / -1;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff8f1;
+      display: grid;
+      gap: 6px;
+    }
+    .stage-card strong {
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .stage-card .meta {
+      font-size: 13px;
     }
     .stat {
       border: 1px solid var(--line);
