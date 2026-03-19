@@ -125,6 +125,61 @@ class ReviewPipelineTest(unittest.TestCase):
             )
         )
 
+    def test_review_requires_more_than_two_lightweight_sports_support_markers_without_hard_mismatch(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：2025年省级全民健身工程（多功能运动场项目）",
+                "围网、硅PU面层和体育比赛用灯等运动场设施应满足采购需求。",
+                "支持二维码报修系统。",
+                "支持智能显示联动。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sports-mixed-lightweight.docx",
+            document_name="2025年省级全民健身工程（多功能运动场项目）.docx",
+            file_hash="sports-mixed-lightweight",
+            normalized_text_path="/tmp/sports-mixed-lightweight.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertFalse(
+            any(
+                finding.problem_title == "体育器材及运动场设施叠加轻量智能化功能，边界需进一步论证"
+                for finding in review.findings
+            )
+        )
+
+    def test_review_prefers_hard_mismatch_over_equipment_only_in_signage_scope(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：医院导视标识和宣传印刷服务",
+                "设计制作与现场安装维护应满足采购需求。",
+                "投标人具备UV打印机、喷绘机、写真机的得10分。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/signage-mixed-light.docx",
+            document_name="医院导视标识和宣传印刷服务.docx",
+            file_hash="signage-mixed-light",
+            normalized_text_path="/tmp/signage-mixed-light.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertFalse(
+            any(
+                finding.problem_title == "标识标牌及宣传印制服务叠加设备保障和信息化支撑内容，边界不清"
+                for finding in review.findings
+            )
+        )
+
     def test_representative_evidence_prefers_catalog_relevant_keywords(self) -> None:
         text = "\n".join(
             [

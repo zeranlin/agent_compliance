@@ -116,7 +116,16 @@
         "桌",
         "椅"
       ],
+      "mixed_scope_support_markers": [],
       "mixed_scope_out_of_scope_markers": [
+        "资产定位",
+        "智能芯片",
+        "软件管理系统",
+        "UWB",
+        "蓝牙",
+        "碳足迹"
+      ],
+      "mixed_scope_hard_mismatch_markers": [
         "资产定位",
         "智能芯片",
         "软件管理系统",
@@ -229,7 +238,15 @@
         "阻燃",
         "抗菌"
       ],
+      "mixed_scope_support_markers": [],
       "mixed_scope_out_of_scope_markers": [
+        "芯片",
+        "软件",
+        "平台",
+        "无缝对接",
+        "系统"
+      ],
+      "mixed_scope_hard_mismatch_markers": [
         "芯片",
         "软件",
         "平台",
@@ -350,11 +367,29 @@
         "器材",
         "铺装"
       ],
-      "mixed_scope_out_of_scope_markers": [
+      "mixed_scope_support_markers": [
         "二维码报修系统",
         "OTA远程升级",
         "智能显示",
         "远程升级"
+      ],
+      "mixed_scope_out_of_scope_markers": [
+        "二维码报修系统",
+        "OTA远程升级",
+        "智能显示",
+        "远程升级",
+        "系统端口",
+        "无缝对接",
+        "软件著作权",
+        "平台接口",
+        "综合业务协同平台"
+      ],
+      "mixed_scope_hard_mismatch_markers": [
+        "系统端口",
+        "无缝对接",
+        "软件著作权",
+        "平台接口",
+        "综合业务协同平台"
       ]
     },
     {
@@ -470,7 +505,15 @@
         "驻场",
         "服务"
       ],
+      "mixed_scope_support_markers": [],
       "mixed_scope_out_of_scope_markers": [
+        "自动化分拣",
+        "能源管理软件",
+        "电梯远程监控",
+        "软件著作权",
+        "著作权登记证书"
+      ],
+      "mixed_scope_hard_mismatch_markers": [
         "自动化分拣",
         "能源管理软件",
         "电梯远程监控",
@@ -585,7 +628,19 @@
         "驻场",
         "演示"
       ],
+      "mixed_scope_support_markers": [
+        "驻场",
+        "签到",
+        "原型演示",
+        "现场演示"
+      ],
       "mixed_scope_out_of_scope_markers": [
+        "特种设备",
+        "高空清洗",
+        "生活垃圾分类",
+        "保安服务认证"
+      ],
+      "mixed_scope_hard_mismatch_markers": [
         "特种设备",
         "高空清洗",
         "生活垃圾分类",
@@ -703,6 +758,13 @@
         "验收",
         "院内接口"
       ],
+      "mixed_scope_support_markers": [
+        "软件端口",
+        "医院信息系统",
+        "HIS",
+        "PACS",
+        "LIS"
+      ],
       "mixed_scope_out_of_scope_markers": [
         "碳足迹",
         "盘查报告",
@@ -711,6 +773,11 @@
         "PACS",
         "LIS",
         "软件端口"
+      ],
+      "mixed_scope_hard_mismatch_markers": [
+        "碳足迹",
+        "盘查报告",
+        "改进报告"
       ]
     },
     {
@@ -821,11 +888,22 @@
         "仓储",
         "供应"
       ],
+      "mixed_scope_support_markers": [
+        "信息化管理系统",
+        "系统端口",
+        "自动化调剂",
+        "发药机"
+      ],
       "mixed_scope_out_of_scope_markers": [
         "信息化管理系统",
         "系统端口",
         "自动化调剂",
         "发药机",
+        "药瓶清洁"
+      ],
+      "mixed_scope_hard_mismatch_markers": [
+        "综合业务协同平台",
+        "无缝对接",
         "药瓶清洁"
       ]
     },
@@ -945,6 +1023,11 @@
         "设计制作",
         "安装维护"
       ],
+      "mixed_scope_support_markers": [
+        "UV打印机",
+        "喷绘机",
+        "写真机"
+      ],
       "mixed_scope_out_of_scope_markers": [
         "软件著作权",
         "系统端口",
@@ -952,6 +1035,11 @@
         "UV打印机",
         "喷绘机",
         "写真机"
+      ],
+      "mixed_scope_hard_mismatch_markers": [
+        "软件著作权",
+        "系统端口",
+        "无缝对接"
       ]
     },
     {

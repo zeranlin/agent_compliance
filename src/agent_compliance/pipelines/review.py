@@ -40,7 +40,9 @@ from agent_compliance.knowledge.catalog_knowledge_profile import (
     catalog_domain_mismatch_markers_for_classification,
     catalog_mixed_scope_markers_for_classification,
     catalog_mixed_scope_core_markers_for_classification,
+    catalog_mixed_scope_hard_mismatch_markers_for_classification,
     catalog_mixed_scope_out_of_scope_markers_for_classification,
+    catalog_mixed_scope_support_markers_for_classification,
     catalog_template_scope_markers_for_classification,
 )
 from agent_compliance.knowledge.procurement_catalog import (
@@ -1205,7 +1207,9 @@ def _add_mixed_scope_boundary_theme_finding(
     domain = _effective_domain_key(document, classification)
     profile_mixed_markers = catalog_mixed_scope_markers_for_classification(classification)
     profile_core_markers = catalog_mixed_scope_core_markers_for_classification(classification)
+    profile_support_markers = catalog_mixed_scope_support_markers_for_classification(classification)
     profile_out_of_scope_markers = catalog_mixed_scope_out_of_scope_markers_for_classification(classification)
+    profile_hard_markers = catalog_mixed_scope_hard_mismatch_markers_for_classification(classification)
     min_out_of_scope_hits = 2
     if domain == "medical_tcm_mixed":
         mixed_markers = profile_out_of_scope_markers or (
@@ -1228,6 +1232,11 @@ def _add_mixed_scope_boundary_theme_finding(
         if len(out_of_scope_hits) < min_out_of_scope_hits or not any(
             any(marker in clause.text for marker in core_markers) for clause in clauses
         ):
+            return findings
+        hard_hits = _collect_marker_hits(clauses, profile_hard_markers or mixed_markers)
+        support_hits = _collect_marker_hits(clauses, profile_support_markers)
+        support_clause_count = _count_marker_clauses(clauses, profile_support_markers)
+        if not hard_hits and profile_support_markers and (len(support_hits) < 3 or support_clause_count < 2):
             return findings
         title = "混合采购场景叠加自动化设备和信息化接口义务，边界不清"
         rationale = (
@@ -1259,6 +1268,11 @@ def _add_mixed_scope_boundary_theme_finding(
             any(marker in clause.text for marker in core_markers) for clause in clauses
         ):
             return findings
+        hard_hits = _collect_marker_hits(clauses, profile_hard_markers or mixed_markers)
+        support_hits = _collect_marker_hits(clauses, profile_support_markers)
+        support_clause_count = _count_marker_clauses(clauses, profile_support_markers)
+        if not hard_hits and profile_support_markers and (len(support_hits) < 3 or support_clause_count < 2):
+            return findings
         title = "家具采购场景叠加资产定位和智能管理系统义务，边界不清"
         rationale = (
             "文件在家具采购中叠加了资产定位标签模块、蓝牙或UWB定位系统、智能芯片和在线管理系统等信息化义务。"
@@ -1287,6 +1301,11 @@ def _add_mixed_scope_boundary_theme_finding(
         if len(out_of_scope_hits) < min_out_of_scope_hits or not any(
             any(marker in clause.text for marker in core_markers) for clause in clauses
         ):
+            return findings
+        hard_hits = _collect_marker_hits(clauses, profile_hard_markers or mixed_markers)
+        support_hits = _collect_marker_hits(clauses, profile_support_markers)
+        support_clause_count = _count_marker_clauses(clauses, profile_support_markers)
+        if not hard_hits and profile_support_markers and (len(support_hits) < 3 or support_clause_count < 2):
             return findings
         title = "物业服务场景叠加自动化系统和软件著作权评分，边界不清"
         rationale = (
@@ -1318,6 +1337,11 @@ def _add_mixed_scope_boundary_theme_finding(
         if len(out_of_scope_hits) < min_out_of_scope_hits or not any(
             any(marker in clause.text for marker in core_markers) for clause in clauses
         ):
+            return findings
+        hard_hits = _collect_marker_hits(clauses, profile_hard_markers or mixed_markers)
+        support_hits = _collect_marker_hits(clauses, profile_support_markers)
+        support_clause_count = _count_marker_clauses(clauses, profile_support_markers)
+        if not hard_hits and profile_support_markers and (len(support_hits) < 3 or support_clause_count < 2):
             return findings
         title = "标识标牌及宣传印制服务叠加设备保障和信息化支撑内容，边界不清"
         rationale = (
@@ -1351,6 +1375,11 @@ def _add_mixed_scope_boundary_theme_finding(
         )
         if len(out_of_scope_hits) < min_out_of_scope_hits or not has_core_context:
             return findings
+        hard_hits = _collect_marker_hits(clauses, profile_hard_markers or mixed_markers)
+        support_hits = _collect_marker_hits(clauses, profile_support_markers)
+        support_clause_count = _count_marker_clauses(clauses, profile_support_markers)
+        if not hard_hits and profile_support_markers and (len(support_hits) < 3 or support_clause_count < 2):
+            return findings
         title = "设备采购场景叠加信息化接口和碳足迹义务，边界不清"
         rationale = (
             "文件在设备采购中叠加了软件端口开放、医院信息系统对接、数据交换费用承担以及碳足迹盘查和持续改进等义务。"
@@ -1373,6 +1402,11 @@ def _add_mixed_scope_boundary_theme_finding(
             for clause in clauses
         )
         if len(out_of_scope_hits) < min_out_of_scope_hits or not has_core_in_body:
+            return findings
+        hard_hits = _collect_marker_hits(clauses, profile_hard_markers or mixed_markers)
+        support_hits = _collect_marker_hits(clauses, profile_support_markers)
+        support_clause_count = _count_marker_clauses(clauses, profile_support_markers)
+        if not hard_hits and profile_support_markers and (len(support_hits) < 3 or support_clause_count < 2):
             return findings
         title = "体育器材及运动场设施叠加轻量智能化功能，边界需进一步论证"
         rationale = (
@@ -1415,6 +1449,12 @@ def _collect_marker_hits(clauses, markers: tuple[str, ...]) -> tuple[str, ...]:
             if marker in clause.text:
                 hits.append(marker)
     return tuple(dict.fromkeys(hits))
+
+
+def _count_marker_clauses(clauses, markers: tuple[str, ...]) -> int:
+    if not markers:
+        return 0
+    return sum(1 for clause in clauses if any(marker in clause.text for marker in markers))
 
 
 def _prefer_dominant_commercial_section(clauses):
