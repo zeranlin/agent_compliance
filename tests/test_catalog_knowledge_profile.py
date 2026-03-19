@@ -8,8 +8,10 @@ from agent_compliance.knowledge.catalog_knowledge_profile import (
     catalog_commercial_lifecycle_markers_for_classification,
     catalog_core_delivery_capabilities_for_classification,
     catalog_domain_mismatch_markers_for_classification,
+    catalog_mixed_scope_core_markers_for_classification,
     catalog_scoring_evidence_markers_for_classification,
     catalog_mixed_scope_markers_for_classification,
+    catalog_mixed_scope_out_of_scope_markers_for_classification,
     catalog_knowledge_profile_by_catalog_id,
     catalog_knowledge_profiles_for_classification,
     catalog_scoring_mismatch_markers_for_classification,
@@ -45,6 +47,8 @@ class CatalogKnowledgeProfileTest(unittest.TestCase):
         self.assertIn("二维码报修系统", sports.domain_mismatch_markers)
         self.assertIn("二维码报修系统", sports.template_scope_markers)
         self.assertIn("智能显示", sports.mixed_scope_markers)
+        self.assertIn("运动场", sports.mixed_scope_core_markers)
+        self.assertIn("二维码报修系统", sports.mixed_scope_out_of_scope_markers)
 
     def test_profiles_follow_classification(self) -> None:
         classification = CatalogClassification(
@@ -67,6 +71,8 @@ class CatalogKnowledgeProfileTest(unittest.TestCase):
         self.assertIn("CAT-MEDICAL-TCM", profile_ids)
         self.assertIn("CAT-INFO", profile_ids)
         self.assertIn("信息化管理系统", catalog_mixed_scope_markers_for_classification(classification))
+        self.assertIn("中药配方颗粒", catalog_mixed_scope_core_markers_for_classification(classification))
+        self.assertIn("信息化管理系统", catalog_mixed_scope_out_of_scope_markers_for_classification(classification))
         self.assertIn("园区保洁", catalog_template_scope_markers_for_classification(classification))
         self.assertIn("药品供货", catalog_core_delivery_capabilities_for_classification(classification))
         self.assertIn("信息化管理系统", catalog_scoring_risk_markers_for_classification(classification))

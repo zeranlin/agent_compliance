@@ -39,6 +39,8 @@ from agent_compliance.knowledge.legal_authority_reasoner import apply_legal_auth
 from agent_compliance.knowledge.catalog_knowledge_profile import (
     catalog_domain_mismatch_markers_for_classification,
     catalog_mixed_scope_markers_for_classification,
+    catalog_mixed_scope_core_markers_for_classification,
+    catalog_mixed_scope_out_of_scope_markers_for_classification,
     catalog_template_scope_markers_for_classification,
 )
 from agent_compliance.knowledge.procurement_catalog import (
@@ -1202,24 +1204,29 @@ def _add_mixed_scope_boundary_theme_finding(
         return findings
     domain = _effective_domain_key(document, classification)
     profile_mixed_markers = catalog_mixed_scope_markers_for_classification(classification)
+    profile_core_markers = catalog_mixed_scope_core_markers_for_classification(classification)
+    profile_out_of_scope_markers = catalog_mixed_scope_out_of_scope_markers_for_classification(classification)
     if domain == "medical_tcm_mixed":
+        mixed_markers = profile_out_of_scope_markers or (
+            "信息化管理系统",
+            "系统端口",
+            "无缝对接",
+            "综合业务协同平台",
+            "自动化调剂",
+            "发药机",
+            "药瓶清洁",
+            "系统进行管理维护",
+        )
+        core_markers = profile_core_markers or ("中药配方颗粒", "药品", "配送", "仓储", "供应")
         clauses = [
             clause
             for clause in document.clauses
-            if any(
-                marker in clause.text
-                for marker in (
-                    "信息化管理系统",
-                    "系统端口",
-                    "无缝对接",
-                    "综合业务协同平台",
-                    "自动化调剂",
-                    "发药机",
-                    "药瓶清洁",
-                    "系统进行管理维护",
-                )
-            )
+            if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
+        if not any(any(marker in clause.text for marker in mixed_markers) for clause in clauses) or not any(
+            any(marker in clause.text for marker in core_markers) for clause in clauses
+        ):
+            return findings
         title = "混合采购场景叠加自动化设备和信息化接口义务，边界不清"
         rationale = (
             "文件在中药配方颗粒采购中叠加了自动化设备配套、信息化系统端口无缝对接、系统维护和药瓶清洁等多类义务。"
@@ -1229,23 +1236,26 @@ def _add_mixed_scope_boundary_theme_finding(
         rewrite = "建议将中药配方颗粒供货、自动化设备配套和信息化接口开发分开表述；与本次药品采购不直接相关的系统维护、药瓶清洁和扩展服务内容应删除或另行采购。"
         review_reason = "需结合本次采购边界、现有自动化设备建设情况和信息化接口职责分工判断相关配套义务是否应并入当前采购范围。"
     elif domain == "furniture_goods":
+        mixed_markers = profile_out_of_scope_markers or (
+            "定位管理标签模块",
+            "资产管理读写基站",
+            "蓝牙",
+            "UWB",
+            "资产定位管理系统",
+            "智能芯片",
+            "软件管理系统",
+            "碳足迹数据",
+        )
+        core_markers = profile_core_markers or ("家具", "供货", "安装", "交货")
         clauses = [
             clause
             for clause in document.clauses
-            if any(
-                marker in clause.text
-                for marker in (
-                    "定位管理标签模块",
-                    "资产管理读写基站",
-                    "蓝牙",
-                    "UWB",
-                    "资产定位管理系统",
-                    "智能芯片",
-                    "软件管理系统",
-                    "碳足迹数据",
-                )
-            )
+            if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
+        if not any(any(marker in clause.text for marker in mixed_markers) for clause in clauses) or not any(
+            any(marker in clause.text for marker in core_markers) for clause in clauses
+        ):
+            return findings
         title = "家具采购场景叠加资产定位和智能管理系统义务，边界不清"
         rationale = (
             "文件在家具采购中叠加了资产定位标签模块、蓝牙或UWB定位系统、智能芯片和在线管理系统等信息化义务。"
@@ -1255,22 +1265,25 @@ def _add_mixed_scope_boundary_theme_finding(
         rewrite = "建议将家具供货与资产定位、智能芯片和软件管理系统义务分开表述；确需配套建设的，应单独说明其业务必要性、边界和验收责任。"
         review_reason = "需结合家具采购边界、院内资产管理系统现状和是否属于独立信息化建设内容判断相关配套义务是否应并入本次采购。"
     elif domain == "property_service":
+        mixed_markers = profile_out_of_scope_markers or (
+            "物业垃圾分类自动化分捡类系统",
+            "物业能源管理类软件",
+            "物业电梯安全远程监控类系统",
+            "物业消防设备监测自动化类系统",
+            "物业空调运行自动化监测类系统",
+            "软件著作权",
+            "著作权登记证书",
+        )
+        core_markers = profile_core_markers or ("物业", "保洁", "安保", "维修", "驻场", "服务")
         clauses = [
             clause
             for clause in document.clauses
-            if any(
-                marker in clause.text
-                for marker in (
-                    "物业垃圾分类自动化分捡类系统",
-                    "物业能源管理类软件",
-                    "物业电梯安全远程监控类系统",
-                    "物业消防设备监测自动化类系统",
-                    "物业空调运行自动化监测类系统",
-                    "软件著作权",
-                    "著作权登记证书",
-                )
-            )
+            if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
+        if not any(any(marker in clause.text for marker in mixed_markers) for clause in clauses) or not any(
+            any(marker in clause.text for marker in core_markers) for clause in clauses
+        ):
+            return findings
         title = "物业服务场景叠加自动化系统和软件著作权评分，边界不清"
         rationale = (
             "文件在物业管理服务采购中叠加了垃圾分类自动分拣、能源管理、电梯远程监控、消防自动监测和空调运行监测等系统类软件著作权评分。"
@@ -1280,24 +1293,27 @@ def _add_mixed_scope_boundary_theme_finding(
         rewrite = "建议将物业服务能力评价与自动化系统建设能力分开表述；如确需考察数字化管理能力，应围绕实际应用场景、功能效果和服务方案设置低权重、可核验评分因素，而非直接按软件著作权储备赋分。"
         review_reason = "需结合本次物业服务采购范围、学校现有智能化设施情况和数字化管理需求判断相关系统类能力是否应并入本项目评分。"
     elif domain == "signage_printing_service":
+        mixed_markers = profile_out_of_scope_markers or (
+            "软件著作权",
+            "UV 打印机",
+            "UV打印机",
+            "喷绘机",
+            "写真机",
+            "雕刻机",
+            "折弯机",
+            "系统端口",
+            "无缝对接",
+        )
+        core_markers = profile_core_markers or ("标识", "标牌", "导视", "宣传印刷", "设计制作", "安装维护")
         clauses = [
             clause
             for clause in document.clauses
-            if any(
-                marker in clause.text
-                for marker in (
-                    "软件著作权",
-                    "UV 打印机",
-                    "UV打印机",
-                    "喷绘机",
-                    "写真机",
-                    "雕刻机",
-                    "折弯机",
-                    "系统端口",
-                    "无缝对接",
-                )
-            )
+            if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
+        if not any(any(marker in clause.text for marker in mixed_markers) for clause in clauses) or not any(
+            any(marker in clause.text for marker in core_markers) for clause in clauses
+        ):
+            return findings
         title = "标识标牌及宣传印制服务叠加设备保障和信息化支撑内容，边界不清"
         rationale = (
             "文件在标识标牌及宣传印制服务采购中，同时叠加了印刷设备储备、软件著作权和可能的信息化支撑内容。"
@@ -1307,24 +1323,28 @@ def _add_mixed_scope_boundary_theme_finding(
         rewrite = "建议将设计制作服务、现场安装维护、设备保障和可能的信息化支撑分开表述；如确需考察设备或数字化能力，应单独说明业务必要性、边界和验收责任。"
         review_reason = "需结合本次宣传印制服务的真实交付边界判断印刷设备储备和软件著作权等内容是必要支撑，还是被不当上浮为评分或履约要求。"
     elif domain == "medical_device_goods":
+        mixed_markers = profile_out_of_scope_markers or (
+            "免费开放软件端口",
+            "医院信息系统",
+            "HIS",
+            "PACS",
+            "LIS",
+            "完整的数据交换",
+            "数据对接产生的费用",
+            "碳足迹盘查报告",
+            "碳足迹改进报告",
+        )
+        core_markers = profile_core_markers or ("设备", "供货", "安装", "调试", "验收", "院内接口")
         clauses = [
             clause
             for clause in document.clauses
-            if any(
-                marker in clause.text
-                for marker in (
-                    "免费开放软件端口",
-                    "医院信息系统",
-                    "HIS",
-                    "PACS",
-                    "LIS",
-                    "完整的数据交换",
-                    "数据对接产生的费用",
-                    "碳足迹盘查报告",
-                    "碳足迹改进报告",
-                )
-            )
+            if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
         ]
+        has_core_context = any(any(marker in clause.text for marker in core_markers) for clause in clauses) or any(
+            marker in document.document_name for marker in core_markers
+        )
+        if not any(any(marker in clause.text for marker in mixed_markers) for clause in clauses) or not has_core_context:
+            return findings
         title = "设备采购场景叠加信息化接口和碳足迹义务，边界不清"
         rationale = (
             "文件在设备采购中叠加了软件端口开放、医院信息系统对接、数据交换费用承担以及碳足迹盘查和持续改进等义务。"
@@ -1334,8 +1354,20 @@ def _add_mixed_scope_boundary_theme_finding(
         rewrite = "建议将设备供货、医院信息系统接口配合和碳足迹管理分开表述；与本次设备采购不直接相关的系统开放、持续对接和碳足迹报告义务应删除或单列采购。"
         review_reason = "需结合设备联网需求、医院现有信息系统接口边界和碳足迹管理职责判断相关义务是否应并入本次设备采购范围。"
     elif domain == "sports_facility_goods":
-        markers = profile_mixed_markers or ("二维码报修系统", "OTA远程升级", "智能显示", "远程升级")
-        clauses = [clause for clause in document.clauses if any(marker in clause.text for marker in markers)]
+        mixed_markers = profile_out_of_scope_markers or profile_mixed_markers or ("二维码报修系统", "OTA远程升级", "智能显示", "远程升级")
+        core_markers = profile_core_markers or ("运动场", "围网", "硅PU", "照明", "器材", "铺装")
+        clauses = [
+            clause
+            for clause in document.clauses
+            if any(marker in clause.text for marker in (*mixed_markers, *core_markers))
+        ]
+        has_mixed = any(any(marker in clause.text for marker in mixed_markers) for clause in clauses)
+        has_core_in_body = any(
+            any(marker in clause.text for marker in core_markers) and not clause.text.startswith("项目名称")
+            for clause in clauses
+        )
+        if not has_mixed or not has_core_in_body:
+            return findings
         title = "体育器材及运动场设施叠加轻量智能化功能，边界需进一步论证"
         rationale = (
             "文件在体育器材及运动场设施采购中叠加了二维码报修、OTA远程升级、智能显示等轻量智能化功能。"

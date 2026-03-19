@@ -31,6 +31,13 @@ def apply_commercial_analyzers(
         is_substantive_commercial_clause=is_substantive_commercial_clause,
         catalog_classification=catalog_classification,
     )
+    findings = _add_service_evaluation_penalty_theme_finding(
+        document,
+        findings,
+        build_theme_finding=build_theme_finding,
+        is_substantive_commercial_clause=is_substantive_commercial_clause,
+        catalog_classification=catalog_classification,
+    )
     findings = _add_commercial_lifecycle_theme_finding(
         document,
         findings,
@@ -80,6 +87,80 @@ def apply_commercial_analyzers(
         document,
         findings,
         build_theme_finding=build_theme_finding,
+    )
+    return findings
+
+
+def _add_service_evaluation_penalty_theme_finding(
+    document: NormalizedDocument,
+    findings: list[Finding],
+    *,
+    build_theme_finding: ThemeBuilder,
+    is_substantive_commercial_clause: ClausePredicate,
+    catalog_classification: CatalogClassification | None = None,
+) -> list[Finding]:
+    if any("考核扣罚、满意度评价与解除合同后果叠加偏重" in finding.problem_title for finding in findings):
+        return findings
+    is_property_service = classification_has_domain(catalog_classification, "property_service") or classification_has_catalog_prefix(
+        catalog_classification, "C210400"
+    )
+    is_catering_service = classification_has_domain(catalog_classification, "catering_service") or classification_has_catalog_prefix(
+        catalog_classification, "C220400"
+    )
+    if not (is_property_service or is_catering_service):
+        return findings
+    markers = (
+        "每月服务费与考核结果挂钩",
+        "管理费直接挂钩",
+        "满意度评价结果与服务费挂钩",
+        "满意度评价在",
+        "扣除当月物业服务费",
+        "按1%扣减",
+        "按2%扣减",
+        "按3%扣减",
+        "每低1分",
+        "月得分",
+        "考核不合格",
+        "连续两次被评级为“中”",
+        "甲方有权解除合同",
+        "无条件服从",
+        "及时修正《标准》",
+    )
+    clauses = [
+        clause
+        for clause in document.clauses
+        if is_substantive_commercial_clause(clause)
+        and any(marker in clause.text for marker in markers)
+    ]
+    payment_or_deduction = [
+        clause for clause in clauses if any(marker in clause.text for marker in ("服务费", "扣除当月物业服务费", "按1%扣减", "按2%扣减", "按3%扣减", "每低1分"))
+    ]
+    termination_or_open_standard = [
+        clause for clause in clauses if any(marker in clause.text for marker in ("甲方有权解除合同", "无条件服从", "及时修正《标准》", "考核不合格", "连续两次被评级为“中”"))
+    ]
+    if len(clauses) < 3 or not payment_or_deduction or not termination_or_open_standard:
+        return findings
+    findings.append(
+        build_theme_finding(
+            document=document,
+            clauses=clauses,
+            issue_type="one_sided_commercial_term",
+            problem_title="考核扣罚、满意度评价与解除合同后果叠加偏重",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky=(
+                "服务类条款将满意度评价、月度考核、服务费扣减和解除合同后果连续串联。"
+                "当考核标准可调整、扣罚后果直接影响服务费且低分还能触发解除合同时，供应商在履约过程中会承受明显偏重的单方管理后果。"
+            ),
+            impact_on_competition_or_performance="可能使服务费回款、整改压力和解除合同风险同时上升，进而抬高服务项目的不确定性和竞争门槛。",
+            legal_or_policy_basis="中华人民共和国民法典；政府采购需求管理办法（财政部）；履约验收规范要点（中国政府采购网）",
+            rewrite_suggestion="建议分别明确服务考核、满意度评价、扣罚比例和解除合同条件，删除开放式标准调整和自动叠加后果设计，不宜让月度评分直接连续放大为扣费和解除合同依据。",
+            needs_human_review=True,
+            human_review_reason="需结合服务考核制度、付款机制和采购人管理边界判断当前扣罚与解除合同后果是否明显超过项目实际履约需要。",
+            finding_origin="analyzer",
+        )
     )
     return findings
 

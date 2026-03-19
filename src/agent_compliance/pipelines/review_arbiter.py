@@ -58,6 +58,7 @@ def _drop_overbroad_theme_findings(theme_findings: list[Finding]) -> list[Findin
         return theme_findings
     specific_commercial_titles = {
         "付款条件与履约评价结果深度绑定且评价标准开放",
+        "考核扣罚、满意度评价与解除合同后果叠加偏重",
         "商务条款设置异常资金占用安排",
         "交货期限设置异常或明显失真",
         "验收送检、检测和专家评审费用整体转嫁给供应商",
@@ -85,6 +86,7 @@ def _drop_overbroad_theme_findings(theme_findings: list[Finding]) -> list[Findin
         has_other_specific = bool(
             overlapping_titles
             & {
+                "考核扣罚、满意度评价与解除合同后果叠加偏重",
                 "验收送检、检测和专家评审费用整体转嫁给供应商",
                 "商务责任和违约后果设置明显偏重",
                 "验收程序、复检与最终确认边界不清",

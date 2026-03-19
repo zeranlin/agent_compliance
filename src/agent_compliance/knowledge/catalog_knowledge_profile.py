@@ -30,6 +30,8 @@ class CatalogKnowledgeProfile:
     domain_mismatch_markers: tuple[str, ...]
     template_scope_markers: tuple[str, ...]
     mixed_scope_markers: tuple[str, ...]
+    mixed_scope_core_markers: tuple[str, ...]
+    mixed_scope_out_of_scope_markers: tuple[str, ...]
     boundary_notes: str
     related_issue_types: tuple[str, ...]
     preferred_analyzers: tuple[str, ...]
@@ -56,6 +58,8 @@ def load_catalog_knowledge_profiles() -> tuple[CatalogKnowledgeProfile, ...]:
             domain_mismatch_markers=tuple(item.get("domain_mismatch_markers", item.get("common_mismatch_clues", []))),
             template_scope_markers=tuple(item.get("template_scope_markers", [])),
             mixed_scope_markers=tuple(item.get("mixed_scope_markers", [])),
+            mixed_scope_core_markers=tuple(item.get("mixed_scope_core_markers", item.get("core_delivery_capabilities", item.get("reasonable_requirements", [])))),
+            mixed_scope_out_of_scope_markers=tuple(item.get("mixed_scope_out_of_scope_markers", item.get("mixed_scope_markers", []))),
             boundary_notes=item.get("boundary_notes", ""),
             related_issue_types=tuple(item.get("related_issue_types", [])),
             preferred_analyzers=tuple(item.get("preferred_analyzers", [])),
@@ -111,6 +115,24 @@ def catalog_mixed_scope_markers_for_classification(
     values: list[str] = []
     for profile in catalog_knowledge_profiles_for_classification(classification):
         values.extend(profile.mixed_scope_markers)
+    return tuple(dict.fromkeys(values))
+
+
+def catalog_mixed_scope_core_markers_for_classification(
+    classification: CatalogClassification | None,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.mixed_scope_core_markers)
+    return tuple(dict.fromkeys(values))
+
+
+def catalog_mixed_scope_out_of_scope_markers_for_classification(
+    classification: CatalogClassification | None,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.mixed_scope_out_of_scope_markers)
     return tuple(dict.fromkeys(values))
 
 

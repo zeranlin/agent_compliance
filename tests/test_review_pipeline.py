@@ -97,6 +97,35 @@ class ReviewPipelineTest(unittest.TestCase):
             )
         )
 
+    def test_review_requires_core_delivery_clues_for_sports_mixed_scope_theme(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：2025年省级全民健身工程（多功能运动场项目）",
+                "系统功能说明",
+                "提供二维码报修系统，支持OTA远程升级。",
+                "支持智能显示联动。",
+                "支持远程大屏展示与数据同步。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/sports-mixed-no-core.docx",
+            document_name="2025年省级全民健身工程（多功能运动场项目）.docx",
+            file_hash="sports-mixed-no-core",
+            normalized_text_path="/tmp/sports-mixed-no-core.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertFalse(
+            any(
+                finding.problem_title == "体育器材及运动场设施叠加轻量智能化功能，边界需进一步论证"
+                for finding in review.findings
+            )
+        )
+
     def test_representative_evidence_prefers_catalog_relevant_keywords(self) -> None:
         text = "\n".join(
             [
@@ -802,6 +831,33 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("付款条件与履约评价结果深度绑定且评价标准开放", titles)
         self.assertIn("验收送检、检测和专家评审费用整体转嫁给供应商", titles)
         self.assertIn("商务责任和违约后果设置明显偏重", titles)
+        self.assertNotIn("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担", titles)
+
+    def test_review_adds_property_service_penalty_chain_theme_and_drops_overbroad_lifecycle(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：物业管理服务项目",
+                "商务要求",
+                "每月服务费与考核结果挂钩，管理费直接挂钩，满意度评价结果与服务费挂钩。",
+                "月得分每低1分，按1%扣减当月物业服务费。",
+                "采购人可及时修正《标准》，供应商应无条件服从。",
+                "连续两次被评级为“中”或考核不合格的，甲方有权解除合同。",
+                "供应商应24小时内到场处理。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/property-penalty-theme.docx",
+            document_name="物业管理服务项目.docx",
+            file_hash="property-penalty-theme",
+            normalized_text_path="/tmp/property-penalty-theme.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("考核扣罚、满意度评价与解除合同后果叠加偏重", titles)
         self.assertNotIn("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担", titles)
 
     def test_review_overall_summary_includes_document_strategy_route(self) -> None:
