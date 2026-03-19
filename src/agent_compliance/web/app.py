@@ -1468,6 +1468,29 @@ def _review_next_html() -> str:
       gap: 12px;
       flex-wrap: wrap;
     }
+    .export-panel {
+      display: grid;
+      gap: 8px;
+      width: 100%;
+      margin-top: 4px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(255, 248, 240, 0.9);
+      border: 1px solid rgba(201, 175, 150, 0.45);
+    }
+    .export-panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .export-panel strong {
+      font-size: 13px;
+    }
+    .export-panel .meta {
+      font-size: 12px;
+    }
     .switch {
       display: inline-flex;
       align-items: center;
@@ -1707,6 +1730,10 @@ def _review_next_html() -> str:
       color: var(--muted);
       font-weight: 600;
     }
+    .mini-pill.action-direct { background: rgba(163, 61, 34, 0.12); color: var(--high); }
+    .mini-pill.action-soften { background: rgba(143, 103, 20, 0.12); color: var(--medium); }
+    .mini-pill.action-justify { background: rgba(39, 93, 138, 0.12); color: #275d8a; }
+    .mini-pill.action-review { background: rgba(110, 62, 164, 0.12); color: #6e3ea4; }
     .detail-pane {
       display: grid;
       grid-template-rows: minmax(0, 4fr) auto auto;
@@ -1868,6 +1895,10 @@ def _review_next_html() -> str:
       font-size: 10px;
       color: var(--muted);
       letter-spacing: 0.02em;
+    }
+    .detail-item.action-callout {
+      background: #fff8f1;
+      border-color: rgba(201, 175, 150, 0.6);
     }
     .document-pane {
       min-height: 0;
@@ -2099,13 +2130,19 @@ def _review_next_html() -> str:
           </div>
         </form>
         <div id="run-meta" class="meta">上传后会同时返回文档原文、主问题视图、明细视图和来源链路信息。</div>
-        <div id="export-toolbar" class="hero-actions" style="display:none;">
-          <button type="button" class="secondary" data-export-format="markdown" data-export-mode="summary">导出 Markdown（主问题版）</button>
-          <button type="button" class="secondary" data-export-format="markdown" data-export-mode="full">导出 Markdown（完整明细版）</button>
-          <button type="button" class="secondary" data-export-format="xlsx" data-export-mode="summary">导出 Excel（主问题版）</button>
-          <button type="button" class="secondary" data-export-format="xlsx" data-export-mode="full">导出 Excel（完整明细版）</button>
-          <button type="button" class="secondary" data-export-format="json" data-export-mode="summary">导出 JSON（主问题版）</button>
-          <button type="button" class="secondary" data-export-format="json" data-export-mode="full">导出 JSON（完整明细版）</button>
+        <div id="export-toolbar" class="export-panel" style="display:none;">
+          <div class="export-panel-head">
+            <strong>结果导出</strong>
+            <span id="export-status" class="meta">默认按采购人改稿和发布前复核场景导出。</span>
+          </div>
+          <div class="hero-actions">
+            <button type="button" class="secondary" data-export-format="markdown" data-export-mode="summary">导出 Markdown（主问题版）</button>
+            <button type="button" class="secondary" data-export-format="markdown" data-export-mode="full">导出 Markdown（完整明细版）</button>
+            <button type="button" class="secondary" data-export-format="xlsx" data-export-mode="summary">导出 Excel（主问题版）</button>
+            <button type="button" class="secondary" data-export-format="xlsx" data-export-mode="full">导出 Excel（完整明细版）</button>
+            <button type="button" class="secondary" data-export-format="json" data-export-mode="summary">导出 JSON（主问题版）</button>
+            <button type="button" class="secondary" data-export-format="json" data-export-mode="full">导出 JSON（完整明细版）</button>
+          </div>
         </div>
       </div>
     </section>
@@ -2184,12 +2221,14 @@ def _review_next_html() -> str:
       documentMode: 'context',
       activeChapterKey: 'all',
       contextExpanded: false,
+      lastExportLabel: '',
     };
 
     const form = document.getElementById('review-form');
     const openSourceBtn = document.getElementById('open-source-btn');
     const runMetaNode = document.getElementById('run-meta');
     const exportToolbarNode = document.getElementById('export-toolbar');
+    const exportStatusNode = document.getElementById('export-status');
     const summaryGridNode = document.getElementById('summary-grid');
     const issueListNode = document.getElementById('issue-list');
     const detailTitleNode = document.getElementById('detail-title');
@@ -2256,6 +2295,9 @@ def _review_next_html() -> str:
         state.collapsedIssueSections = {};
         openSourceBtn.disabled = !payload.document || !payload.document.source_path;
         exportToolbarNode.style.display = 'flex';
+        if (exportStatusNode) {
+          exportStatusNode.textContent = '默认按采购人改稿和发布前复核场景导出。';
+        }
         const stageName = payload.stage && payload.stage.stage_name ? payload.stage.stage_name : '采购需求形成与发布前审查';
         runMetaNode.textContent = `已完成审查：${payload.review.document_name}；当前按“${stageName}”口径生成结果；缓存 ${payload.cache.used ? '命中' : '未命中'}；本地模型 ${payload.llm.enabled ? '已启用' : '未启用'}。`;
         render();
@@ -2300,8 +2342,15 @@ def _review_next_html() -> str:
         link.click();
         link.remove();
         window.URL.revokeObjectURL(url);
+        state.lastExportLabel = filename;
+        if (exportStatusNode) {
+          exportStatusNode.textContent = `最近导出：${filename}；默认仍按采购人改稿和发布前复核场景组织字段。`;
+        }
         runMetaNode.textContent = `已导出 ${filename}`;
       } catch (error) {
+        if (exportStatusNode) {
+          exportStatusNode.textContent = `导出失败：${error.message}`;
+        }
         runMetaNode.textContent = `导出失败：${error.message}`;
       }
     }
@@ -2486,6 +2535,7 @@ def _review_next_html() -> str:
 
     function renderIssueCard(finding) {
       const active = finding.finding_id === state.selectedFindingId;
+      const action = suggestedAction(finding);
       const badges = [
         `<span class="badge ${escapeHtml(finding.risk_level)}">${riskLabel(finding.risk_level)}</span>`,
         isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : '',
@@ -2502,6 +2552,7 @@ def _review_next_html() -> str:
           <div class="mini-meta" style="margin-top:10px;">
             <span class="mini-pill">位置 ${escapeHtml(compactLocation(finding))}</span>
             <span class="mini-pill">来源 ${escapeHtml(sourceChain(finding))}</span>
+            <span class="mini-pill ${escapeHtml(action.className)}">${escapeHtml(action.label)}</span>
           </div>
           <div class="issue-excerpt"><strong>代表性证据：</strong>${escapeHtml(finding.source_text || '无原文摘录')}</div>
         </article>
@@ -2528,11 +2579,12 @@ def _review_next_html() -> str:
       `;
       detailExcerptNode.textContent = '';
       detailGridNode.innerHTML = `
-        <div class="detail-item"><strong>代表性证据</strong><div>${escapeHtml(finding.source_text || '暂无')}</div></div>
+        <div class="detail-item action-callout"><strong>处理建议</strong><div>${escapeHtml(suggestedAction(finding).label)}${finding.needs_human_review ? ` ｜ ${escapeHtml(finding.human_review_reason || '需采购/法务复核')}` : ''}</div></div>
         <div class="detail-item"><strong>风险说明</strong><div>${escapeHtml(finding.why_it_is_risky || '暂无')}</div></div>
-        <div class="detail-item"><strong>建议改写</strong><div>${escapeHtml(finding.rewrite_suggestion || '暂无')}</div></div>
         <div class="detail-item"><strong>法规依据</strong><div>${escapeHtml(finding.legal_or_policy_basis || finding.primary_authority || '暂无')}</div></div>
-        <div class="detail-item"><strong>适用逻辑</strong><div>${escapeHtml(finding.applicability_logic || finding.human_review_reason || '暂无')}</div></div>
+        <div class="detail-item"><strong>适用逻辑</strong><div>${escapeHtml(finding.applicability_logic || '暂无')}</div></div>
+        <div class="detail-item"><strong>建议改写</strong><div>${escapeHtml(finding.rewrite_suggestion || '暂无')}</div></div>
+        <div class="detail-item"><strong>代表性证据</strong><div>${escapeHtml(finding.source_text || '暂无')}</div></div>
       `;
       renderDifferenceLearning(finding);
     }
@@ -2710,6 +2762,19 @@ def _review_next_html() -> str:
       if (level === 'high') return '高风险';
       if (level === 'medium') return '中风险';
       return level || '未知';
+    }
+
+    function suggestedAction(finding) {
+      if (finding.needs_human_review) {
+        return { label: '建议采购/法务复核', className: 'action-review' };
+      }
+      if (/论证/.test(finding.problem_title || '') || finding.issue_type === 'technical_justification_needed') {
+        return { label: '建议补必要性论证', className: 'action-justify' };
+      }
+      if (/弱化|主观|高分|过严|边界/.test([finding.problem_title, finding.why_it_is_risky].filter(Boolean).join(' '))) {
+        return { label: '建议弱化表述', className: 'action-soften' };
+      }
+      return { label: '建议直接修改', className: 'action-direct' };
     }
 
     function compactLocation(finding) {
