@@ -742,6 +742,36 @@ class ReviewPipelineTest(unittest.TestCase):
         self.assertIn("商务条款设置异常资金占用安排", titles)
         self.assertIn("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担", titles)
 
+    def test_arbiter_drops_overbroad_commercial_lifecycle_when_specific_themes_are_present(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：物业管理服务项目",
+                "商务要求",
+                "每月服务费与履约评价结果挂钩，管理费直接挂钩，满意度评价结果与服务费挂钩，支付对应阶段款。",
+                "项目负责人可根据项目要求自行设定评价标准、评价指标和分值。",
+                "履约评价不合格的，对应阶段款不予支付。",
+                "所有送检、检测、专家评审和复检费用均由供应商承担。",
+                "如出现违约情形，采购人可解除合同并从应付货款中直接扣除违约金。",
+                "供应商应24小时内到场处理，否则采购人可另行委托。",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/property-commercial-specifics.docx",
+            document_name="物业管理服务项目.docx",
+            file_hash="property-commercial-specifics",
+            normalized_text_path="/tmp/property-commercial-specifics.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+
+        review = build_review_result(document, run_rule_scan(document))
+        titles = {finding.problem_title for finding in review.findings}
+        self.assertIn("付款条件与履约评价结果深度绑定且评价标准开放", titles)
+        self.assertIn("验收送检、检测和专家评审费用整体转嫁给供应商", titles)
+        self.assertIn("商务责任和违约后果设置明显偏重", titles)
+        self.assertNotIn("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担", titles)
+
     def test_review_overall_summary_includes_document_strategy_route(self) -> None:
         text = "\n".join(
             [

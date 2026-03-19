@@ -5,6 +5,7 @@ import unittest
 import tests._bootstrap  # noqa: F401
 
 from agent_compliance.knowledge.catalog_knowledge_profile import (
+    catalog_commercial_lifecycle_markers_for_classification,
     catalog_core_delivery_capabilities_for_classification,
     catalog_domain_mismatch_markers_for_classification,
     catalog_mixed_scope_markers_for_classification,
@@ -65,6 +66,7 @@ class CatalogKnowledgeProfileTest(unittest.TestCase):
         self.assertIn("园区保洁", catalog_template_scope_markers_for_classification(classification))
         self.assertIn("药品供货", catalog_core_delivery_capabilities_for_classification(classification))
         self.assertIn("信息化管理系统", catalog_scoring_risk_markers_for_classification(classification))
+        self.assertIn("36个月", catalog_commercial_lifecycle_markers_for_classification(classification))
 
     def test_strategy_profile_consumes_catalog_knowledge(self) -> None:
         classification = CatalogClassification(

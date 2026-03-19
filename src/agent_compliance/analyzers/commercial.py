@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Any, Callable
 
+from agent_compliance.knowledge.catalog_knowledge_profile import catalog_commercial_lifecycle_markers_for_classification
 from agent_compliance.knowledge.procurement_catalog import (
     CatalogClassification,
     classification_has_catalog_prefix,
@@ -412,6 +413,7 @@ def _add_commercial_lifecycle_theme_finding(
 ) -> list[Finding]:
     if any("履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担" in finding.problem_title for finding in findings):
         return findings
+    profile_markers = catalog_commercial_lifecycle_markers_for_classification(catalog_classification)
     is_property_service = classification_has_domain(catalog_classification, "property_service") or classification_has_catalog_prefix(
         catalog_classification, "C210400"
     )
@@ -466,6 +468,7 @@ def _add_commercial_lifecycle_theme_finding(
                 "备用设备",
                 "财政审批",
                 "暂停支付",
+                *profile_markers,
             )
         )
     ]
@@ -530,6 +533,7 @@ def _add_commercial_lifecycle_theme_finding(
                 "其他合同未明示的相关工作",
                 "必须有能力进行更改",
                 "固定不变价格",
+                *profile_markers,
             )
         )
     ]
@@ -572,8 +576,16 @@ def _add_commercial_lifecycle_theme_finding(
             for clause in focused_clauses
             if any(marker in clause.text for marker in ("安装", "调试", "验收", "终验", "开机率", "备用设备", "送检"))
         ]
+    profile_clauses = [clause for clause in focused_clauses if any(marker in clause.text for marker in profile_markers)]
     if len(focused_clauses) < 3 or not responsibility_clauses or not acceptance_clauses:
         return findings
+    if profile_markers and len(profile_clauses) < 2 and len(focused_clauses) > 4:
+        return findings
+    lifecycle_hint = ""
+    if is_property_service:
+        lifecycle_hint = " 在物业服务场景下，付款考核、驻场响应和服务质量责任边界本应预先固定，不宜交由履约过程中单方放大。"
+    elif is_goods_install or is_medical_goods:
+        lifecycle_hint = " 在设备供货并安装或医疗设备场景下，付款、验收、备用设备、开机率和售后到场条件应围绕安装调试与试运行边界分别明确。"
     findings.append(
         build_theme_finding(
             document=document,
@@ -587,10 +599,11 @@ def _add_commercial_lifecycle_theme_finding(
             why_it_is_risky=(
                 "商务与验收条款将付款节点、验收判定、送检复检费用、售后到场时限以及附加管理义务串联在一起，形成对供应商整体偏重的履约后果链。"
                 "当这些后果叠加出现时，供应商不仅承担较高的履约成本，也难以预判回款、整改、到场响应和附加义务边界。"
+                f"{lifecycle_hint}"
             ),
             impact_on_competition_or_performance="可能提高报价不确定性和合同争议风险，并通过整体偏重的履约后果抬高投标门槛。",
             legal_or_policy_basis="中华人民共和国民法典；政府采购需求管理办法（财政部）；履约验收规范要点（中国政府采购网）",
-            rewrite_suggestion="建议将付款、验收、复检、售后到场和附加管理义务拆分为独立条款，分别明确触发条件、责任来源和费用边界，不宜通过开放式义务和叠加式后果整体压重供应商责任。",
+            rewrite_suggestion="建议将付款、验收、复检、售后到场和附加管理义务拆分为独立条款，分别明确触发条件、责任来源和费用边界，并按当前品目的安装、服务或验收核心流程单独设定，不宜通过开放式义务和叠加式后果整体压重供应商责任。",
             needs_human_review=True,
             human_review_reason="需结合财政支付节点、验收流程和售后服务模式判断全链路责任配置是否超过项目实际履约需要。",
             finding_origin="analyzer",

@@ -238,6 +238,7 @@
   - 评分引擎已开始按真实评分表结构识别 `技术部分评分PT`、`商务部分评分PB`、`评审项` 等表达，不再只依赖 `评标信息` 或简单 `评分` 标签
   - 品目知识画像已进入第二阶段，开始提供可执行的 `domain_mismatch_markers`、`template_scope_markers`、`mixed_scope_markers`，并直接参与错位判断、模板残留判断和混合采购边界判断
   - 品目知识画像已继续补入 `core_delivery_capabilities`、`scoring_risk_markers`、`scoring_mismatch_markers`，评分引擎开始直接按品目核心履约能力与高风险评分信号判断评分主题是否漂移
+  - 品目知识画像已继续补入 `commercial_lifecycle_markers`，商务引擎开始按品目场景收紧付款、验收、责任和到场响应的关键线索，减少通用关键词对商务总问题的过度放大
   - 品目知识画像已继续下沉到 `document_audit_llm`、`confidence_calibrator` 和 benchmark/difference learning：全文辅助扫描提示词会显式带出品目画像高风险和边界提示，置信度校准会结合当前品目画像做轻量升降权，benchmark 与差异学习结果也开始汇总当前场景的画像高风险模式
 
 相关设计：
@@ -327,6 +328,7 @@
 - 当前已开始落地 `personnel_certificate_mismatch_engine`，可进一步识别团队评分中学历、职称、奖项、项目经验和错位证书的堆叠设计。
 - 当前已继续增强 `demo_mechanism_engine`，除演示高分值外，还可把可运行系统、原型/PPT 差异、签到时限和现场组织门槛收束为演示机制主问题。
 - 当前已开始落地 `commercial_lifecycle_analyzer`，可从付款、验收、复检、售后到场和责任承担全链路识别整体偏重供应商承担的履约后果链。
+- 当前已继续增强 `commercial_lifecycle_analyzer`，开始结合品目画像里的商务链路线索，在物业、设备安装、医疗设备等场景下更稳地挑选付款、验收、责任与到场响应的关键条款，并避免无关章节噪声放大全链路主题。
 - 当前已开始落地 `evidence_selector`，可按主问题语义优先挑选更像人工会引用的代表性摘录，而不再仅按前两段原文截取。
 - 当前已开始落地 `difference_learning_loop`，启用本地模型后会额外生成结构化学习建议，分别反哺规则、主题分析器、LLM prompt 和 benchmark。
 - 本地模型新增的边界问题会自动沉淀成 `rule_candidate`，而不是只停留在一次性 finding 中
@@ -366,6 +368,7 @@
 - 当前主编排已正式接入品目分类结果：`review.py` 会先完成 `procurement_catalog_classifier` 识别，再把同一份分类结果传入 `review_strategy.py`，用于生成文件级策略画像、章节复核路线和分析器执行顺序，而不再只是作为摘要展示字段。
 - 当前 `domain_match_engine` 与高频 `qualification / scoring / technical / commercial` 分析器也已开始按主品目、次品目和混合采购标记做差异化判断，不再只按固定顺序和通用规则做统一分析。
 - 当前 `qualification_reasoning_engine` 和 `finding_arbiter` 也已开始参考官方品目编码前缀控制资格总问题上浮和主题覆盖边界，能够更稳地区分物业、标识印制、医疗设备等场景下哪些错位证书和门槛应独立上浮、哪些不应被总问题过度吞并。
+- 当前 `finding_arbiter` 已继续增强商务主题仲裁：当“付款绑定评价”等更具体的商务子主题已经上浮时，会优先压掉过宽的履约全链路总括主题，避免采购人同时看到重复且层级冲突的商务结论。
 - 当前官方品目编码映射结果也已继续下沉到 `document_audit_llm` 和 `evidence_selector`：全文辅助扫描会在提示词里显式带出主品目、官方品目映射和混合采购提示，代表性证据选择也会结合品目场景优先保留更具诊断价值的原文摘录。
 - 当前官方品目编码映射结果也已继续下沉到 `rule_candidates` 和 `difference_learning_loop`：本地模型新增问题生成的规则候选、benchmark 建议和差异学习建议会同时带上主品目、审查领域和混合采购标记，便于后续按场景补规则、补分析器和补 benchmark。
 - 当前已新增第一版品目知识画像层 `catalog-knowledge-profiles.json` 和 `catalog_knowledge_profile.py`，开始把“常见合理要求 / 高风险画像 / 常见错位线索 / 边界说明 / 优先 analyzer”从分类数据中独立出来，并供 `review_strategy` 的摘要与 analyzer 路由消费。

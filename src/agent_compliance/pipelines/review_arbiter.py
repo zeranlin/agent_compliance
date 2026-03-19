@@ -34,18 +34,68 @@ def apply_finding_arbiter(
     classification: CatalogClassification | None = None,
 ) -> list[Finding]:
     theme_findings = [finding for finding in findings if finding.finding_origin == "analyzer"]
+    theme_findings = _drop_overbroad_theme_findings(theme_findings)
     if not theme_findings:
         return findings
+    kept_theme_keys = {(finding.problem_title, finding.text_line_start, finding.text_line_end) for finding in theme_findings}
 
     filtered: list[Finding] = []
     for finding in findings:
         if finding.finding_origin == "analyzer":
+            key = (finding.problem_title, finding.text_line_start, finding.text_line_end)
+            if key not in kept_theme_keys:
+                continue
             filtered.append(finding)
             continue
         if is_finding_covered_by_theme(finding, theme_findings, classification=classification):
             continue
         filtered.append(finding)
     return filtered
+
+
+def _drop_overbroad_theme_findings(theme_findings: list[Finding]) -> list[Finding]:
+    if not theme_findings:
+        return theme_findings
+    specific_commercial_titles = {
+        "付款条件与履约评价结果深度绑定且评价标准开放",
+        "商务条款设置异常资金占用安排",
+        "交货期限设置异常或明显失真",
+        "验收送检、检测和专家评审费用整体转嫁给供应商",
+        "商务责任和违约后果设置明显偏重",
+        "验收程序、复检与最终确认边界不清",
+    }
+    lifecycle_title = "履约全链路中的付款、验收、责任和到场响应边界整体偏向供应商承担"
+    lifecycle_themes = [finding for finding in theme_findings if finding.problem_title == lifecycle_title]
+    if not lifecycle_themes:
+        return theme_findings
+
+    kept: list[Finding] = []
+    for finding in theme_findings:
+        if finding.problem_title != lifecycle_title:
+            kept.append(finding)
+            continue
+        overlapping_specifics = [
+            candidate
+            for candidate in theme_findings
+            if candidate.problem_title in specific_commercial_titles
+            and line_ranges_overlap(candidate, finding, tolerance=6)
+        ]
+        overlapping_titles = {candidate.problem_title for candidate in overlapping_specifics}
+        has_payment_chain = "付款条件与履约评价结果深度绑定且评价标准开放" in overlapping_titles
+        has_other_specific = bool(
+            overlapping_titles
+            & {
+                "验收送检、检测和专家评审费用整体转嫁给供应商",
+                "商务责任和违约后果设置明显偏重",
+                "验收程序、复检与最终确认边界不清",
+                "交货期限设置异常或明显失真",
+                "商务条款设置异常资金占用安排",
+            }
+        )
+        if has_payment_chain and has_other_specific:
+            continue
+        kept.append(finding)
+    return kept
 
 
 def is_finding_covered_by_theme(

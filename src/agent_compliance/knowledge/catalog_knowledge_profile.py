@@ -23,6 +23,7 @@ class CatalogKnowledgeProfile:
     high_risk_patterns: tuple[str, ...]
     scoring_risk_markers: tuple[str, ...]
     scoring_mismatch_markers: tuple[str, ...]
+    commercial_lifecycle_markers: tuple[str, ...]
     common_mismatch_clues: tuple[str, ...]
     domain_mismatch_markers: tuple[str, ...]
     template_scope_markers: tuple[str, ...]
@@ -46,6 +47,7 @@ def load_catalog_knowledge_profiles() -> tuple[CatalogKnowledgeProfile, ...]:
             high_risk_patterns=tuple(item.get("high_risk_patterns", [])),
             scoring_risk_markers=tuple(item.get("scoring_risk_markers", item.get("high_risk_patterns", []))),
             scoring_mismatch_markers=tuple(item.get("scoring_mismatch_markers", item.get("domain_mismatch_markers", item.get("common_mismatch_clues", [])))),
+            commercial_lifecycle_markers=tuple(item.get("commercial_lifecycle_markers", [])),
             common_mismatch_clues=tuple(item.get("common_mismatch_clues", [])),
             domain_mismatch_markers=tuple(item.get("domain_mismatch_markers", item.get("common_mismatch_clues", []))),
             template_scope_markers=tuple(item.get("template_scope_markers", [])),
@@ -132,4 +134,13 @@ def catalog_scoring_mismatch_markers_for_classification(
     values: list[str] = []
     for profile in catalog_knowledge_profiles_for_classification(classification):
         values.extend(profile.scoring_mismatch_markers)
+    return tuple(dict.fromkeys(values))
+
+
+def catalog_commercial_lifecycle_markers_for_classification(
+    classification: CatalogClassification | None,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.commercial_lifecycle_markers)
     return tuple(dict.fromkeys(values))
