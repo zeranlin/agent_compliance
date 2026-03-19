@@ -41,6 +41,7 @@
 - [code-review-main-pipeline-update.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/code-review-main-pipeline-update.md)
 - [architecture-gap-priorities.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/architecture-gap-priorities.md)
 - [engine-tuning-checklist.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/engine-tuning-checklist.md)
+- [human-vs-code-review-gap-matrix.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/human-vs-code-review-gap-matrix.md)
 - [legal-semantic-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/legal-semantic-layer-design.md)
 - [legal-authority-local-storage-spec.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/legal-authority-local-storage-spec.md)
 - [review-export-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/review-export-design.md)
