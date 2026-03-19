@@ -3,6 +3,13 @@ from __future__ import annotations
 from agent_compliance.knowledge.catalog_knowledge_profile import catalog_knowledge_profiles_for_classification
 from agent_compliance.knowledge.procurement_catalog import CatalogClassification
 from agent_compliance.pipelines.procurement_stage_router import ProcurementStageProfile, route_procurement_stage
+from agent_compliance.pipelines.rewrite_generator import (
+    ACTION_DIRECT,
+    ACTION_JUSTIFY,
+    ACTION_REVIEW,
+    ACTION_SOFTEN,
+    determine_suggested_action,
+)
 from agent_compliance.schemas import Finding
 
 
@@ -77,20 +84,18 @@ def _stage_adjusted_confidence(
 ) -> str:
     stage_key = stage_profile.stage_key if stage_profile else None
     adjusted = base_confidence
+    action = determine_suggested_action(finding, stage_profile=stage_profile)
     if stage_key == "pre_release_requirement_review":
-        if (
-            finding.issue_type in {"technical_justification_needed", "ambiguous_requirement", "unclear_acceptance_standard"}
-            and finding.severity_score >= 2
-            and adjusted == "low"
-        ):
+        if action in {ACTION_JUSTIFY, ACTION_REVIEW} and adjusted == "low" and finding.severity_score >= 2:
             adjusted = "medium"
-        if (
-            finding.needs_human_review
-            and finding.issue_type in UNCERTAIN_ISSUE_TYPES
-            and finding.severity_score >= 2
-            and adjusted == "low"
-        ):
+        if action == ACTION_JUSTIFY and adjusted == "high":
             adjusted = "medium"
+        if action == ACTION_REVIEW and adjusted == "high" and finding.issue_type in UNCERTAIN_ISSUE_TYPES:
+            adjusted = "medium"
+        if action == ACTION_SOFTEN and adjusted == "low" and finding.severity_score >= 2:
+            adjusted = "medium"
+        if action == ACTION_DIRECT and finding.primary_authority and finding.severity_score >= 2:
+            adjusted = "high"
     return _catalog_adjusted_confidence(finding, adjusted, classification=classification)
 
 

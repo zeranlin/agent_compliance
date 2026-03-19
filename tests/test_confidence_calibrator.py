@@ -140,6 +140,68 @@ class ConfidenceCalibratorTest(unittest.TestCase):
         )
         self.assertEqual(calibrate_finding_confidence(finding, classification=classification), "high")
 
+    def test_pre_release_stage_caps_justify_findings_at_medium(self) -> None:
+        finding = Finding(
+            finding_id="F-004",
+            document_name="sample.docx",
+            problem_title="技术要求可能合理但需补充必要性论证",
+            page_hint=None,
+            clause_id="4",
+            source_section="技术",
+            section_path="技术要求",
+            table_or_item_label=None,
+            text_line_start=4,
+            text_line_end=4,
+            source_text="需由本地机构出具检测报告。",
+            issue_type="technical_justification_needed",
+            risk_level="high",
+            severity_score=3,
+            confidence="high",
+            compliance_judgment="needs_human_review",
+            why_it_is_risky="需结合市场可得性补充论证。",
+            impact_on_competition_or_performance="x",
+            legal_or_policy_basis="x",
+            rewrite_suggestion="x",
+            needs_human_review=True,
+            human_review_reason="x",
+            primary_authority="《政府采购需求管理办法》第七条",
+        )
+        self.assertEqual(
+            calibrate_finding_confidence(finding, stage_profile=DEFAULT_STAGE_PROFILE),
+            "medium",
+        )
+
+    def test_pre_release_stage_keeps_direct_modify_authority_backed_finding_high(self) -> None:
+        finding = Finding(
+            finding_id="F-005",
+            document_name="sample.docx",
+            problem_title="商务责任和违约后果设置明显偏重",
+            page_hint=None,
+            clause_id="5",
+            source_section="商务",
+            section_path="商务条款",
+            table_or_item_label=None,
+            text_line_start=5,
+            text_line_end=5,
+            source_text="采购人不承担任何责任。",
+            issue_type="one_sided_commercial_term",
+            risk_level="high",
+            severity_score=3,
+            confidence="medium",
+            compliance_judgment="likely_non_compliant",
+            why_it_is_risky="责任条款绝对化。",
+            impact_on_competition_or_performance="x",
+            legal_or_policy_basis="x",
+            rewrite_suggestion="x",
+            needs_human_review=False,
+            human_review_reason=None,
+            primary_authority="《民法典》相关规定",
+        )
+        self.assertEqual(
+            calibrate_finding_confidence(finding, stage_profile=DEFAULT_STAGE_PROFILE),
+            "high",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

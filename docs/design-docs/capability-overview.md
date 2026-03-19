@@ -230,6 +230,7 @@
 - 已生成第一版 `data/legal-authorities/index/issue-type-authority-map.json`，先把高频 `issue_type` 稳定映射到主依据、辅依据和条文级索引，减少同类问题在不同文件中的法规引用漂移
 - 已接入第一版 `legal_authority_reasoner`，开始基于 `issue_type_authority_map + clause-index + 当前 finding` 自动生成主依据、辅依据、适用逻辑，并补充法规侧人工复核理由
 - 已接入第一版 `confidence_calibrator`，开始把条文级主依据、问题类型边界和人工复核标记合并进 `confidence` 校准
+- 已新增 `rewrite_generator`，开始按“建议直接修改 / 建议弱化表述 / 建议补充必要性论证 / 建议采购与法务复核”统一改写建议前缀，并与 `confidence_calibrator` 联动校准发布前审查场景下的分寸感
 - `review-next`、规则管理页和 benchmark gate 已开始展示主依据、辅依据、适用逻辑和法规侧复核提示，法规语义层不再只停留在后端
 - 已接入规则治理层，开始具备 `rule_registry`、`rule_priority_profile` 和 `catalog_sensitive_rule_router`，并让规则扫描按采购品目优先级压缩同一条款同一风险簇的重复命中；当前已支持正式规则状态分层、按品目显式停用/降权，以及在 `/rules` 页面展示规则治理信息
 - 已开始把采购品目层从“分类”推进到“画像”：
