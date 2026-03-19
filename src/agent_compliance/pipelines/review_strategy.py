@@ -3,7 +3,10 @@ from __future__ import annotations
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from agent_compliance.knowledge.catalog_knowledge_profile import catalog_knowledge_profiles_for_classification
+from agent_compliance.knowledge.catalog_knowledge_profile import (
+    catalog_core_delivery_capabilities_for_classification,
+    catalog_knowledge_profiles_for_classification,
+)
 from agent_compliance.knowledge.procurement_catalog import CatalogClassification, classify_procurement_catalog, load_procurement_catalogs
 from agent_compliance.pipelines.procurement_stage_router import ProcurementStageProfile, route_procurement_stage
 from agent_compliance.schemas import Finding, NormalizedDocument
@@ -39,6 +42,7 @@ class DocumentStrategyProfile:
     catalog_evidence: tuple[str, ...] = ()
     preferred_analyzer_groups: tuple[str, ...] = ()
     catalog_reasonable_requirements: tuple[str, ...] = ()
+    catalog_core_delivery_capabilities: tuple[str, ...] = ()
     catalog_high_risk_patterns: tuple[str, ...] = ()
     catalog_boundary_notes: tuple[str, ...] = ()
 
@@ -159,6 +163,7 @@ def build_document_strategy_profile(
             catalog_evidence=classification.catalog_evidence if classification else (),
             preferred_analyzer_groups=preferred_analyzer_groups_for_classification(classification),
             catalog_reasonable_requirements=_catalog_reasonable_requirements_for_classification(classification),
+            catalog_core_delivery_capabilities=catalog_core_delivery_capabilities_for_classification(classification),
             catalog_high_risk_patterns=_catalog_high_risk_patterns_for_classification(classification),
             catalog_boundary_notes=_catalog_boundary_notes_for_classification(classification),
         )
@@ -245,6 +250,7 @@ def build_document_strategy_profile(
         catalog_evidence=classification.catalog_evidence if classification else (),
         preferred_analyzer_groups=preferred_analyzer_groups_for_classification(classification),
         catalog_reasonable_requirements=_catalog_reasonable_requirements_for_classification(classification),
+        catalog_core_delivery_capabilities=catalog_core_delivery_capabilities_for_classification(classification),
         catalog_high_risk_patterns=_catalog_high_risk_patterns_for_classification(classification),
         catalog_boundary_notes=_catalog_boundary_notes_for_classification(classification),
     )

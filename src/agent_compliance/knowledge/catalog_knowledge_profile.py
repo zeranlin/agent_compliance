@@ -19,7 +19,10 @@ class CatalogKnowledgeProfile:
     review_domain_key: str
     category_type: str
     reasonable_requirements: tuple[str, ...]
+    core_delivery_capabilities: tuple[str, ...]
     high_risk_patterns: tuple[str, ...]
+    scoring_risk_markers: tuple[str, ...]
+    scoring_mismatch_markers: tuple[str, ...]
     common_mismatch_clues: tuple[str, ...]
     domain_mismatch_markers: tuple[str, ...]
     template_scope_markers: tuple[str, ...]
@@ -39,7 +42,10 @@ def load_catalog_knowledge_profiles() -> tuple[CatalogKnowledgeProfile, ...]:
             review_domain_key=item["review_domain_key"],
             category_type=item["category_type"],
             reasonable_requirements=tuple(item.get("reasonable_requirements", [])),
+            core_delivery_capabilities=tuple(item.get("core_delivery_capabilities", item.get("reasonable_requirements", []))),
             high_risk_patterns=tuple(item.get("high_risk_patterns", [])),
+            scoring_risk_markers=tuple(item.get("scoring_risk_markers", item.get("high_risk_patterns", []))),
+            scoring_mismatch_markers=tuple(item.get("scoring_mismatch_markers", item.get("domain_mismatch_markers", item.get("common_mismatch_clues", [])))),
             common_mismatch_clues=tuple(item.get("common_mismatch_clues", [])),
             domain_mismatch_markers=tuple(item.get("domain_mismatch_markers", item.get("common_mismatch_clues", []))),
             template_scope_markers=tuple(item.get("template_scope_markers", [])),
@@ -99,4 +105,31 @@ def catalog_mixed_scope_markers_for_classification(
     values: list[str] = []
     for profile in catalog_knowledge_profiles_for_classification(classification):
         values.extend(profile.mixed_scope_markers)
+    return tuple(dict.fromkeys(values))
+
+
+def catalog_core_delivery_capabilities_for_classification(
+    classification: CatalogClassification | None,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.core_delivery_capabilities)
+    return tuple(dict.fromkeys(values))
+
+
+def catalog_scoring_risk_markers_for_classification(
+    classification: CatalogClassification | None,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.scoring_risk_markers)
+    return tuple(dict.fromkeys(values))
+
+
+def catalog_scoring_mismatch_markers_for_classification(
+    classification: CatalogClassification | None,
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for profile in catalog_knowledge_profiles_for_classification(classification):
+        values.extend(profile.scoring_mismatch_markers)
     return tuple(dict.fromkeys(values))

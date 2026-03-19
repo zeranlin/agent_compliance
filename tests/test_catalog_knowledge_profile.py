@@ -5,10 +5,13 @@ import unittest
 import tests._bootstrap  # noqa: F401
 
 from agent_compliance.knowledge.catalog_knowledge_profile import (
+    catalog_core_delivery_capabilities_for_classification,
     catalog_domain_mismatch_markers_for_classification,
     catalog_mixed_scope_markers_for_classification,
     catalog_knowledge_profile_by_catalog_id,
     catalog_knowledge_profiles_for_classification,
+    catalog_scoring_mismatch_markers_for_classification,
+    catalog_scoring_risk_markers_for_classification,
     catalog_template_scope_markers_for_classification,
     load_catalog_knowledge_profiles,
 )
@@ -24,12 +27,15 @@ class CatalogKnowledgeProfileTest(unittest.TestCase):
         self.assertIsNotNone(furniture)
         assert furniture is not None
         self.assertIn("环保要求", furniture.reasonable_requirements)
+        self.assertIn("供货质量", furniture.core_delivery_capabilities)
         self.assertIn("智能管理边界外扩", furniture.high_risk_patterns)
+        self.assertIn("生产设备", furniture.scoring_risk_markers)
         self.assertTrue(furniture.boundary_notes)
         sports = catalog_knowledge_profile_by_catalog_id("CAT-SPORTS")
         self.assertIsNotNone(sports)
         assert sports is not None
         self.assertIn("技术评分过高", sports.high_risk_patterns)
+        self.assertIn("器材供货", sports.core_delivery_capabilities)
         self.assertIn("二维码报修系统", sports.common_mismatch_clues)
         self.assertIn("二维码报修系统", sports.domain_mismatch_markers)
         self.assertIn("二维码报修系统", sports.template_scope_markers)
@@ -57,6 +63,8 @@ class CatalogKnowledgeProfileTest(unittest.TestCase):
         self.assertIn("CAT-INFO", profile_ids)
         self.assertIn("信息化管理系统", catalog_mixed_scope_markers_for_classification(classification))
         self.assertIn("园区保洁", catalog_template_scope_markers_for_classification(classification))
+        self.assertIn("药品供货", catalog_core_delivery_capabilities_for_classification(classification))
+        self.assertIn("信息化管理系统", catalog_scoring_risk_markers_for_classification(classification))
 
     def test_strategy_profile_consumes_catalog_knowledge(self) -> None:
         classification = CatalogClassification(
@@ -76,6 +84,7 @@ class CatalogKnowledgeProfileTest(unittest.TestCase):
         )
         strategy = build_document_strategy_profile([], classification=classification)
         self.assertIn("设计制作", strategy.catalog_reasonable_requirements)
+        self.assertIn("设计制作", strategy.catalog_core_delivery_capabilities)
         self.assertIn("错位IT/保安/信息安全认证", strategy.catalog_high_risk_patterns)
         self.assertTrue(strategy.catalog_boundary_notes)
         self.assertIn("scoring", strategy.preferred_analyzer_groups)
@@ -99,6 +108,8 @@ class CatalogKnowledgeProfileTest(unittest.TestCase):
         markers = catalog_domain_mismatch_markers_for_classification(classification)
         self.assertIn("IT服务管理体系认证", markers)
         self.assertIn("交通部交工验收", markers)
+        scoring_markers = catalog_scoring_mismatch_markers_for_classification(classification)
+        self.assertIn("软件著作权", scoring_markers)
 
 
 if __name__ == "__main__":
