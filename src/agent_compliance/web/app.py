@@ -456,8 +456,8 @@ def _run_review_job(job_id: str, source_path: Path, use_cache: bool, use_llm: bo
             job_id,
             current_step="base_scan",
             complete_steps=("parse", "catalog"),
-            run_steps=("base_scan", "rule_scan", "scoring", "mixed_scope", "commercial"),
-            message="正在进行基础风险扫描，识别资格、评分、技术、商务/验收问题。",
+            run_steps=("base_scan", "rule_scan"),
+            message="正在扫描基础条款，识别资格、评分、技术、商务/验收风险。",
         )
 
         reference_snapshot = reference_snapshot_id(paths.repo_root / "docs" / "references")
@@ -471,6 +471,12 @@ def _run_review_job(job_id: str, source_path: Path, use_cache: bool, use_llm: bo
         cache_used = review is not None
         if review is None:
             hits = run_rule_scan(normalized)
+            _mark_review_job(
+                job_id,
+                complete_steps=("rule_scan",),
+                run_steps=("scoring", "mixed_scope", "commercial"),
+                message="正在扫描评分条款，并分析混合边界和商务链条。",
+            )
             review = build_review_result(normalized, hits)
             if use_cache:
                 save_review_cache(
@@ -498,8 +504,8 @@ def _run_review_job(job_id: str, source_path: Path, use_cache: bool, use_llm: bo
             _mark_review_job(
                 job_id,
                 current_step="llm_enhance",
-                run_steps=("llm_enhance", "llm_document_audit", "llm_chapter_summary", "llm_legal_reasoning"),
-                message="正在进行智能增强分析，补充边界问题、章节主问题和法规解释。",
+                run_steps=("llm_enhance", "llm_document_audit"),
+                message="正在进行全文辅助扫描，补充规则未稳定命中的边界问题。",
             )
             llm_completed_steps = ("llm_enhance", "llm_document_audit", "llm_chapter_summary", "llm_legal_reasoning")
         else:
@@ -511,12 +517,28 @@ def _run_review_job(job_id: str, source_path: Path, use_cache: bool, use_llm: bo
             )
 
         review = enhance_review_result(review, llm_config)
+        if llm_config.enabled:
+            _mark_review_job(
+                job_id,
+                current_step="llm_enhance",
+                complete_steps=("llm_document_audit",),
+                run_steps=("llm_chapter_summary",),
+                message="正在汇总章节主问题，收束评分、技术和商务章节的关键风险。",
+            )
         review, llm_artifacts = apply_llm_review_tasks(
             normalized,
             review,
             llm_config,
             output_stem=normalized.file_hash[:12],
         )
+        if llm_config.enabled:
+            _mark_review_job(
+                job_id,
+                current_step="llm_enhance",
+                complete_steps=("llm_chapter_summary",),
+                run_steps=("llm_legal_reasoning",),
+                message="正在生成法规适用逻辑，说明哪些问题应直接修改、论证或复核。",
+            )
         _mark_review_job(
             job_id,
             current_step="finalize",
@@ -4497,6 +4519,7 @@ def _review_buyer_html() -> str:
       border-color: #8bb6d8;
       background: #f4f9fd;
       box-shadow: 0 0 0 2px rgba(31, 95, 139, 0.08);
+      animation: progressPulse 1.4s ease-in-out infinite;
     }
     .progress-step.completed {
       border-color: #b9dcca;
@@ -4541,6 +4564,11 @@ def _review_buyer_html() -> str:
     .progress-tech-item .state {
       color: var(--muted);
       font-weight: 700;
+    }
+    @keyframes progressPulse {
+      0% { box-shadow: 0 0 0 0 rgba(31, 95, 139, 0.18); }
+      50% { box-shadow: 0 0 0 4px rgba(31, 95, 139, 0.06); }
+      100% { box-shadow: 0 0 0 0 rgba(31, 95, 139, 0.18); }
     }
     .summary-grid {
       display: grid;
