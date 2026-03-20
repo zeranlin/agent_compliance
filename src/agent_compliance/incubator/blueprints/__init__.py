@@ -5,6 +5,10 @@ from agent_compliance.incubator.blueprints.budget_agent import (
     BUDGET_AGENT_BLUEPRINT,
     budget_agent_blueprint,
 )
+from agent_compliance.incubator.blueprints.registry import (
+    get_blueprint,
+    list_blueprints,
+)
 from agent_compliance.incubator.blueprints.review_agent import (
     REVIEW_AGENT_BLUEPRINT,
     review_agent_blueprint,
@@ -16,4 +20,6 @@ __all__ = [
     "BUDGET_AGENT_BLUEPRINT",
     "review_agent_blueprint",
     "budget_agent_blueprint",
+    "get_blueprint",
+    "list_blueprints",
 ]

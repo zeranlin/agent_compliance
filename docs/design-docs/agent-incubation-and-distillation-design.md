@@ -213,8 +213,10 @@ src/agent_compliance/incubator/
   __init__.py
   lifecycle.py
   scaffold_generator.py
+  factory.py
   blueprints/
     __init__.py
+    registry.py
   scaffolds/
     __init__.py
   evals/
@@ -228,8 +230,11 @@ src/agent_compliance/incubator/
   - 管理 `SampleSet / ValidationComparison / DistillationRecommendation / IncubationRun`
 - `scaffold_generator.py`
   - 根据蓝图生成最小智能体骨架
+- `factory.py`
+  - 把蓝图、脚手架、生命周期和蒸馏报告串成统一启动入口
 - `blueprints/`
   - 定义不同智能体类型的标准蓝图
+  - 提供蓝图注册表与标准查询入口
 - `scaffolds/`
   - 定义脚手架模板与生成入口
 - `evals/`
@@ -282,6 +287,23 @@ src/agent_compliance/incubator/
 - `render_distillation_report_markdown()`
 
 统一输出结构化结果和 Markdown 结果，后续再接到更完整的评测与自动留痕流程。
+
+
+## 10. 最小工厂入口
+
+为了避免“生命周期、蓝图、脚手架、报告”彼此分散，`incubator` 层应提供一个最小工厂入口：
+
+- `bootstrap_agent_factory()`
+
+第一版职责：
+
+- 按 `agent_key` 取标准蓝图
+- 生成最小智能体骨架
+- 初始化一轮 `IncubationRun`
+- 自动记录需求定义、设计和目标智能体生成阶段的初始产物
+- 同时产出结构化蒸馏报告和 Markdown 报告
+
+这样后续孵化一个新智能体，不再是手工拼装，而是按统一工厂入口启动。
 - 导出
 
 第一版对应实现：
