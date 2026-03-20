@@ -5,15 +5,12 @@ import subprocess
 import threading
 import time
 import uuid
-from datetime import datetime
-from email.parser import BytesParser
-from email.policy import default
 from html import escape as html_escape
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import quote, urlparse
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
@@ -25,17 +22,16 @@ from agent_compliance.core.cache.review_cache import (
     save_review_cache,
 )
 from agent_compliance.core.config import LLMConfig, detect_llm_config, detect_paths, detect_tender_parser_mode
-from agent_compliance.incubator import (
-    bootstrap_agent_factory,
-    build_distillation_report,
-    list_blueprints,
-    load_incubation_run,
-    resume_agent_factory,
-    serialize_incubation_run,
-    write_distillation_report,
-    write_incubation_run,
+from agent_compliance.apps.web.incubator.page import incubator_html
+from agent_compliance.apps.web.incubator.routes import (
+    handle_incubator_run_detail,
+    handle_incubator_start,
+    incubator_blueprints_payload,
+    list_incubator_runs,
 )
-from agent_compliance.incubator.improvement.rule_management import load_rule_management_payload, save_rule_decision
+from agent_compliance.apps.web.rules.page import rules_html
+from agent_compliance.apps.web.rules.routes import handle_rule_decision, rules_payload
+from agent_compliance.apps.web.shared.http import parse_multipart, send_html, send_json
 from agent_compliance.core.knowledge.procurement_catalog import classify_procurement_catalog
 from agent_compliance.core.parsers.pagination import page_hint_for_line
 from agent_compliance.agents.compliance_review.pipelines.llm_enhance import enhance_review_result
@@ -121,22 +117,22 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
             self._send_html(_review_fresh_html())
             return
         if path == "/rules":
-            self._send_html(_rules_html())
+            self._send_html(rules_html())
             return
         if path == "/incubator":
-            self._send_html(_incubator_html())
+            self._send_html(incubator_html())
             return
         if path == "/api/rules":
-            self._send_json(load_rule_management_payload())
+            self._send_json(rules_payload())
             return
         if path == "/api/incubator/blueprints":
-            self._send_json({"blueprints": _incubator_blueprints_payload()})
+            self._send_json({"blueprints": incubator_blueprints_payload()})
             return
         if path == "/api/incubator/runs":
-            self._send_json({"runs": _list_incubator_runs()})
+            self._send_json({"runs": list_incubator_runs()})
             return
         if path == "/api/incubator/run":
-            self._handle_incubator_run_detail(parsed.query)
+            handle_incubator_run_detail(self, parsed.query)
             return
         if path == "/api/review-status":
             self._handle_review_status(parsed.query)
@@ -155,10 +151,10 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
             self._handle_export_review()
             return
         if path == "/api/rules/decision":
-            self._handle_rule_decision()
+            handle_rule_decision(self)
             return
         if path == "/api/incubator/start":
-            self._handle_incubator_start()
+            handle_incubator_start(self)
             return
         if path == "/api/review-start":
             self._handle_review_start()
@@ -169,7 +165,7 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
 
         try:
             body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
-            fields = _parse_multipart(self.headers, body)
+            fields = parse_multipart(self.headers, body)
         except Exception as exc:
             self._send_json({"error": f"请求解析失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
             return
@@ -215,20 +211,10 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         return
 
     def _send_html(self, html: str, *, status: HTTPStatus = HTTPStatus.OK) -> None:
-        data = html.encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        send_html(self, html, status=status)
 
     def _send_json(self, payload: dict, *, status: HTTPStatus = HTTPStatus.OK) -> None:
-        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        send_json(self, payload, status=status)
 
     def _handle_open_source(self) -> None:
         try:
@@ -242,115 +228,6 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": True})
         except Exception as exc:
             self._send_json({"error": f"打开原文件失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
-
-    def _handle_rule_decision(self) -> None:
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-            candidate_rule_id = str(payload.get("candidate_rule_id", "")).strip()
-            decision = str(payload.get("decision", "")).strip()
-            note = str(payload.get("note", "")).strip()
-            if not candidate_rule_id:
-                self._send_json({"error": "缺少 candidate_rule_id"}, status=HTTPStatus.BAD_REQUEST)
-                return
-            save_rule_decision(candidate_rule_id, decision, note)
-            self._send_json(load_rule_management_payload())
-        except Exception as exc:
-            self._send_json({"error": f"保存规则决策失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
-
-    def _handle_incubator_start(self) -> None:
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-            agent_key = str(payload.get("agent_key", "")).strip()
-            run_title = str(payload.get("run_title", "")).strip() or None
-            resume_run = str(payload.get("resume_run", "")).strip() or None
-            overwrite = bool(payload.get("overwrite", False))
-            if not agent_key:
-                self._send_json({"error": "缺少 agent_key"}, status=HTTPStatus.BAD_REQUEST)
-                return
-
-            paths = detect_paths()
-            agents_dir = paths.repo_root / "src" / "agent_compliance" / "agents"
-            output_dir = paths.repo_root / "docs" / "generated" / "incubator"
-
-            if resume_run:
-                run_manifest_path = _safe_incubator_path(resume_run, output_dir)
-                run = load_incubation_run(run_manifest_path)
-                if run.agent_key != agent_key:
-                    self._send_json(
-                        {"error": f"run manifest agent_key={run.agent_key} 与当前蓝图 {agent_key} 不一致"},
-                        status=HTTPStatus.BAD_REQUEST,
-                    )
-                    return
-                result = resume_agent_factory(run)
-                run_key = _run_key_from_manifest(run_manifest_path)
-            else:
-                result = bootstrap_agent_factory(
-                    agents_dir,
-                    agent_key,
-                    run_title=run_title,
-                    overwrite=overwrite,
-                )
-                run_key = _slugify_run_key(result.run.run_title)
-
-            artifact_paths = write_distillation_report(
-                output_dir,
-                result.blueprint.agent_key,
-                run_key,
-                result.report,
-                result.report_markdown,
-            )
-            run_paths = write_incubation_run(
-                output_dir,
-                result.blueprint.agent_key,
-                run_key,
-                result.run,
-            )
-            self._send_json(
-                {
-                    "agent_key": result.blueprint.agent_key,
-                    "agent_name": result.blueprint.agent_name,
-                    "run_title": result.run.run_title,
-                    "outputs": {
-                        "run_manifest": str(run_paths.manifest_path),
-                        "report_json": str(artifact_paths.json_path),
-                        "report_markdown": str(artifact_paths.markdown_path),
-                    },
-                    "summary": result.report["summary"],
-                }
-            )
-        except Exception as exc:
-            self._send_json({"error": f"启动孵化失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
-
-    def _handle_incubator_run_detail(self, query: str) -> None:
-        params = parse_qs(query)
-        requested_path = (params.get("path") or [""])[0]
-        if not requested_path:
-            self._send_json({"error": "缺少 path"}, status=HTTPStatus.BAD_REQUEST)
-            return
-        try:
-            paths = detect_paths()
-            base_dir = paths.repo_root / "docs" / "generated" / "incubator"
-            manifest_path = _safe_incubator_path(requested_path, base_dir)
-            run = load_incubation_run(manifest_path)
-            run_key = _run_key_from_manifest(manifest_path)
-            report_markdown_path = manifest_path.parent / f"{run_key}-distillation-report.md"
-            report_markdown = ""
-            if report_markdown_path.exists():
-                report_markdown = report_markdown_path.read_text(encoding="utf-8")
-            self._send_json(
-                {
-                    "run_manifest": str(manifest_path),
-                    "agent_key": run.agent_key,
-                    "run_title": run.run_title,
-                    "report_markdown_path": str(report_markdown_path) if report_markdown_path.exists() else None,
-                    "report_markdown": report_markdown,
-                    "run": run_store_payload(run),
-                }
-            )
-        except Exception as exc:
-            self._send_json({"error": f"读取 run 详情失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
 
     def _handle_export_review(self) -> None:
         try:
@@ -391,7 +268,7 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
     def _handle_review_start(self) -> None:
         try:
             body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
-            fields = _parse_multipart(self.headers, body)
+            fields = parse_multipart(self.headers, body)
         except Exception as exc:
             self._send_json({"error": f"请求解析失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
             return
@@ -765,28 +642,6 @@ def _run_review(
         output_stem=normalized.file_hash[:12],
     )
     return review, llm_artifacts, cache_key, cache_used
-
-
-def _parse_multipart(headers, body: bytes) -> dict[str, dict[str, bytes | str]]:
-    content_type = headers.get("Content-Type", "")
-    if not content_type.startswith("multipart/form-data"):
-        raise ValueError("仅支持 multipart/form-data")
-
-    message = BytesParser(policy=default).parsebytes(
-        f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("utf-8") + body
-    )
-    fields: dict[str, dict[str, bytes | str]] = {}
-    for part in message.iter_parts():
-        name = part.get_param("name", header="content-disposition")
-        if not name:
-            continue
-        payload = part.get_payload(decode=True) or b""
-        fields[name] = {
-            "filename": part.get_filename() or "",
-            "content": payload,
-            "value": payload.decode("utf-8", errors="ignore"),
-        }
-    return fields
 
 
 def _persist_upload(filename: str, content: bytes) -> Path:
@@ -6011,836 +5866,6 @@ def _review_buyer_html() -> str:
 
     function escapeHtml(text) {
       return String(text || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-    }
-  </script>
-</body>
-</html>"""
-
-
-def _incubator_blueprints_payload() -> list[dict[str, str]]:
-    payload: list[dict[str, str]] = []
-    for blueprint in list_blueprints():
-        payload.append(
-            {
-                "agent_key": blueprint.agent_key,
-                "agent_name": blueprint.agent_name,
-                "agent_type": blueprint.agent_type,
-                "goal": blueprint.goal,
-            }
-        )
-    return payload
-
-
-def _slugify_run_key(run_title: str) -> str:
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    normalized = "".join(
-        char if char.isalnum() or char in ("-", "_") else "-"
-        for char in run_title.lower()
-    )
-    normalized = "-".join(part for part in normalized.split("-") if part)
-    return f"{timestamp}-{normalized or 'incubation-run'}"
-
-
-def _run_key_from_manifest(path: Path) -> str:
-    if path.name.endswith("-run.json"):
-        return path.name[: -len("-run.json")]
-    return path.stem
-
-
-def _safe_incubator_path(requested_path: str, base_dir: Path) -> Path:
-    candidate = Path(requested_path)
-    if not candidate.is_absolute():
-        candidate = base_dir / candidate
-    resolved = candidate.resolve()
-    resolved.relative_to(base_dir.resolve())
-    return resolved
-
-
-def run_store_payload(run: Any) -> dict[str, object]:
-    return serialize_incubation_run(run)
-
-
-def _list_incubator_runs() -> list[dict[str, Any]]:
-    base_dir = detect_paths().repo_root / "docs" / "generated" / "incubator"
-    if not base_dir.exists():
-        return []
-    runs: list[dict[str, Any]] = []
-    for manifest_path in sorted(base_dir.rglob("*-run.json"), key=lambda path: path.stat().st_mtime, reverse=True):
-        try:
-            run = load_incubation_run(manifest_path)
-        except Exception:
-            continue
-        run_key = _run_key_from_manifest(manifest_path)
-        report_markdown_path = manifest_path.parent / f"{run_key}-distillation-report.md"
-        report_json_path = manifest_path.parent / f"{run_key}-distillation-report.json"
-        report_summary = build_distillation_report(run)["summary"]
-        runs.append(
-            {
-                "agent_key": run.agent_key,
-                "run_title": run.run_title,
-                "run_manifest": str(manifest_path),
-                "report_markdown": str(report_markdown_path) if report_markdown_path.exists() else None,
-                "report_json": str(report_json_path) if report_json_path.exists() else None,
-                "updated_at": datetime.fromtimestamp(manifest_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-                "summary": report_summary,
-            }
-        )
-    return runs
-
-
-def _incubator_html() -> str:
-    return """<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>智能体孵化与蒸馏工厂控制台</title>
-  <style>
-    :root {
-      --bg: #f4f7fb;
-      --panel: #ffffff;
-      --line: #d5dfec;
-      --ink: #1f2937;
-      --muted: #5e6b7a;
-      --accent: #1f5f8b;
-      --accent-soft: #eef5fb;
-      --ok: #eaf7ef;
-      --warn: #fff5e7;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-      color: var(--ink);
-      background: linear-gradient(180deg, #eef4fb 0%, var(--bg) 100%);
-    }
-    a { color: var(--accent); text-decoration: none; }
-    .app {
-      max-width: 1500px;
-      margin: 0 auto;
-      padding: 24px;
-      display: grid;
-      gap: 16px;
-    }
-    .hero, .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      box-shadow: 0 10px 24px rgba(31, 95, 139, 0.08);
-    }
-    .hero {
-      padding: 24px 28px;
-      display: grid;
-      gap: 10px;
-    }
-    .hero h1 {
-      margin: 0;
-      font-size: 34px;
-      line-height: 1.15;
-    }
-    .hero .meta {
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      color: var(--accent);
-      font-weight: 700;
-    }
-    .hero p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.7;
-      font-size: 17px;
-    }
-    .hero-actions {
-      display: flex;
-      gap: 14px;
-      flex-wrap: wrap;
-      font-weight: 600;
-    }
-    .layout {
-      display: grid;
-      grid-template-columns: 380px minmax(0, 1fr);
-      gap: 16px;
-      align-items: start;
-    }
-    .panel {
-      padding: 20px;
-      display: grid;
-      gap: 16px;
-    }
-    .panel h2 {
-      margin: 0;
-      font-size: 24px;
-    }
-    .panel p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.6;
-    }
-    label {
-      display: grid;
-      gap: 6px;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--muted);
-    }
-    input, select, textarea {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 10px 12px;
-      font-size: 15px;
-      color: var(--ink);
-      background: #fff;
-    }
-    textarea {
-      min-height: 84px;
-      resize: vertical;
-    }
-    .button-row {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    button {
-      border: none;
-      border-radius: 12px;
-      padding: 11px 16px;
-      background: var(--accent);
-      color: #fff;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    button.secondary {
-      background: #fff;
-      color: var(--accent);
-      border: 1px solid var(--line);
-    }
-    .status {
-      padding: 12px 14px;
-      border-radius: 12px;
-      background: var(--accent-soft);
-      color: var(--accent);
-      font-weight: 600;
-      min-height: 48px;
-    }
-    .run-list {
-      display: grid;
-      gap: 10px;
-      max-height: 720px;
-      overflow: auto;
-      padding-right: 4px;
-    }
-    .run-card {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 14px;
-      background: #fbfdff;
-      cursor: pointer;
-      display: grid;
-      gap: 8px;
-    }
-    .run-card.active {
-      border-color: #8eb7d8;
-      background: #eef6fd;
-      box-shadow: inset 0 0 0 1px #c8ddef;
-    }
-    .run-card h3 {
-      margin: 0;
-      font-size: 17px;
-      line-height: 1.4;
-    }
-    .run-meta, .summary-strip {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: var(--accent-soft);
-      color: var(--accent);
-      font-size: 13px;
-      font-weight: 700;
-    }
-    .pill.ok {
-      background: var(--ok);
-      color: #16774e;
-    }
-    .pill.warn {
-      background: var(--warn);
-      color: #996000;
-    }
-    .detail-head {
-      display: grid;
-      gap: 8px;
-      padding-bottom: 6px;
-      border-bottom: 1px solid var(--line);
-    }
-    .detail-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-    }
-    .metric {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 12px 14px;
-      background: #fbfdff;
-      display: grid;
-      gap: 6px;
-    }
-    .metric .label {
-      font-size: 13px;
-      color: var(--muted);
-      font-weight: 600;
-    }
-    .metric .value {
-      font-size: 28px;
-      font-weight: 800;
-      line-height: 1;
-    }
-    .viewer {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 16px;
-      background: #fcfdff;
-      white-space: pre-wrap;
-      line-height: 1.65;
-      max-height: 540px;
-      overflow: auto;
-      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-      font-size: 13px;
-    }
-    .empty {
-      border: 1px dashed var(--line);
-      border-radius: 14px;
-      padding: 24px;
-      text-align: center;
-      color: var(--muted);
-      background: #fbfdff;
-    }
-    @media (max-width: 1100px) {
-      .layout {
-        grid-template-columns: 1fr;
-      }
-      .detail-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-    }
-    @media (max-width: 720px) {
-      .app { padding: 14px; }
-      .hero h1 { font-size: 28px; }
-      .detail-grid { grid-template-columns: 1fr; }
-    }
-  </style>
-</head>
-<body>
-  <div class="app">
-    <section class="hero">
-      <div class="meta">Incubator Console</div>
-      <h1>智能体孵化与蒸馏工厂控制台</h1>
-      <p>这个页面只做一件事：启动一轮标准孵化，并查看落盘的 run manifest 与蒸馏报告。它不负责复杂设计，只服务方法层验证和复盘。</p>
-      <div class="hero-actions">
-        <a href="/review-check">采购需求合规性检查智能体</a>
-        <a href="/review-next">增强审查页</a>
-        <a href="/rules">规则管理页</a>
-      </div>
-    </section>
-    <section class="layout">
-      <section class="panel">
-        <div>
-          <h2>启动一轮孵化</h2>
-          <p>先选蓝图，再给一轮 run 起一个标题。当前页面只提供最小启动和查看，不做复杂样例配置。</p>
-        </div>
-        <label>
-          智能体蓝图
-          <select id="blueprint-select"></select>
-        </label>
-        <label>
-          运行标题
-          <input id="run-title-input" placeholder="例如：政府采购预算需求智能体 第一轮孵化" />
-        </label>
-        <div class="button-row">
-          <button id="start-run-btn" type="button">启动孵化</button>
-          <button id="refresh-runs-btn" class="secondary" type="button">刷新运行列表</button>
-        </div>
-        <div id="incubator-status" class="status">等待选择蓝图并启动一轮孵化。</div>
-        <div>
-          <h2 style="font-size:20px;">历史 runs</h2>
-          <p>点击左侧任一 run，可直接查看 run manifest 摘要和蒸馏报告正文。</p>
-        </div>
-        <div id="run-list" class="run-list"></div>
-      </section>
-      <section class="panel">
-        <div id="run-detail" class="empty">右侧会显示当前选中 run 的摘要、产物路径和蒸馏报告。</div>
-      </section>
-    </section>
-  </div>
-  <script>
-    const blueprintNode = document.getElementById('blueprint-select');
-    const runTitleNode = document.getElementById('run-title-input');
-    const statusNode = document.getElementById('incubator-status');
-    const runListNode = document.getElementById('run-list');
-    const runDetailNode = document.getElementById('run-detail');
-    let blueprints = [];
-    let runs = [];
-    let selectedRunPath = null;
-
-    loadBlueprints();
-    loadRuns();
-
-    document.getElementById('start-run-btn').addEventListener('click', startIncubationRun);
-    document.getElementById('refresh-runs-btn').addEventListener('click', loadRuns);
-    blueprintNode.addEventListener('change', applyDefaultRunTitle);
-
-    async function loadBlueprints() {
-      try {
-        const response = await fetch('/api/incubator/blueprints');
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || '加载蓝图失败');
-        blueprints = payload.blueprints || [];
-        blueprintNode.innerHTML = blueprints.map((item) => (
-          `<option value="${escapeHtml(item.agent_key)}">${escapeHtml(item.agent_name)} · ${escapeHtml(item.agent_type)}</option>`
-        )).join('');
-        applyDefaultRunTitle();
-      } catch (error) {
-        statusNode.textContent = `加载蓝图失败：${error.message}`;
-      }
-    }
-
-    function applyDefaultRunTitle() {
-      if (runTitleNode.value.trim()) return;
-      const selected = blueprints.find((item) => item.agent_key === blueprintNode.value);
-      if (!selected) return;
-      runTitleNode.value = `${selected.agent_name} 第一轮孵化`;
-    }
-
-    async function loadRuns() {
-      try {
-        const response = await fetch('/api/incubator/runs');
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || '加载运行列表失败');
-        runs = payload.runs || [];
-        renderRunList();
-        if (selectedRunPath) {
-          const matched = runs.find((item) => item.run_manifest === selectedRunPath);
-          if (matched) {
-            await showRunDetail(selectedRunPath);
-            return;
-          }
-        }
-        if (runs.length) {
-          await showRunDetail(runs[0].run_manifest);
-        } else {
-          runDetailNode.innerHTML = '<div class="empty">当前还没有 incubator run。先启动一轮孵化即可。</div>';
-        }
-      } catch (error) {
-        statusNode.textContent = `加载运行列表失败：${error.message}`;
-      }
-    }
-
-    function renderRunList() {
-      runListNode.innerHTML = runs.length ? runs.map((item) => {
-        const summary = item.summary || {};
-        const active = item.run_manifest === selectedRunPath ? 'active' : '';
-        return `
-          <article class="run-card ${active}" data-run-path="${escapeHtml(item.run_manifest)}">
-            <h3>${escapeHtml(item.run_title)}</h3>
-            <div class="summary-strip">
-              <span class="pill">${escapeHtml(item.agent_key)}</span>
-              <span class="pill ok">阶段 ${summary.completed_stages || 0}/${summary.total_stages || 0}</span>
-              <span class="pill warn">建议 ${summary.recommendation_count || 0}</span>
-            </div>
-            <div class="run-meta">
-              <span>${escapeHtml(item.updated_at || '')}</span>
-            </div>
-          </article>
-        `;
-      }).join('') : '<div class="empty">当前还没有 run。</div>';
-      runListNode.querySelectorAll('.run-card').forEach((node) => {
-        node.addEventListener('click', () => showRunDetail(node.dataset.runPath));
-      });
-    }
-
-    async function showRunDetail(path) {
-      selectedRunPath = path;
-      renderRunList();
-      try {
-        const response = await fetch(`/api/incubator/run?path=${encodeURIComponent(path)}`);
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || '读取 run 详情失败');
-        const run = payload.run || {};
-        const summary = summarizeRun(run);
-        runDetailNode.innerHTML = `
-          <div class="detail-head">
-            <h2>${escapeHtml(payload.run_title || '')}</h2>
-            <p>${escapeHtml(payload.agent_key || '')} · run manifest：${escapeHtml(payload.run_manifest || '')}</p>
-            <div class="summary-strip">
-              <span class="pill">${escapeHtml(payload.report_markdown_path || '无 Markdown 报告')}</span>
-            </div>
-          </div>
-          <div class="detail-grid">
-            <div class="metric"><div class="label">已完成阶段</div><div class="value">${summary.completedStages}</div></div>
-            <div class="metric"><div class="label">样例集</div><div class="value">${summary.sampleSets}</div></div>
-            <div class="metric"><div class="label">对照结果</div><div class="value">${summary.comparisons}</div></div>
-            <div class="metric"><div class="label">蒸馏建议</div><div class="value">${summary.recommendations}</div></div>
-          </div>
-          <div>
-            <h2 style="font-size:20px; margin-bottom:8px;">蒸馏报告</h2>
-            <div class="viewer">${escapeHtml(payload.report_markdown || '暂无 Markdown 报告。')}</div>
-          </div>
-        `;
-      } catch (error) {
-        runDetailNode.innerHTML = `<div class="empty">读取 run 详情失败：${escapeHtml(error.message)}</div>`;
-      }
-    }
-
-    async function startIncubationRun() {
-      const agentKey = blueprintNode.value;
-      const runTitle = runTitleNode.value.trim();
-      if (!agentKey) {
-        statusNode.textContent = '请先选择一个蓝图。';
-        return;
-      }
-      statusNode.textContent = '正在启动一轮标准孵化，请稍候...';
-      try {
-        const response = await fetch('/api/incubator/start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ agent_key: agentKey, run_title: runTitle }),
-        });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || '启动孵化失败');
-        statusNode.textContent = `已启动：${payload.run_title}；已完成阶段 ${payload.summary.completed_stages}/${payload.summary.total_stages}。`;
-        await loadRuns();
-        if (payload.outputs && payload.outputs.run_manifest) {
-          await showRunDetail(payload.outputs.run_manifest);
-        }
-      } catch (error) {
-        statusNode.textContent = `启动孵化失败：${error.message}`;
-      }
-    }
-
-    function summarizeRun(run) {
-      const stages = Array.isArray(run.stages) ? run.stages : [];
-      return {
-        completedStages: stages.filter((item) => item.status === 'completed').length,
-        sampleSets: stages.reduce((sum, item) => sum + ((item.sample_sets || []).length), 0),
-        comparisons: stages.reduce((sum, item) => sum + ((item.comparisons || []).length), 0),
-        recommendations: stages.reduce((sum, item) => sum + ((item.recommendations || []).length), 0),
-      };
-    }
-
-    function escapeHtml(text) {
-      return String(text || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-    }
-  </script>
-</body>
-</html>"""
-
-
-def _rules_html() -> str:
-    return """<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>规则管理</title>
-  <style>
-    :root {
-      --bg: #f4efe5;
-      --panel: #fffdf8;
-      --line: #ddd2c2;
-      --ink: #20252b;
-      --muted: #6c675e;
-      --accent: #9d4a24;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-      color: var(--ink);
-      background: linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
-    }
-    .app { max-width: 1400px; margin: 0 auto; padding: 20px; }
-    .hero h1 { margin: 0 0 8px; font-size: 30px; }
-    .hero p { margin: 0 0 8px; color: var(--muted); line-height: 1.6; }
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      box-shadow: 0 12px 30px rgba(52, 41, 29, 0.06);
-      padding: 16px;
-    }
-    .meta { color: var(--muted); font-size: 13px; line-height: 1.6; word-break: break-word; }
-    .rules-grid {
-      display: grid;
-      grid-template-columns: 340px minmax(0, 1fr);
-      gap: 16px;
-      margin-top: 16px;
-    }
-    .rules-col {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: #fff;
-      overflow: hidden;
-    }
-    .rules-col-head {
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--line);
-      display: grid;
-      gap: 6px;
-    }
-    .rules-col-head h2, .rules-col-head h3 { margin: 0; }
-    .rules-toolbar, .rule-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-    }
-    .rules-list {
-      padding: 12px;
-      display: grid;
-      gap: 10px;
-      max-height: 70vh;
-      overflow: auto;
-    }
-    .rule-card {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 12px;
-      background: #fffdfa;
-      display: grid;
-      gap: 8px;
-      cursor: pointer;
-    }
-    .rule-card.active {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(157, 74, 36, 0.12);
-      background: #fff8f1;
-    }
-    .rule-card-title { font-size: 15px; font-weight: 700; line-height: 1.5; }
-    .rule-card-meta, .detail-label { color: var(--muted); font-size: 12px; line-height: 1.6; }
-    .detail-value {
-      color: var(--ink);
-      font-size: 13px;
-      line-height: 1.7;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .detail-pair { display: grid; gap: 4px; }
-    .rule-detail { padding: 16px; display: grid; gap: 12px; }
-    .rule-note {
-      width: 100%;
-      min-height: 80px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid var(--line);
-      font: inherit;
-      resize: vertical;
-    }
-    .filter-chip, button {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: #fff;
-      color: var(--ink);
-      padding: 8px 12px;
-      font-size: 12px;
-      cursor: pointer;
-    }
-    button.primary, .filter-chip.active {
-      border-color: var(--accent);
-      color: var(--accent);
-      background: #fff5ea;
-    }
-    .empty { padding: 20px 16px; color: var(--muted); line-height: 1.7; }
-    @media (max-width: 1080px) {
-      .rules-grid { grid-template-columns: 1fr; }
-    }
-  </style>
-</head>
-<body>
-  <div class="app">
-    <section class="hero">
-      <h1>规则管理</h1>
-      <p>这里单独管理模型新增候选规则、benchmark gate 状态和入库确认决策。</p>
-      <p><a href="/">返回审查工作台</a> · <a href="/review-check">打开采购人审查页</a> · <a href="/review-next">打开增强审查页</a> · <a href="/incubator">打开孵化工厂控制台</a></p>
-    </section>
-
-    <section class="panel">
-      <div id="rules-summary" class="meta">正在加载规则候选...</div>
-      <div class="rules-grid">
-        <section class="rules-col">
-          <div id="rules-col-head" class="rules-col-head"></div>
-          <div id="rules-list" class="rules-list"></div>
-        </section>
-        <section class="rules-col">
-          <div class="rules-col-head">
-            <h3>规则详情</h3>
-            <div class="meta">查看候选规则、gate 状态，并记录确认入库、暂缓或忽略决策。</div>
-          </div>
-          <div id="rule-detail" class="rule-detail"></div>
-        </section>
-      </div>
-    </section>
-  </div>
-
-  <script>
-    const rulesSummaryNode = document.getElementById('rules-summary');
-    const rulesColHeadNode = document.getElementById('rules-col-head');
-    const rulesListNode = document.getElementById('rules-list');
-    const ruleDetailNode = document.getElementById('rule-detail');
-
-    let latestRulePayload = { formal_rules: [], candidate_rules: [], decision_summary: {} };
-    let currentRuleFilter = 'pending';
-    let selectedCandidateId = '';
-
-    loadRuleManagement();
-
-    async function loadRuleManagement() {
-      try {
-        const response = await fetch('/api/rules');
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || '规则管理加载失败');
-        latestRulePayload = payload;
-        if (!selectedCandidateId && payload.candidate_rules.length) {
-          selectedCandidateId = payload.candidate_rules[0].candidate_rule_id;
-        }
-        renderRules(payload);
-      } catch (error) {
-        rulesSummaryNode.textContent = `规则管理加载失败：${error.message}`;
-      }
-    }
-
-    function renderRules(payload) {
-      const summary = payload.decision_summary || {};
-      const formalSummary = payload.formal_rule_summary || {};
-      const topScene = (payload.catalog_scene_summary || [])[0];
-      const topDomain = (payload.domain_summary || [])[0];
-      const topAuthority = (payload.authority_summary || [])[0];
-      const sceneText = topScene ? `；主品目场景以 ${topScene.primary_catalog_name} 为主` : '';
-      const domainText = topDomain ? `；审查领域以 ${topDomain.primary_domain_key} 为主` : '';
-      const authorityText = topAuthority ? `；主依据以 ${topAuthority.primary_authority} 为主` : '';
-      rulesSummaryNode.textContent = `正式规则 ${payload.formal_rules.length} 条；候选规则 ${payload.candidate_rules.length} 条；待确认 ${summary.pending || 0} 条；已确认 ${summary.confirmed || 0} 条${sceneText}${domainText}${authorityText}。`;
-      const activeCount = ((formalSummary.by_status || {}).formal_active) || 0;
-      const catalogSensitiveCount = ((formalSummary.by_status || {}).formal_catalog_sensitive) || 0;
-      const supportCount = ((formalSummary.by_status || {}).formal_support) || 0;
-      const qualificationCount = ((formalSummary.by_family || {}).qualification) || 0;
-      const scoringCount = ((formalSummary.by_family || {}).scoring) || 0;
-      const technicalCount = ((formalSummary.by_family || {}).technical) || 0;
-      const commercialCount = ((formalSummary.by_family || {}).commercial) || 0;
-      rulesColHeadNode.innerHTML = `
-        <h2>候选规则</h2>
-        <div class="meta">候选规则来自模型新增问题和 benchmark gate 结果。确认入库表示进入本地规则候选确认状态，不会自动改代码。</div>
-        <div class="meta">正式规则治理：激活 ${activeCount} 条，品目敏感 ${catalogSensitiveCount} 条，支撑 ${supportCount} 条；资格 ${qualificationCount} 条，评分 ${scoringCount} 条，技术 ${technicalCount} 条，商务 ${commercialCount} 条。</div>
-        <div class="rules-toolbar">
-          <button type="button" class="filter-chip ${currentRuleFilter === 'pending' ? 'active' : ''}" data-rule-filter="pending">待确认</button>
-          <button type="button" class="filter-chip ${currentRuleFilter === 'confirmed' ? 'active' : ''}" data-rule-filter="confirmed">已确认</button>
-          <button type="button" class="filter-chip ${currentRuleFilter === 'all' ? 'active' : ''}" data-rule-filter="all">全部</button>
-        </div>`;
-      rulesColHeadNode.querySelectorAll('[data-rule-filter]').forEach((node) => {
-        node.addEventListener('click', () => {
-          currentRuleFilter = node.dataset.ruleFilter;
-          renderRules(latestRulePayload);
-        });
-      });
-      const candidates = applyRuleFilter(payload.candidate_rules || []);
-      rulesListNode.innerHTML = candidates.length
-        ? candidates.map((item) => renderRuleCard(item)).join('')
-        : '<div class="empty">当前没有符合筛选条件的候选规则。</div>';
-      rulesListNode.querySelectorAll('.rule-card').forEach((node) => {
-        node.addEventListener('click', () => {
-          selectedCandidateId = node.dataset.candidateId;
-          renderRules(latestRulePayload);
-        });
-      });
-      const selected = candidates.find((item) => item.candidate_rule_id === selectedCandidateId) || candidates[0] || null;
-      if (selected) selectedCandidateId = selected.candidate_rule_id;
-      renderRuleDetail(selected);
-    }
-
-    function renderRuleCard(item) {
-      const active = item.candidate_rule_id === selectedCandidateId ? 'active' : '';
-      const sceneLabel = item.primary_catalog_name || '未识别品目';
-      const domainLabel = item.primary_domain_key || 'unknown';
-      return `<article class="rule-card ${active}" data-candidate-id="${escapeHtml(item.candidate_rule_id)}">
-        <div class="rule-card-title">${escapeHtml(item.problem_title)}</div>
-        <div class="rule-card-meta">候选ID：${escapeHtml(item.candidate_rule_id)}</div>
-        <div class="rule-card-meta">问题类型：${escapeHtml(item.issue_type)} ｜ gate：${escapeHtml(item.gate_status)} ｜ 状态：${escapeHtml(decisionLabelText(item.decision))}</div>
-        <div class="rule-card-meta">主品目：${escapeHtml(sceneLabel)} ｜ 审查领域：${escapeHtml(domainLabel)}${item.is_mixed_scope ? ' ｜ 混合采购' : ''}</div>
-        <div class="rule-card-meta">法规主依据：${escapeHtml(item.primary_authority || '暂无')}</div>
-        <div class="rule-card-meta">${escapeHtml(item.source_text || '')}</div>
-      </article>`;
-    }
-
-    function renderRuleDetail(item) {
-      if (!item) {
-        ruleDetailNode.innerHTML = '<div class="empty">当前没有可查看的候选规则。</div>';
-        return;
-      }
-      ruleDetailNode.innerHTML = `
-        <div class="detail-pair"><div class="detail-label">候选规则ID</div><div class="detail-value">${escapeHtml(item.candidate_rule_id)}</div></div>
-        <div class="detail-pair"><div class="detail-label">问题标题</div><div class="detail-value">${escapeHtml(item.problem_title)}</div></div>
-        <div class="detail-pair"><div class="detail-label">问题类型</div><div class="detail-value">${escapeHtml(item.issue_type)}</div></div>
-        <div class="detail-pair"><div class="detail-label">采购品目场景</div><div class="detail-value">${escapeHtml(item.primary_catalog_name || '未识别品目')} ｜ ${escapeHtml(item.primary_domain_key || 'unknown')}${item.is_mixed_scope ? ' ｜ 混合采购' : ''}</div></div>
-        <div class="detail-pair"><div class="detail-label">来源位置</div><div class="detail-value">${escapeHtml(item.section_path || '')}</div></div>
-        <div class="detail-pair"><div class="detail-label">原文摘录</div><div class="detail-value">${escapeHtml(item.source_text || '')}</div></div>
-        <div class="detail-pair"><div class="detail-label">风险说明</div><div class="detail-value">${escapeHtml(item.why_it_is_risky || '')}</div></div>
-        <div class="detail-pair"><div class="detail-label">建议改写</div><div class="detail-value">${escapeHtml(item.rewrite_suggestion || '')}</div></div>
-        <div class="detail-pair"><div class="detail-label">法规主依据</div><div class="detail-value">${escapeHtml(item.primary_authority || '暂无')}</div></div>
-        <div class="detail-pair"><div class="detail-label">法规辅依据</div><div class="detail-value">${escapeHtml((item.secondary_authorities || []).join('；') || '暂无')}</div></div>
-        <div class="detail-pair"><div class="detail-label">适用逻辑</div><div class="detail-value">${escapeHtml(item.applicability_logic || '暂无')}</div></div>
-        <div class="detail-pair"><div class="detail-label">触发关键词</div><div class="detail-value">${escapeHtml((item.trigger_keywords || []).join('，'))}</div></div>
-        <div class="detail-pair"><div class="detail-label">benchmark gate</div><div class="detail-value">${escapeHtml(item.gate_status)} ｜ ${escapeHtml(item.gate_reason || '')}</div></div>
-        <div class="detail-pair"><div class="detail-label">法规侧复核</div><div class="detail-value">${escapeHtml(item.human_review_reason || '暂无')}</div></div>
-        <div class="detail-pair"><div class="detail-label">当前状态</div><div class="detail-value">${escapeHtml(decisionLabelText(item.decision))}</div></div>
-        <div class="detail-pair">
-          <div class="detail-label">备注</div>
-          <textarea id="rule-note" class="rule-note" placeholder="可选：记录为什么确认、暂缓或忽略">${escapeHtml(item.decision_note || '')}</textarea>
-        </div>
-        <div class="rule-actions">
-          <button type="button" class="primary" data-rule-action="confirmed">确认入库</button>
-          <button type="button" data-rule-action="deferred">暂缓</button>
-          <button type="button" data-rule-action="ignored">忽略</button>
-        </div>`;
-      ruleDetailNode.querySelectorAll('[data-rule-action]').forEach((node) => {
-        node.addEventListener('click', async () => {
-          await saveRuleDecision(item.candidate_rule_id, node.dataset.ruleAction);
-        });
-      });
-    }
-
-    async function saveRuleDecision(candidateRuleId, decision) {
-      const noteNode = document.getElementById('rule-note');
-      const note = noteNode ? noteNode.value : '';
-      const response = await fetch('/api/rules/decision', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidate_rule_id: candidateRuleId, decision, note }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || '规则决策保存失败');
-      latestRulePayload = payload;
-      selectedCandidateId = candidateRuleId;
-      renderRules(payload);
-    }
-
-    function applyRuleFilter(candidates) {
-      if (currentRuleFilter === 'all') return candidates;
-      return candidates.filter((item) => item.decision === currentRuleFilter);
-    }
-
-    function decisionLabelText(decision) {
-      return ({ pending: '待确认', confirmed: '已确认入库', deferred: '暂缓', ignored: '忽略' }[decision] || decision || '待确认');
-    }
-
-    function escapeHtml(text) {
-      return String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
     }
   </script>
 </body>
