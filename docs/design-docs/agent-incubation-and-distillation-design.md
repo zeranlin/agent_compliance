@@ -574,6 +574,21 @@ src/agent_compliance/incubator/
   - 让一轮 run 不只知道“阶段到了哪里”
   - 还知道“什么时候补了样例、什么时候加了 comparison、什么时候更新了建议状态”
 
+当前也已开始补齐 `P1.1` 的第一版样例资产版本化：
+
+- `SampleManifest` 现在已开始携带：
+  - `version`
+  - `agent_key`
+  - `benchmark_refs`
+  - `change_summary`
+- 当前接入方式：
+  - `incubate-agent --sample-manifest-version <vN> --sample-change-summary <text>`
+  - `incubate-agent --sample-manifest-file <manifest.json>`
+- 当前产物：
+  - 一旦本轮孵化传入样例清单，工厂会同步落盘独立的 `sample-manifest.json`
+- 当前目标：
+  - 让样例资产从“登记清单”升级成“可版本追踪、可回读、可复用的标准资产”
+
 当前也已开始补齐“多轮蒸馏比较”最小能力：
 
 - 可输入两轮或多轮 `run.json`

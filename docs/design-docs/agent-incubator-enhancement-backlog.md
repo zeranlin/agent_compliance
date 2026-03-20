@@ -111,16 +111,23 @@
 
 ### 3.1 样例资产版本化
 
+当前状态：
+- 第一版已完成。
+- 现在 `SampleManifest` 已开始支持：
+  - `version`
+  - `agent_key`
+  - `benchmark_refs`
+  - `change_summary`
+- 工厂在接到样例清单时，也会同步落盘独立的版本化 `sample-manifest.json`
+
 目标：
 - 样例集从“登记清单”升级为“可版本追踪资产”
 
 当前缺口：
-- 已有 `SampleManifest`
-- 但还没有：
-  - 版本号
-  - 更新说明
-  - benchmark 绑定
-  - 所属智能体绑定
+- 当前仍缺：
+  - 样例资产版本间差异对比
+  - 样例资产与 run 的自动回挂关系
+  - 样例版本与 benchmark 版本联动校验
 
 建议落点：
 - `src/agent_compliance/incubator/sample_registry.py`

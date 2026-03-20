@@ -142,7 +142,7 @@ def _initialize_run(
         run.set_stage_status(
             IncubationStage.SAMPLE_PREPARATION,
             "completed",
-            f"已登记样例清单：{sample_manifest.name}",
+            f"已登记样例清单：{sample_manifest.name}@{sample_manifest.version}",
         )
         run.add_sample_set(
             IncubationStage.SAMPLE_PREPARATION,
@@ -156,6 +156,11 @@ def _initialize_run(
                 f"边界样例 {len(sample_manifest.boundary_examples)}"
             ),
         )
+        if sample_manifest.change_summary:
+            run.add_stage_output(
+                IncubationStage.SAMPLE_PREPARATION,
+                f"版本说明：{sample_manifest.change_summary}",
+            )
 
     if comparisons:
         _apply_comparisons_and_recommendations(run, comparisons)
@@ -171,7 +176,7 @@ def _merge_follow_up_inputs(
         run.set_stage_status(
             IncubationStage.SAMPLE_PREPARATION,
             "completed",
-            f"已补充样例清单：{sample_manifest.name}",
+            f"已补充样例清单：{sample_manifest.name}@{sample_manifest.version}",
         )
         run.add_sample_set(
             IncubationStage.SAMPLE_PREPARATION,
@@ -185,6 +190,11 @@ def _merge_follow_up_inputs(
                 f"边界样例 {len(sample_manifest.boundary_examples)}"
             ),
         )
+        if sample_manifest.change_summary:
+            run.add_stage_output(
+                IncubationStage.SAMPLE_PREPARATION,
+                f"版本说明：{sample_manifest.change_summary}",
+            )
 
     if comparisons:
         _apply_comparisons_and_recommendations(run, comparisons)

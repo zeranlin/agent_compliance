@@ -24,10 +24,12 @@ from agent_compliance.incubator import (
     build_run_comparison_report,
     build_validation_comparison_from_files,
     load_incubation_run,
+    load_sample_manifest,
     render_run_comparison_markdown,
     resume_agent_factory,
     write_incubation_run,
     write_distillation_report,
+    write_sample_manifest,
 )
 from agent_compliance.incubator.evals.runner import benchmark_summary
 from agent_compliance.agents.compliance_review.pipelines.llm_enhance import enhance_review_result
@@ -110,6 +112,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="Add a boundary sample path",
+    )
+    incubate_parser.add_argument("--sample-manifest-version", default="v1")
+    incubate_parser.add_argument("--sample-change-summary", default="")
+    incubate_parser.add_argument(
+        "--sample-manifest-file",
+        type=Path,
+        default=None,
+        help="Load a pre-versioned sample manifest JSON",
     )
     incubate_parser.add_argument(
         "--comparisons-json",
@@ -250,12 +260,17 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "incubate-agent":
         sample_manifest = None
-        if args.positive_sample or args.negative_sample or args.boundary_sample:
+        if args.sample_manifest_file is not None:
+            sample_manifest = load_sample_manifest(args.sample_manifest_file)
+        elif args.positive_sample or args.negative_sample or args.boundary_sample:
             sample_manifest = build_sample_manifest(
                 name=f"{args.agent_key}-samples",
                 positive_paths=tuple(args.positive_sample),
                 negative_paths=tuple(args.negative_sample),
                 boundary_paths=tuple(args.boundary_sample),
+                version=args.sample_manifest_version,
+                agent_key=args.agent_key,
+                change_summary=args.sample_change_summary,
             )
         comparisons = _load_comparisons(args.comparisons_json)
         comparisons = comparisons + _collect_comparisons(args, sample_manifest)
@@ -297,6 +312,12 @@ def main(argv: list[str] | None = None) -> int:
             run_key,
             result.run,
         )
+        sample_manifest_path = None
+        if sample_manifest is not None:
+            sample_manifest_path = write_sample_manifest(
+                args.output_dir / result.blueprint.agent_key / "sample-assets",
+                sample_manifest,
+            )
         payload = {
             "agent_key": result.blueprint.agent_key,
             "agent_name": result.blueprint.agent_name,
@@ -311,6 +332,7 @@ def main(argv: list[str] | None = None) -> int:
                 "run_manifest": str(run_paths.manifest_path),
                 "json": str(artifact_paths.json_path),
                 "markdown": str(artifact_paths.markdown_path),
+                "sample_manifest": str(sample_manifest_path) if sample_manifest_path else None,
             },
         }
         return _print_result(payload, args.json)

@@ -113,6 +113,11 @@
 - 当前 `run manifest` 也已开始记录阶段执行痕迹：
   - 包括样例登记、comparison 追加、建议生成、建议状态更新等事件
   - 蒸馏报告中会同步展示总执行事件数和阶段最近事件
+- 当前样例清单也已开始支持版本化：
+  - `--sample-manifest-version <vN>`
+  - `--sample-change-summary <text>`
+  - `--sample-manifest-file <manifest.json>`
+  - 工厂会把样例清单同步写成独立 `sample-manifest.json` 资产
 - 当前已形成独立的 MVP 验收总结：
   - `docs/design-docs/agent-incubator-mvp-acceptance.md`
 - 当前也已提供一个轻量 Web 控制台：

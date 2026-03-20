@@ -88,7 +88,7 @@ class IncubatorFactoryTests(unittest.TestCase):
         self.assertIsNone(resumed.scaffold_plan)
         self.assertEqual(
             resumed.run.get_stage(IncubationStage.SAMPLE_PREPARATION).sample_sets[-1].name,
-            "补充样例",
+            "补充样例@v1",
         )
         self.assertEqual(
             resumed.run.get_stage(IncubationStage.PARITY_VALIDATION).comparisons[-1].sample_id,

@@ -56,6 +56,7 @@ class IncubatorCliTests(unittest.TestCase):
             self.assertTrue(Path(payload["outputs"]["run_manifest"]).exists())
             self.assertTrue(Path(payload["outputs"]["json"]).exists())
             self.assertTrue(Path(payload["outputs"]["markdown"]).exists())
+            self.assertTrue(Path(payload["outputs"]["sample_manifest"]).exists())
 
     def test_incubate_agent_command_can_resume_existing_run(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -206,6 +207,38 @@ class IncubatorCliTests(unittest.TestCase):
             report_json = json.loads(Path(payload["outputs"]["json"]).read_text(encoding="utf-8"))
             self.assertEqual(report_json["summary"]["comparison_count"], 1)
             self.assertGreaterEqual(report_json["summary"]["recommendation_count"], 1)
+
+    def test_incubate_agent_command_writes_versioned_sample_manifest_asset(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                exit_code = main(
+                    [
+                        "incubate-agent",
+                        "demand_research",
+                        "--agents-dir",
+                        str(temp_path / "agents"),
+                        "--output-dir",
+                        str(temp_path / "outputs"),
+                        "--positive-sample",
+                        "samples/positive/positive-a.docx",
+                        "--sample-manifest-version",
+                        "v2",
+                        "--sample-change-summary",
+                        "追加需求调查正样例",
+                        "--json",
+                    ]
+                )
+
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(exit_code, 0)
+            manifest_path = Path(payload["outputs"]["sample_manifest"])
+            self.assertTrue(manifest_path.exists())
+            manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest_payload["version"], "v2")
+            self.assertEqual(manifest_payload["agent_key"], "demand_research")
+            self.assertEqual(manifest_payload["change_summary"], "追加需求调查正样例")
 
     def test_compare_incubation_runs_command_outputs_json(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
