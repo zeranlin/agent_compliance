@@ -88,6 +88,13 @@ from agent_compliance.incubator.productize import (
     render_productization_markdown,
     write_productization_package,
 )
+from agent_compliance.incubator.requirement_definition import (
+    RequirementDefinitionDraft,
+    RequirementDefinitionPaths,
+    build_requirement_definition,
+    render_requirement_definition_markdown,
+    write_requirement_definition,
+)
 from agent_compliance.incubator.scaffold_generator import (
     ScaffoldPlan,
     build_scaffold_plan,
@@ -115,6 +122,8 @@ __all__ = [
     "IncubationRunPaths",
     "IncubationStageRecord",
     "ProductizationArtifactPaths",
+    "RequirementDefinitionDraft",
+    "RequirementDefinitionPaths",
     "RegressionFeedback",
     "REVIEW_AGENT_BLUEPRINT",
     "REVIEW_AGENT_TEMPLATE",
@@ -132,6 +141,7 @@ __all__ = [
     "bootstrap_agent_factory",
     "build_regression_feedback",
     "build_productization_package",
+    "build_requirement_definition",
     "build_validation_comparison",
     "build_validation_comparison_from_files",
     "collect_validation_comparisons_from_manifest",
@@ -151,6 +161,7 @@ __all__ = [
     "load_incubation_run",
     "render_distillation_report_markdown",
     "render_productization_markdown",
+    "render_requirement_definition_markdown",
     "render_run_comparison_markdown",
     "resume_agent_factory",
     "review_agent_blueprint",
@@ -163,5 +174,6 @@ __all__ = [
     "write_distillation_report",
     "write_incubation_run",
     "write_productization_package",
+    "write_requirement_definition",
     "write_sample_manifest",
 ]

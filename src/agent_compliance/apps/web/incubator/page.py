@@ -318,6 +318,7 @@ def incubator_html() -> str:
       <h1>智能体孵化与蒸馏工厂控制台</h1>
       <p>这个页面只做一件事：启动一轮标准孵化，并查看落盘的 run manifest 与蒸馏报告。它不负责复杂设计，只服务方法层验证和复盘。</p>
       <div class="hero-actions">
+        <a href="/incubator/definition">需求定义层</a>
         <a href="/review-check">采购需求合规性检查智能体</a>
         <a href="/review-next">增强审查页</a>
         <a href="/rules">规则管理页</a>

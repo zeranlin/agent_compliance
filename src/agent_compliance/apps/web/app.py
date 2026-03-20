@@ -4,6 +4,11 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
+from agent_compliance.apps.web.incubator.definition_page import incubator_definition_html
+from agent_compliance.apps.web.incubator.definition_routes import (
+    handle_requirement_definition_submit,
+    incubator_template_payload,
+)
 from agent_compliance.apps.web.incubator.page import incubator_html
 from agent_compliance.apps.web.incubator.routes import (
     handle_incubator_continue,
@@ -66,11 +71,17 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         if path == "/incubator":
             send_html(self, incubator_html())
             return
+        if path == "/incubator/definition":
+            send_html(self, incubator_definition_html())
+            return
         if path == "/api/rules":
             send_json(self, rules_payload())
             return
         if path == "/api/incubator/blueprints":
             send_json(self, {"blueprints": incubator_blueprints_payload()})
+            return
+        if path == "/api/incubator/blueprint-templates":
+            send_json(self, {"templates": incubator_template_payload()})
             return
         if path == "/api/incubator/runs":
             send_json(self, {"runs": list_incubator_runs()})
@@ -105,6 +116,9 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/incubator/continue":
             handle_incubator_continue(self)
+            return
+        if path == "/api/incubator/definition":
+            handle_requirement_definition_submit(self)
             return
         if path == "/api/incubator/recommendation":
             handle_incubator_recommendation_update(self)

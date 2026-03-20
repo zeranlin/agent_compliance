@@ -98,6 +98,24 @@
 - 不做事项
 - 第一版目标能力清单
 
+当前已落第一版“需求定义层”页面能力：
+- Web 页面：`/incubator/definition`
+- 面向业务方辅助澄清：
+  - 智能体名称
+  - 业务需求
+  - 使用场景
+  - 用户角色
+  - 输入项
+  - 目标输出
+  - 成功标准
+  - 不做事项
+  - 约束条件
+- 当前会自动生成并落盘：
+  - `*-requirement-definition.json`
+  - `*-requirement-definition.md`
+- 产物目录：
+  - `docs/generated/incubator-definition/`
+
 ### 阶段 B：样例资产准备
 
 输入：
