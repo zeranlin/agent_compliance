@@ -350,6 +350,13 @@ src/agent_compliance/incubator/
 
 后续再继续往“恢复执行”和“多轮对比”推进。
 
+第一版恢复执行建议通过：
+
+- `resume_agent_factory()`
+- `agent_compliance incubate-agent --resume-run <run.json>`
+
+让后续补充样例、对照结果和蒸馏建议时，可以继续并回原 run，而不是每次都从零开始。
+
 
 ## 11. 样例资产登记
 

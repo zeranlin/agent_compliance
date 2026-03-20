@@ -32,6 +32,7 @@ from agent_compliance.incubator.distillation_engine import (
 from agent_compliance.incubator.factory import (
     FactoryBootstrapResult,
     bootstrap_agent_factory,
+    resume_agent_factory,
 )
 from agent_compliance.incubator.sample_registry import (
     SampleAsset,
@@ -86,6 +87,7 @@ __all__ = [
     "list_blueprints",
     "load_incubation_run",
     "render_distillation_report_markdown",
+    "resume_agent_factory",
     "review_agent_blueprint",
     "serialize_incubation_run",
     "summarize_sample_manifest",

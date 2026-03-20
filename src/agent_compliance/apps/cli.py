@@ -17,6 +17,8 @@ from agent_compliance.incubator import (
     ValidationComparison,
     bootstrap_agent_factory,
     build_sample_manifest,
+    load_incubation_run,
+    resume_agent_factory,
     write_incubation_run,
     write_distillation_report,
 )
@@ -77,6 +79,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("docs/generated/incubator"),
     )
     incubate_parser.add_argument("--run-title", default=None)
+    incubate_parser.add_argument(
+        "--resume-run",
+        type=Path,
+        default=None,
+        help="Resume an existing incubation run manifest",
+    )
     incubate_parser.add_argument("--overwrite", action="store_true")
     incubate_parser.add_argument(
         "--positive-sample",
@@ -198,15 +206,28 @@ def main(argv: list[str] | None = None) -> int:
                 boundary_paths=tuple(args.boundary_sample),
             )
         comparisons = _load_comparisons(args.comparisons_json)
-        result = bootstrap_agent_factory(
-            args.agents_dir,
-            args.agent_key,
-            run_title=args.run_title,
-            sample_manifest=sample_manifest,
-            comparisons=comparisons,
-            overwrite=args.overwrite,
-        )
-        run_key = _slugify_run_key(result.run.run_title)
+        if args.resume_run is not None:
+            run = load_incubation_run(args.resume_run)
+            if run.agent_key != args.agent_key:
+                raise ValueError(
+                    f"resume run agent_key={run.agent_key} does not match requested {args.agent_key}"
+                )
+            result = resume_agent_factory(
+                run,
+                sample_manifest=sample_manifest,
+                comparisons=comparisons,
+            )
+            run_key = _run_key_from_manifest(args.resume_run)
+        else:
+            result = bootstrap_agent_factory(
+                args.agents_dir,
+                args.agent_key,
+                run_title=args.run_title,
+                sample_manifest=sample_manifest,
+                comparisons=comparisons,
+                overwrite=args.overwrite,
+            )
+            run_key = _slugify_run_key(result.run.run_title)
         artifact_paths = write_distillation_report(
             args.output_dir,
             result.blueprint.agent_key,
@@ -223,7 +244,11 @@ def main(argv: list[str] | None = None) -> int:
         payload = {
             "agent_key": result.blueprint.agent_key,
             "agent_name": result.blueprint.agent_name,
-            "scaffold_root": str(result.scaffold_plan.target_root),
+            "scaffold_root": (
+                str(result.scaffold_plan.target_root)
+                if result.scaffold_plan is not None
+                else None
+            ),
             "completed_stages": result.report["summary"]["completed_stages"],
             "recommendation_count": result.report["summary"]["recommendation_count"],
             "outputs": {
@@ -292,3 +317,9 @@ def _slugify_run_key(run_title: str) -> str:
     normalized = "".join(char if char.isalnum() else "-" for char in run_title.lower())
     normalized = "-".join(part for part in normalized.split("-") if part)
     return f"{timestamp}-{normalized or 'incubation-run'}"
+
+
+def _run_key_from_manifest(path: Path) -> str:
+    suffix = "-run.json"
+    name = path.name
+    return name[: -len(suffix)] if name.endswith(suffix) else path.stem

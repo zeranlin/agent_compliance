@@ -30,7 +30,7 @@ class FactoryBootstrapResult:
     """描述一次智能体工厂启动结果。"""
 
     blueprint: AgentBlueprint
-    scaffold_plan: ScaffoldPlan
+    scaffold_plan: ScaffoldPlan | None
     run: IncubationRun
     report: dict[str, object]
     report_markdown: str
@@ -67,6 +67,31 @@ def bootstrap_agent_factory(
     return FactoryBootstrapResult(
         blueprint=blueprint,
         scaffold_plan=plan,
+        run=run,
+        report=report,
+        report_markdown=report_markdown,
+    )
+
+
+def resume_agent_factory(
+    run: IncubationRun,
+    *,
+    sample_manifest: SampleManifest | None = None,
+    comparisons: tuple[ValidationComparison, ...] = (),
+) -> FactoryBootstrapResult:
+    """基于已有 run manifest 继续推进一轮孵化。"""
+
+    blueprint = get_blueprint(run.agent_key)
+    _merge_follow_up_inputs(
+        run,
+        sample_manifest=sample_manifest,
+        comparisons=comparisons,
+    )
+    report = build_distillation_report(run)
+    report_markdown = render_distillation_report_markdown(report)
+    return FactoryBootstrapResult(
+        blueprint=blueprint,
+        scaffold_plan=None,
         run=run,
         report=report,
         report_markdown=report_markdown,
@@ -133,23 +158,59 @@ def _initialize_run(
         )
 
     if comparisons:
-        run.set_stage_status(
-            IncubationStage.PARITY_VALIDATION,
-            "completed",
-            f"已记录 {len(comparisons)} 条对照结果。",
-        )
-        for comparison in comparisons:
-            run.add_comparison(IncubationStage.PARITY_VALIDATION, comparison)
+        _apply_comparisons_and_recommendations(run, comparisons)
 
-        recommendations = build_distillation_recommendations(comparisons)
-        if recommendations:
-            run.set_stage_status(
+
+def _merge_follow_up_inputs(
+    run: IncubationRun,
+    *,
+    sample_manifest: SampleManifest | None,
+    comparisons: tuple[ValidationComparison, ...],
+) -> None:
+    if sample_manifest is not None:
+        run.set_stage_status(
+            IncubationStage.SAMPLE_PREPARATION,
+            "completed",
+            f"已补充样例清单：{sample_manifest.name}",
+        )
+        run.add_sample_set(
+            IncubationStage.SAMPLE_PREPARATION,
+            sample_manifest.to_sample_set(),
+        )
+        run.add_stage_output(
+            IncubationStage.SAMPLE_PREPARATION,
+            (
+                f"补充正样例 {len(sample_manifest.positive_examples)} / "
+                f"负样例 {len(sample_manifest.negative_examples)} / "
+                f"边界样例 {len(sample_manifest.boundary_examples)}"
+            ),
+        )
+
+    if comparisons:
+        _apply_comparisons_and_recommendations(run, comparisons)
+
+
+def _apply_comparisons_and_recommendations(
+    run: IncubationRun,
+    comparisons: tuple[ValidationComparison, ...],
+) -> None:
+    run.set_stage_status(
+        IncubationStage.PARITY_VALIDATION,
+        "completed",
+        f"已记录 {len(comparisons)} 条对照结果。",
+    )
+    for comparison in comparisons:
+        run.add_comparison(IncubationStage.PARITY_VALIDATION, comparison)
+
+    recommendations = build_distillation_recommendations(comparisons)
+    if recommendations:
+        run.set_stage_status(
+            IncubationStage.DISTILLATION_ITERATION,
+            "in_progress",
+            f"已根据对照差异生成 {len(recommendations)} 条初步蒸馏建议。",
+        )
+        for recommendation in recommendations:
+            run.add_recommendation(
                 IncubationStage.DISTILLATION_ITERATION,
-                "in_progress",
-                f"已根据对照差异生成 {len(recommendations)} 条初步蒸馏建议。",
+                recommendation,
             )
-            for recommendation in recommendations:
-                run.add_recommendation(
-                    IncubationStage.DISTILLATION_ITERATION,
-                    recommendation,
-                )

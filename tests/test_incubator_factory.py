@@ -5,10 +5,12 @@ import unittest
 from pathlib import Path
 
 from agent_compliance.incubator import (
+    IncubationStage,
     ValidationComparison,
     bootstrap_agent_factory,
     build_sample_manifest,
     list_blueprints,
+    resume_agent_factory,
 )
 
 
@@ -59,6 +61,38 @@ class IncubatorFactoryTests(unittest.TestCase):
         self.assertEqual(validation_stage.status, "completed")
         self.assertEqual(distill_stage.status, "in_progress")
         self.assertEqual(len(distill_stage.recommendations), 1)
+
+    def test_resume_agent_factory_appends_follow_up_inputs(self) -> None:
+        initial = bootstrap_agent_factory(Path(tempfile.gettempdir()), "budget_demand")
+        manifest = build_sample_manifest(
+            "补充样例",
+            negative_paths=("samples/negative/z.docx",),
+        )
+        comparisons = (
+            ValidationComparison(
+                sample_id="case-002",
+                human_baseline="人工抓到边界问题",
+                strong_agent_result="强智能体抓到边界问题",
+                target_agent_result="目标智能体误报",
+                gap_points=("边界问题误报",),
+            ),
+        )
+
+        resumed = resume_agent_factory(
+            initial.run,
+            sample_manifest=manifest,
+            comparisons=comparisons,
+        )
+
+        self.assertIsNone(resumed.scaffold_plan)
+        self.assertEqual(
+            resumed.run.get_stage(IncubationStage.SAMPLE_PREPARATION).sample_sets[-1].name,
+            "补充样例",
+        )
+        self.assertEqual(
+            resumed.run.get_stage(IncubationStage.PARITY_VALIDATION).comparisons[-1].sample_id,
+            "case-002",
+        )
 
 
 if __name__ == "__main__":

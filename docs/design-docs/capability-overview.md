@@ -613,6 +613,9 @@
   - `serialize_incubation_run()`
   - `write_incubation_run()`
   - `load_incubation_run()`
+- 已具备基础恢复执行能力：
+  - `resume_agent_factory()`
+  - `agent_compliance incubate-agent --resume-run <run.json>`
 - 已具备样例资产登记能力：
   - `SampleAsset`
   - `SampleManifest`
