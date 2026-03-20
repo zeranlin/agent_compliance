@@ -118,6 +118,12 @@
   - `--sample-change-summary <text>`
   - `--sample-manifest-file <manifest.json>`
   - 工厂会把样例清单同步写成独立 `sample-manifest.json` 资产
+- 当前多轮 run 比较也已开始支持趋势化输出：
+  - `gap_series`
+  - `recommendation_series`
+  - `validated_change_series`
+  - `gap_trend`
+  - `validated_change_trend`
 - 当前已形成独立的 MVP 验收总结：
   - `docs/design-docs/agent-incubator-mvp-acceptance.md`
 - 当前也已提供一个轻量 Web 控制台：

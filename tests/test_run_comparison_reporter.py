@@ -74,6 +74,13 @@ class RunComparisonReporterTests(unittest.TestCase):
         self.assertEqual(report["trend"]["gap_delta"], -1)
         self.assertEqual(report["trend"]["validated_change_delta"], -1)
         self.assertTrue(report["trend"]["is_gap_converging"])
+        self.assertEqual(report["trend"]["gap_series"], (2, 1))
+        self.assertEqual(report["trend"]["validated_change_series"], (1, 0))
+        self.assertIn("持续下降", report["trajectory"]["gap_trend"])
+        self.assertEqual(
+            report["trajectory"]["dominant_target_layers"][0]["name"],
+            "review_pipeline",
+        )
 
     def test_render_run_comparison_markdown_includes_summary(self) -> None:
         run = create_incubation_run("demand_research", "第一轮孵化")
@@ -81,6 +88,7 @@ class RunComparisonReporterTests(unittest.TestCase):
         markdown = render_run_comparison_markdown(report)
 
         self.assertIn("# demand_research 多轮孵化对比报告", markdown)
+        self.assertIn("## 趋势摘要", markdown)
         self.assertIn("## 各轮摘要", markdown)
         self.assertIn("### 第一轮孵化", markdown)
 

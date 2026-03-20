@@ -139,16 +139,25 @@
 
 ### 3.2 多轮趋势报告
 
+当前状态：
+- 第一版已完成。
+- 现在 `compare-incubation-runs` 已开始输出：
+  - `gap_series`
+  - `recommendation_series`
+  - `validated_change_series`
+  - `gap_trend`
+  - `validated_change_trend`
+  - 高频目标层摘要
+
 目标：
 - 不只比较第 1 轮和第 2 轮
 - 而是给出一条目标智能体的能力提升趋势
 
 当前缺口：
-- 已有多轮 run 对比
-- 但还没有趋势报告，比如：
-  - 哪些 gap 在持续下降
-  - 哪些 target layer 反复成为重点
-  - 哪些建议长期没有落地
+- 当前仍缺：
+  - 更长周期的 run 趋势图
+  - 建议长期未落地项的单独摘要
+  - 样例版本变化对趋势的影响解释
 
 建议落点：
 - `src/agent_compliance/incubator/evals/trend_reporter.py`
