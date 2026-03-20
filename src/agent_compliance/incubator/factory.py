@@ -5,6 +5,9 @@ from pathlib import Path
 
 from agent_compliance.incubator.blueprints.base import AgentBlueprint
 from agent_compliance.incubator.blueprints.registry import get_blueprint
+from agent_compliance.incubator.distillation_engine import (
+    build_distillation_recommendations,
+)
 from agent_compliance.incubator.evals import (
     build_distillation_report,
     render_distillation_report_markdown,
@@ -12,8 +15,10 @@ from agent_compliance.incubator.evals import (
 from agent_compliance.incubator.lifecycle import (
     IncubationRun,
     IncubationStage,
+    ValidationComparison,
     create_incubation_run,
 )
+from agent_compliance.incubator.sample_registry import SampleManifest
 from agent_compliance.incubator.scaffold_generator import (
     ScaffoldPlan,
     generate_agent_scaffold,
@@ -36,6 +41,8 @@ def bootstrap_agent_factory(
     agent_key: str,
     *,
     run_title: str | None = None,
+    sample_manifest: SampleManifest | None = None,
+    comparisons: tuple[ValidationComparison, ...] = (),
     overwrite: bool = False,
 ) -> FactoryBootstrapResult:
     """按标准蓝图启动一个新的智能体孵化回合。"""
@@ -47,7 +54,13 @@ def bootstrap_agent_factory(
         agent_key=blueprint.agent_key,
         run_title=run_title or f"{blueprint.agent_name} 第一轮孵化",
     )
-    _initialize_run(run, blueprint, plan)
+    _initialize_run(
+        run,
+        blueprint,
+        plan,
+        sample_manifest=sample_manifest,
+        comparisons=comparisons,
+    )
 
     report = build_distillation_report(run)
     report_markdown = render_distillation_report_markdown(report)
@@ -64,6 +77,9 @@ def _initialize_run(
     run: IncubationRun,
     blueprint: AgentBlueprint,
     plan: ScaffoldPlan,
+    *,
+    sample_manifest: SampleManifest | None,
+    comparisons: tuple[ValidationComparison, ...],
 ) -> None:
     run.set_stage_status(
         IncubationStage.REQUIREMENT_DEFINITION,
@@ -96,3 +112,44 @@ def _initialize_run(
             IncubationStage.TARGET_AGENT_BOOTSTRAP,
             str(file_path.relative_to(plan.target_root.parent)),
         )
+
+    if sample_manifest is not None:
+        run.set_stage_status(
+            IncubationStage.SAMPLE_PREPARATION,
+            "completed",
+            f"已登记样例清单：{sample_manifest.name}",
+        )
+        run.add_sample_set(
+            IncubationStage.SAMPLE_PREPARATION,
+            sample_manifest.to_sample_set(),
+        )
+        run.add_stage_output(
+            IncubationStage.SAMPLE_PREPARATION,
+            (
+                f"正样例 {len(sample_manifest.positive_examples)} / "
+                f"负样例 {len(sample_manifest.negative_examples)} / "
+                f"边界样例 {len(sample_manifest.boundary_examples)}"
+            ),
+        )
+
+    if comparisons:
+        run.set_stage_status(
+            IncubationStage.PARITY_VALIDATION,
+            "completed",
+            f"已记录 {len(comparisons)} 条对照结果。",
+        )
+        for comparison in comparisons:
+            run.add_comparison(IncubationStage.PARITY_VALIDATION, comparison)
+
+        recommendations = build_distillation_recommendations(comparisons)
+        if recommendations:
+            run.set_stage_status(
+                IncubationStage.DISTILLATION_ITERATION,
+                "in_progress",
+                f"已根据对照差异生成 {len(recommendations)} 条初步蒸馏建议。",
+            )
+            for recommendation in recommendations:
+                run.add_recommendation(
+                    IncubationStage.DISTILLATION_ITERATION,
+                    recommendation,
+                )
