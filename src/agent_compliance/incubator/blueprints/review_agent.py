@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from agent_compliance.incubator.blueprints.base import AgentBlueprint
+from agent_compliance.incubator.blueprints.base import AgentBlueprint, create_agent_blueprint
+from agent_compliance.incubator.blueprints.type_templates import REVIEW_AGENT_TEMPLATE
 
 
-REVIEW_AGENT_BLUEPRINT = AgentBlueprint(
+REVIEW_AGENT_BLUEPRINT = create_agent_blueprint(
+    template=REVIEW_AGENT_TEMPLATE,
     agent_key="compliance_review",
     agent_name="采购需求合规性检查智能体",
-    agent_type="review_agent",
     goal=(
         "围绕采购需求形成、复核和发布前审查，识别资格、评分、技术、"
         "商务/验收等条款中的结构性风险，并输出可直接用于改稿和复核的结果。"
@@ -24,24 +25,6 @@ REVIEW_AGENT_BLUEPRINT = AgentBlueprint(
         "建议改写",
         "导出结果",
     ),
-    shared_capabilities=(
-        "normalize",
-        "tender_document_parser",
-        "catalog classification",
-        "legal authorities",
-        "cache",
-        "export base",
-        "web shell",
-    ),
-    required_files=(
-        "schemas.py",
-        "pipeline.py",
-        "service.py",
-        "rules/__init__.py",
-        "analyzers/__init__.py",
-        "web/__init__.py",
-    ),
-    default_directories=("rules", "analyzers", "web"),
     incubation_focus=(
         "人工审查对照",
         "规则与 analyzer 主链设计",

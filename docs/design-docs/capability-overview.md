@@ -173,6 +173,7 @@
 - `incubator` 现已补入 `run manifest` 执行痕迹细化第一版能力，每个阶段开始记录 `events`，可追踪样例登记、comparison 追加、建议生成与状态更新等动作，并同步进入蒸馏报告，开始把 run 从“静态阶段状态”推进到“可复盘的阶段事件流”
 - `incubator` 现已补入样例资产版本化第一版能力，`SampleManifest` 开始携带 `version / agent_key / benchmark_refs / change_summary`，并可作为独立 JSON 资产落盘和回读，开始把样例清单从“临时输入”推进到“可追踪、可复用的版本化资产”
 - `incubator` 现已补入多轮趋势报告第一版能力，`compare-incubation-runs` 不再只返回两轮 delta，而会进一步输出 `gap_series / recommendation_series / validated_change_series`、趋势判断和高频目标层摘要，开始把 run 比较推进成“能力成长曲线”视图
+- `incubator` 现已补入蓝图模板分型第一版能力，蓝图层开始区分 `审查型 / 预算分析型 / 调研生成型 / 对比评估型` 四类标准模板，并让 `review_agent / budget_agent / demand_research_agent` 从模板派生，开始把“起具体蓝图”推进成“先选类型模板、再落具体智能体”
 - `incubator` 现已补入最小多轮蒸馏比较能力，可通过 `compare-incubation-runs <run1> <run2> ...` 比较同一目标智能体不同 run 的 `gap_count / recommendation_count / completed_stages` 变化，并识别重复出现的 gap 与反复成为增强重点的目标层
 - `incubator` 现已补入蒸馏建议执行状态跟踪能力，每条 `DistillationRecommendation` 均带 `recommendation_key / status / resolution_notes`，并可通过 `update-incubation-recommendation` 将建议标记为 `accepted / implemented / validated / dropped`，开始记录“建议是否真的变成能力”
 - `incubator` 现已开始支持把 `regression_result / capability_change` 回挂到单条蒸馏建议，并同步反映到蒸馏报告和多轮 run 比较中，开始回答“哪条建议经过实现和回归后，确实让目标智能体能力增强了”

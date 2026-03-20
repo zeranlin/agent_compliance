@@ -88,7 +88,8 @@
 - 当前推荐先使用 `assist`
 
 智能体孵化与蒸馏工厂当前已支持：
-- 标准蓝图：`review_agent`、`budget_agent`、`demand_research_agent`
+- 标准蓝图模板：`review / budget_analysis / demand_research / comparison_eval`
+- 当前具体蓝图：`review_agent`、`budget_agent`、`demand_research_agent`
 - 标准命令：`PYTHONPATH=src python3 -m agent_compliance incubate-agent <agent_key>`
 - 多轮比较命令：`PYTHONPATH=src python3 -m agent_compliance compare-incubation-runs <run1> <run2> ...`
 - 建议状态命令：`PYTHONPATH=src python3 -m agent_compliance update-incubation-recommendation <run.json> <recommendation_key> --status ...`

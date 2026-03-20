@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from agent_compliance.incubator.blueprints.base import AgentBlueprint
+from agent_compliance.incubator.blueprints.base import AgentBlueprint, create_agent_blueprint
+from agent_compliance.incubator.blueprints.type_templates import BUDGET_ANALYSIS_AGENT_TEMPLATE
 
 
-BUDGET_AGENT_BLUEPRINT = AgentBlueprint(
+BUDGET_AGENT_BLUEPRINT = create_agent_blueprint(
+    template=BUDGET_ANALYSIS_AGENT_TEMPLATE,
     agent_key="budget_demand",
     agent_name="政府采购预算需求智能体",
-    agent_type="budget_agent",
     goal=(
         "围绕政府采购预算需求形成与复核，识别预算测算依据、数量单价总价口径、"
         "预算范围、预算结构和预算漏重项等问题。"
@@ -25,24 +26,6 @@ BUDGET_AGENT_BLUEPRINT = AgentBlueprint(
         "预算复核建议",
         "导出结果",
     ),
-    shared_capabilities=(
-        "normalize",
-        "tender_document_parser",
-        "catalog classification",
-        "legal authorities",
-        "cache",
-        "export base",
-        "web shell",
-    ),
-    required_files=(
-        "schemas.py",
-        "pipeline.py",
-        "service.py",
-        "rules/__init__.py",
-        "analyzers/__init__.py",
-        "web/__init__.py",
-    ),
-    default_directories=("rules", "analyzers", "web"),
     incubation_focus=(
         "预算表结构解析",
         "数量单价总价一致性",
