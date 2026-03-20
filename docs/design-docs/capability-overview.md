@@ -607,6 +607,11 @@
   - `list_blueprints()`
   - `get_blueprint()`
   - `bootstrap_agent_factory()`
+- 已具备样例资产登记能力：
+  - `SampleAsset`
+  - `SampleManifest`
+  - `build_sample_manifest()`
+  - `summarize_sample_manifest()`
 - 已具备按蓝图生成最小骨架能力
 - 已具备统一蒸馏报告能力：
   - `build_distillation_report()`

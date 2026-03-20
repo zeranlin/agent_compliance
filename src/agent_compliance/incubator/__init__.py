@@ -29,6 +29,12 @@ from agent_compliance.incubator.factory import (
     FactoryBootstrapResult,
     bootstrap_agent_factory,
 )
+from agent_compliance.incubator.sample_registry import (
+    SampleAsset,
+    SampleManifest,
+    build_sample_manifest,
+    summarize_sample_manifest,
+)
 from agent_compliance.incubator.scaffold_generator import (
     ScaffoldPlan,
     build_scaffold_plan,
@@ -48,9 +54,12 @@ __all__ = [
     "REVIEW_AGENT_BLUEPRINT",
     "SampleSet",
     "ScaffoldPlan",
+    "SampleAsset",
     "ValidationComparison",
+    "SampleManifest",
     "build_scaffold_plan",
     "build_distillation_report",
+    "build_sample_manifest",
     "bootstrap_agent_factory",
     "budget_agent_blueprint",
     "create_incubation_run",
@@ -60,4 +69,5 @@ __all__ = [
     "list_blueprints",
     "render_distillation_report_markdown",
     "review_agent_blueprint",
+    "summarize_sample_manifest",
 ]

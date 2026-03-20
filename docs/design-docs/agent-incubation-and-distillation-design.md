@@ -228,6 +228,8 @@ src/agent_compliance/incubator/
 - `lifecycle.py`
   - 定义标准生命周期与阶段对象
   - 管理 `SampleSet / ValidationComparison / DistillationRecommendation / IncubationRun`
+- `sample_registry.py`
+  - 管理正样例 / 负样例 / 边界样例的登记与摘要
 - `scaffold_generator.py`
   - 根据蓝图生成最小智能体骨架
 - `factory.py`
@@ -304,6 +306,24 @@ src/agent_compliance/incubator/
 - 同时产出结构化蒸馏报告和 Markdown 报告
 
 这样后续孵化一个新智能体，不再是手工拼装，而是按统一工厂入口启动。
+
+
+## 11. 样例资产登记
+
+为了把“样例驱动”做成标准能力，`incubator` 层应统一管理：
+
+- 正样例
+- 负样例
+- 边界样例
+
+第一版建议通过：
+
+- `SampleAsset`
+- `SampleManifest`
+- `build_sample_manifest()`
+- `summarize_sample_manifest()`
+
+实现样例资产登记与摘要输出，再把结果转给生命周期中的 `SampleSet` 使用。
 - 导出
 
 第一版对应实现：
