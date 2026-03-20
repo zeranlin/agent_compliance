@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from agent_compliance.incubator.blueprints.base import AgentBlueprint
 from agent_compliance.incubator.blueprints.budget_agent import BUDGET_AGENT_BLUEPRINT
+from agent_compliance.incubator.blueprints.demand_research_agent import (
+    DEMAND_RESEARCH_AGENT_BLUEPRINT,
+)
 from agent_compliance.incubator.blueprints.review_agent import REVIEW_AGENT_BLUEPRINT
 
 
 BLUEPRINT_REGISTRY: dict[str, AgentBlueprint] = {
     REVIEW_AGENT_BLUEPRINT.agent_key: REVIEW_AGENT_BLUEPRINT,
     BUDGET_AGENT_BLUEPRINT.agent_key: BUDGET_AGENT_BLUEPRINT,
+    DEMAND_RESEARCH_AGENT_BLUEPRINT.agent_key: DEMAND_RESEARCH_AGENT_BLUEPRINT,
 }
 
 

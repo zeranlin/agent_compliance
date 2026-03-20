@@ -1,0 +1,144 @@
+{
+  "agent_key": "demand_research",
+  "run_title": "政府采购需求调查智能体 第一轮孵化",
+  "summary": {
+    "total_stages": 7,
+    "completed_stages": 5,
+    "sample_set_count": 1,
+    "comparison_count": 1,
+    "recommendation_count": 3
+  },
+  "priority_summary": {
+    "P2": 2,
+    "P1": 1
+  },
+  "target_layer_summary": {
+    "review_pipeline": 2,
+    "mixed_scope_boundary_engine": 1
+  },
+  "stages": [
+    {
+      "stage": "requirement_definition",
+      "status": "completed",
+      "notes": "已按 政府采购需求调查智能体 蓝图建立第一版目标定义。",
+      "outputs": [
+        "围绕政府采购需求调查与需求初稿形成，接收采购品目、预算和场景约束，输出结构完整、便于人工修改的采购需求初稿骨架。"
+      ],
+      "sample_sets": [],
+      "comparisons": [],
+      "recommendations": []
+    },
+    {
+      "stage": "sample_preparation",
+      "status": "completed",
+      "notes": "已登记样例清单：demand_research-samples",
+      "outputs": [
+        "正样例 1 / 负样例 0 / 边界样例 0"
+      ],
+      "sample_sets": [
+        {
+          "name": "demand_research-samples",
+          "positive_examples": [
+            "gov-procurement-demand-research-agent-product-outline"
+          ],
+          "negative_examples": [],
+          "boundary_examples": [],
+          "benchmark_refs": []
+        }
+      ],
+      "comparisons": [],
+      "recommendations": []
+    },
+    {
+      "stage": "strong_agent_design",
+      "status": "completed",
+      "notes": "已选择标准蓝图并确认共享底座与孵化重点。",
+      "outputs": [
+        "共享底座：normalize, tender_document_parser, catalog classification, legal authorities, cache, export base, web shell",
+        "孵化重点：采购需求章节结构生成, 预算约束向需求条款转换, 品目驱动的需求初稿模板, 待人工补充项与边界提示"
+      ],
+      "sample_sets": [],
+      "comparisons": [],
+      "recommendations": []
+    },
+    {
+      "stage": "target_agent_bootstrap",
+      "status": "completed",
+      "notes": "已生成最小骨架：src/agent_compliance/agents/demand_research",
+      "outputs": [
+        "demand_research/schemas.py",
+        "demand_research/pipeline.py",
+        "demand_research/service.py",
+        "demand_research/rules/__init__.py",
+        "demand_research/analyzers/__init__.py",
+        "demand_research/web/__init__.py"
+      ],
+      "sample_sets": [],
+      "comparisons": [],
+      "recommendations": []
+    },
+    {
+      "stage": "parity_validation",
+      "status": "completed",
+      "notes": "已记录 1 条对照结果。",
+      "outputs": [],
+      "sample_sets": [],
+      "comparisons": [
+        {
+          "sample_id": "demand-research-mvp-001",
+          "human_baseline": "人工会先输出项目概述、采购标的说明、数量与预算约束、技术需求框架、商务需求框架、验收需求框架和待人工补充项。",
+          "strong_agent_result": "强通用智能体建议先输出结构化采购需求初稿骨架，并在关键参数未知时保留待补充字段，避免直接编造具体技术参数。",
+          "target_agent_result": "目标智能体当前还只有骨架，没有体现需求章节结构和预算向需求边界的转换能力。",
+          "aligned_points": [],
+          "gap_points": [
+            "需求章节结构尚未固化",
+            "预算约束尚未转换成需求边界",
+            "待人工补充项尚未标准化输出"
+          ],
+          "summary": "当前 MVP 更适合先把需求初稿骨架和待补充项能力固化，再进入需求正文生成。"
+        }
+      ],
+      "recommendations": []
+    },
+    {
+      "stage": "distillation_iteration",
+      "status": "in_progress",
+      "notes": "已根据对照差异生成 3 条初步蒸馏建议。",
+      "outputs": [],
+      "sample_sets": [],
+      "comparisons": [],
+      "recommendations": [
+        {
+          "title": "补充通用蒸馏增强",
+          "target_layer": "review_pipeline",
+          "action": "围绕样例 demand-research-mvp-001 补充差异：需求章节结构尚未固化",
+          "rationale": "当前差异尚未命中专项规则，先按通用增强入口沉淀。",
+          "priority": "P2"
+        },
+        {
+          "title": "增强边界识别引擎",
+          "target_layer": "mixed_scope_boundary_engine",
+          "action": "围绕样例 demand-research-mvp-001 补充边界差异：预算约束尚未转换成需求边界",
+          "rationale": "边界类问题仍是目标智能体与人工结果差异的高发点。",
+          "priority": "P1"
+        },
+        {
+          "title": "补充通用蒸馏增强",
+          "target_layer": "review_pipeline",
+          "action": "围绕样例 demand-research-mvp-001 补充差异：待人工补充项尚未标准化输出",
+          "rationale": "当前差异尚未命中专项规则，先按通用增强入口沉淀。",
+          "priority": "P2"
+        }
+      ]
+    },
+    {
+      "stage": "productization",
+      "status": "pending",
+      "notes": "",
+      "outputs": [],
+      "sample_sets": [],
+      "comparisons": [],
+      "recommendations": []
+    }
+  ]
+}

@@ -74,6 +74,7 @@
 - `PYTHONPATH=src python3 -m agent_compliance scan-rules <file> --json`
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json`
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --tender-parser-mode assist`
+- `PYTHONPATH=src python3 -m agent_compliance incubate-agent <agent_key>`
 - `PYTHONPATH=src python3 -m agent_compliance web`
 
 测试阶段默认关闭 review 缓存；如需复用缓存，可显式加：
@@ -83,6 +84,16 @@
 - 环境变量：`AGENT_COMPLIANCE_TENDER_PARSER_MODE=off|assist|required`
 - CLI：`--tender-parser-mode off|assist|required`
 - 当前推荐先使用 `assist`
+
+智能体孵化与蒸馏工厂当前已支持：
+- 标准蓝图：`review_agent`、`budget_agent`、`demand_research_agent`
+- 标准命令：`PYTHONPATH=src python3 -m agent_compliance incubate-agent <agent_key>`
+- 标准产物：
+  - `*-distillation-report.md`
+  - `*-distillation-report.json`
+  - `*-run.json`
+- 当前已用 `政府采购需求调查智能体` 跑通第一轮真实 MVP 孵化验证，产物位于：
+  - `docs/generated/incubator/demand_research/`
 
 本地大模型兜底接口已预留，默认关闭；如需显式启用：
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-llm`

@@ -35,6 +35,7 @@
 
 - 采购需求合规性检查智能体
 - 政府采购预算需求智能体
+- 政府采购需求调查智能体
 - 后续的履约、比选、响应文件、规则编排等智能体
 
 
@@ -505,15 +506,31 @@ src/agent_compliance/incubator/
 
 1. 定义生命周期对象
 2. 建立 `blueprints/` 与 `scaffolds/` 目录
-3. 落 `review_agent` 与 `budget_agent` 蓝图
+3. 落 `review_agent`、`budget_agent` 与 `demand_research_agent` 蓝图
 4. 形成正式设计文档
-5. 让新智能体（预算需求智能体）优先按这套方法孵化
+5. 让新智能体优先按这套方法孵化
+6. 提供 `incubate-agent` 统一命令入口
+7. 落盘标准蒸馏报告与 run manifest
+
+当前已完成第一轮真实 MVP 验证：
+
+- 目标智能体：`政府采购需求调查智能体`
+- 启动方式：`PYTHONPATH=src python3 -m agent_compliance incubate-agent demand_research ...`
+- 标准产物：
+  - `docs/generated/incubator/demand_research/*-distillation-report.md`
+  - `docs/generated/incubator/demand_research/*-distillation-report.json`
+  - `docs/generated/incubator/demand_research/*-run.json`
+- 当前验证结论：
+  - 已能按蓝图生成最小骨架
+  - 已能登记样例清单和对照结果
+  - 已能产出首轮蒸馏建议
+  - 已能写出标准报告与恢复执行所需 manifest
 
 ## 14. 下一步建议
 
 按优先级建议继续做：
 
-1. 让 `budget_demand` 第一版严格按该流程起步
-2. 补 `docs/product-specs` 级别的产品 outline 自动生成
-3. 再把 scaffold 入口接到 CLI 或内部孵化命令
-4. 把 `ValidationComparison` 和 `DistillationRecommendation` 接到统一评测报告
+1. 让 `ValidationComparison` 支持更标准的自动生成入口
+2. 补多轮 run 对比，明确“蒸馏后能力是否增强”
+3. 记录 `DistillationRecommendation` 的执行状态与采纳结果
+4. 再让新的目标智能体严格按该流程孵化

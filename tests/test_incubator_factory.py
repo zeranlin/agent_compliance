@@ -19,6 +19,7 @@ class IncubatorFactoryTests(unittest.TestCase):
         agent_keys = {blueprint.agent_key for blueprint in list_blueprints()}
         self.assertIn("compliance_review", agent_keys)
         self.assertIn("budget_demand", agent_keys)
+        self.assertIn("demand_research", agent_keys)
 
     def test_bootstrap_agent_factory_generates_scaffold_and_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
