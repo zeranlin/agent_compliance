@@ -593,3 +593,17 @@
 - 新增定位字段或输出规范
 - 新增更新机制或自动化能力
 - 能力边界发生明显变化
+## 智能体孵化与蒸馏工厂
+
+- 已具备标准孵化生命周期对象：
+  - `SampleSet`
+  - `ValidationComparison`
+  - `DistillationRecommendation`
+  - `IncubationRun`
+- 已具备标准蓝图：
+  - `review_agent`
+  - `budget_agent`
+- 已具备按蓝图生成最小骨架能力
+- 已具备统一蒸馏报告能力：
+  - `build_distillation_report()`
+  - `render_distillation_report_markdown()`

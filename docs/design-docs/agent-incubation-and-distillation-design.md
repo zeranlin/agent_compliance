@@ -234,6 +234,7 @@ src/agent_compliance/incubator/
   - 定义脚手架模板与生成入口
 - `evals/`
   - 复用或扩展孵化评测能力
+  - 统一输出蒸馏报告与对照复盘结果
 - `improvement/`
   - 沉淀差异分析和增强候选
 
@@ -258,6 +259,29 @@ src/agent_compliance/incubator/
 - analyzer
 - 仲裁
 - 法规依据
+
+
+## 9. 标准蒸馏报告
+
+为了避免每个智能体都各自发明“差异复盘”的格式，`incubator` 层应统一产出蒸馏报告。
+
+第一版标准报告至少包含：
+
+- 智能体标识与本轮孵化标题
+- 生命周期完成度
+- 样例集数量
+- 对照记录数量
+- 蒸馏建议数量
+- 按优先级汇总的建议分布
+- 按目标层汇总的建议分布
+- 各阶段明细
+
+建议由：
+
+- `build_distillation_report()`
+- `render_distillation_report_markdown()`
+
+统一输出结构化结果和 Markdown 结果，后续再接到更完整的评测与自动留痕流程。
 - 导出
 
 第一版对应实现：

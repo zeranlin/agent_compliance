@@ -12,6 +12,10 @@ from agent_compliance.incubator.lifecycle import (
     create_incubation_run,
     default_incubation_lifecycle,
 )
+from agent_compliance.incubator.evals import (
+    build_distillation_report,
+    render_distillation_report_markdown,
+)
 from agent_compliance.incubator.scaffold_generator import (
     ScaffoldPlan,
     build_scaffold_plan,
@@ -29,7 +33,9 @@ __all__ = [
     "ScaffoldPlan",
     "ValidationComparison",
     "build_scaffold_plan",
+    "build_distillation_report",
     "create_incubation_run",
     "default_incubation_lifecycle",
     "generate_agent_scaffold",
+    "render_distillation_report_markdown",
 ]
