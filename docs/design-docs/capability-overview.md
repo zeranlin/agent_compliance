@@ -599,6 +599,7 @@
 - 能力边界发生明显变化
 ## 智能体孵化与蒸馏工厂
 
+- 已新增 [agent-incubator-mvp-acceptance.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/agent-incubator-mvp-acceptance.md)，把当前方法层的完成范围、真实验证路径、标准命令、run 产物和剩余增强项统一沉成一份 MVP 验收总结；当前判断这条主线已达到可验证、可留痕、可续跑的完整 MVP 阶段
 - 已具备标准孵化生命周期对象：
   - `SampleSet`
   - `ValidationComparison`

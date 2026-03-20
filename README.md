@@ -54,6 +54,7 @@
 - [budget-demand-agent-architecture.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/budget-demand-agent-architecture.md)
 - [repo-layered-architecture.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/repo-layered-architecture.md)
 - [agent-incubation-and-distillation-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/agent-incubation-and-distillation-design.md)
+- [agent-incubator-mvp-acceptance.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/agent-incubator-mvp-acceptance.md)
 - [llm-fast-path-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/llm-fast-path-design.md)
 - [legal-authority-system.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/legal-authority-system.md)
 - [case-library-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/case-library-design.md)
@@ -104,6 +105,8 @@
   - `--strong-agent-result-file`
   - `--target-agent-result-file`
   用于把三份标准文本自动转换成一条 `ValidationComparison`
+- 当前已形成独立的 MVP 验收总结：
+  - `docs/design-docs/agent-incubator-mvp-acceptance.md`
 
 本地大模型兜底接口已预留，默认关闭；如需显式启用：
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-llm`
