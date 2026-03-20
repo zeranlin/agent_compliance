@@ -607,6 +607,8 @@
   - `list_blueprints()`
   - `get_blueprint()`
   - `bootstrap_agent_factory()`
+- 已具备内部命令入口：
+  - `agent_compliance incubate-agent <agent_key>`
 - 已具备样例资产登记能力：
   - `SampleAsset`
   - `SampleManifest`
