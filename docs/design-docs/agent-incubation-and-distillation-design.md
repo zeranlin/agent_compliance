@@ -248,6 +248,10 @@ src/agent_compliance/incubator/
 - 法规依据
 - 导出
 
+第一版对应实现：
+
+- `src/agent_compliance/incubator/blueprints/review_agent.py`
+
 ### 8.2 预算分析型智能体蓝图
 
 适用于：
@@ -264,8 +268,33 @@ src/agent_compliance/incubator/
 - 预算 analyzer
 - 差异与异常输出
 
+第一版对应实现：
 
-## 9. 脚手架生成建议
+- `src/agent_compliance/incubator/blueprints/budget_agent.py`
+
+
+## 9. 蓝图对象建议
+
+蓝图不应只是说明文字，后续应作为脚手架生成器和生命周期编排的结构化输入。
+
+第一版统一使用：
+
+- `AgentBlueprint`
+
+建议至少包含：
+
+- `agent_key`
+- `agent_name`
+- `agent_type`
+- `goal`
+- `inputs`
+- `outputs`
+- `shared_capabilities`
+- `required_files`
+- `default_directories`
+- `incubation_focus`
+
+## 10. 脚手架生成建议
 
 后续每个新智能体都应尽量通过脚手架起步，而不是手工散建。
 
@@ -278,8 +307,7 @@ src/agent_compliance/incubator/
 - `analyzers/__init__.py`
 - `docs/product-specs/<agent>-product-outline.md`
 
-
-## 10. 评测与蒸馏要求
+## 11. 评测与蒸馏要求
 
 每轮孵化都应保留：
 
@@ -292,22 +320,21 @@ src/agent_compliance/incubator/
 
 避免“感觉更好了”的非可追溯增强。
 
-
-## 11. 第一版落地范围
+## 12. 第一版落地范围
 
 第一版不追求把工厂完全自动化，而是先完成以下最小闭环：
 
 1. 定义生命周期对象
 2. 建立 `blueprints/` 与 `scaffolds/` 目录
-3. 形成正式设计文档
-4. 让新智能体（预算需求智能体）优先按这套方法孵化
+3. 落 `review_agent` 与 `budget_agent` 蓝图
+4. 形成正式设计文档
+5. 让新智能体（预算需求智能体）优先按这套方法孵化
 
-
-## 12. 下一步建议
+## 13. 下一步建议
 
 按优先级建议继续做：
 
-1. 在 `incubator/lifecycle.py` 中固化阶段对象与生命周期 helper
-2. 在 `blueprints/` 中落第一版 `review_agent`、`budget_agent` 蓝图
-3. 在 `scaffolds/` 中补最小脚手架生成器
+1. 在 `scaffolds/` 中补最小脚手架生成器
+2. 让脚手架直接消费 `AgentBlueprint`
+3. 给 lifecycle 增加“阶段执行记录”对象
 4. 让 `budget_demand` 第一版严格按该流程起步
