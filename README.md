@@ -55,6 +55,7 @@
 - [repo-layered-architecture.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/repo-layered-architecture.md)
 - [agent-incubation-and-distillation-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/agent-incubation-and-distillation-design.md)
 - [agent-incubator-mvp-acceptance.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/agent-incubator-mvp-acceptance.md)
+- [agent-incubator-enhancement-backlog.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/agent-incubator-enhancement-backlog.md)
 - [llm-fast-path-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/llm-fast-path-design.md)
 - [legal-authority-system.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/product-specs/legal-authority-system.md)
 - [case-library-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/case-library-design.md)
