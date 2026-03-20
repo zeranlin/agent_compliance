@@ -155,6 +155,10 @@
 - 输出是否可用
 - 哪一层导致偏差
 
+建议统一记录为：
+
+- `ValidationComparison`
+
 ### 阶段 F：持续蒸馏
 
 把差异转成增强动作：
@@ -165,6 +169,10 @@
 - 补仲裁
 - 补导出
 - 补 benchmark
+
+建议统一记录为：
+
+- `DistillationRecommendation`
 
 ### 阶段 G：固化发布
 
@@ -217,6 +225,7 @@ src/agent_compliance/incubator/
 
 - `lifecycle.py`
   - 定义标准生命周期与阶段对象
+  - 管理 `SampleSet / ValidationComparison / DistillationRecommendation / IncubationRun`
 - `scaffold_generator.py`
   - 根据蓝图生成最小智能体骨架
 - `blueprints/`
@@ -297,7 +306,22 @@ src/agent_compliance/incubator/
 - `default_directories`
 - `incubation_focus`
 
-## 10. 脚手架生成建议
+## 10. 生命周期记录对象建议
+
+为了让孵化闭环能真正被执行和追溯，生命周期不应只停留在“阶段枚举”，而应进一步包含：
+
+- `SampleSet`
+  - 一组正样例、负样例、边界样例和 benchmark 引用
+- `ValidationComparison`
+  - 一次人工、强通用智能体、目标智能体的对照结果
+- `DistillationRecommendation`
+  - 一条针对结构层、规则、analyzer、仲裁或导出的增强建议
+- `IncubationStageRecord`
+  - 某个阶段的执行状态、输出、样例、对照和建议
+- `IncubationRun`
+  - 一次完整孵化/蒸馏 run 的统一记录对象
+
+## 11. 脚手架生成建议
 
 后续每个新智能体都应尽量通过脚手架起步，而不是手工散建。
 
@@ -310,7 +334,7 @@ src/agent_compliance/incubator/
 - `analyzers/__init__.py`
 - `docs/product-specs/<agent>-product-outline.md`
 
-## 11. 评测与蒸馏要求
+## 12. 评测与蒸馏要求
 
 每轮孵化都应保留：
 
@@ -323,7 +347,7 @@ src/agent_compliance/incubator/
 
 避免“感觉更好了”的非可追溯增强。
 
-## 12. 第一版落地范围
+## 13. 第一版落地范围
 
 第一版不追求把工厂完全自动化，而是先完成以下最小闭环：
 
@@ -333,11 +357,11 @@ src/agent_compliance/incubator/
 4. 形成正式设计文档
 5. 让新智能体（预算需求智能体）优先按这套方法孵化
 
-## 13. 下一步建议
+## 14. 下一步建议
 
 按优先级建议继续做：
 
-1. 给 lifecycle 增加“阶段执行记录”对象
-2. 让 `budget_demand` 第一版严格按该流程起步
-3. 补 `docs/product-specs` 级别的产品 outline 自动生成
-4. 再把 scaffold 入口接到 CLI 或内部孵化命令
+1. 让 `budget_demand` 第一版严格按该流程起步
+2. 补 `docs/product-specs` 级别的产品 outline 自动生成
+3. 再把 scaffold 入口接到 CLI 或内部孵化命令
+4. 把 `ValidationComparison` 和 `DistillationRecommendation` 接到统一评测报告

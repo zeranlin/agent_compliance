@@ -2,8 +2,14 @@
 
 from agent_compliance.incubator.lifecycle import (
     DEFAULT_INCUBATION_LIFECYCLE,
+    DistillationRecommendation,
     IncubationStage,
     IncubationStageDefinition,
+    IncubationRun,
+    IncubationStageRecord,
+    SampleSet,
+    ValidationComparison,
+    create_incubation_run,
     default_incubation_lifecycle,
 )
 from agent_compliance.incubator.scaffold_generator import (
@@ -14,10 +20,16 @@ from agent_compliance.incubator.scaffold_generator import (
 
 __all__ = [
     "DEFAULT_INCUBATION_LIFECYCLE",
+    "DistillationRecommendation",
     "IncubationStage",
     "IncubationStageDefinition",
+    "IncubationRun",
+    "IncubationStageRecord",
+    "SampleSet",
     "ScaffoldPlan",
+    "ValidationComparison",
     "build_scaffold_plan",
+    "create_incubation_run",
     "default_incubation_lifecycle",
     "generate_agent_scaffold",
 ]

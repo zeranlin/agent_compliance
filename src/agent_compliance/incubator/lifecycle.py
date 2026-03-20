@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 
@@ -24,6 +24,91 @@ class IncubationStageDefinition:
     title: str
     goal: str
     outputs: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SampleSet:
+    """描述一组用于孵化或蒸馏的样例资产。"""
+
+    name: str
+    positive_examples: tuple[str, ...] = ()
+    negative_examples: tuple[str, ...] = ()
+    boundary_examples: tuple[str, ...] = ()
+    benchmark_refs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ValidationComparison:
+    """记录一次人工、强通用智能体与目标智能体的对照结果。"""
+
+    sample_id: str
+    human_baseline: str
+    strong_agent_result: str
+    target_agent_result: str
+    aligned_points: tuple[str, ...] = ()
+    gap_points: tuple[str, ...] = ()
+    summary: str = ""
+
+
+@dataclass(frozen=True)
+class DistillationRecommendation:
+    """描述一条蒸馏增强建议。"""
+
+    title: str
+    target_layer: str
+    action: str
+    rationale: str
+    priority: str = "P1"
+
+
+@dataclass
+class IncubationStageRecord:
+    """记录某个孵化阶段的执行情况。"""
+
+    stage: IncubationStage
+    status: str = "pending"
+    notes: str = ""
+    outputs: list[str] = field(default_factory=list)
+    sample_sets: list[SampleSet] = field(default_factory=list)
+    comparisons: list[ValidationComparison] = field(default_factory=list)
+    recommendations: list[DistillationRecommendation] = field(default_factory=list)
+
+
+@dataclass
+class IncubationRun:
+    """记录一次目标智能体孵化/蒸馏闭环。"""
+
+    agent_key: str
+    run_title: str
+    stages: list[IncubationStageRecord]
+
+    def get_stage(self, stage: IncubationStage) -> IncubationStageRecord:
+        for record in self.stages:
+            if record.stage == stage:
+                return record
+        raise KeyError(stage)
+
+    def set_stage_status(self, stage: IncubationStage, status: str, notes: str = "") -> None:
+        record = self.get_stage(stage)
+        record.status = status
+        if notes:
+            record.notes = notes
+
+    def add_stage_output(self, stage: IncubationStage, output: str) -> None:
+        self.get_stage(stage).outputs.append(output)
+
+    def add_sample_set(self, stage: IncubationStage, sample_set: SampleSet) -> None:
+        self.get_stage(stage).sample_sets.append(sample_set)
+
+    def add_comparison(self, stage: IncubationStage, comparison: ValidationComparison) -> None:
+        self.get_stage(stage).comparisons.append(comparison)
+
+    def add_recommendation(
+        self,
+        stage: IncubationStage,
+        recommendation: DistillationRecommendation,
+    ) -> None:
+        self.get_stage(stage).recommendations.append(recommendation)
 
 
 DEFAULT_INCUBATION_LIFECYCLE: tuple[IncubationStageDefinition, ...] = (
@@ -76,3 +161,16 @@ def default_incubation_lifecycle() -> tuple[IncubationStageDefinition, ...]:
     """返回默认孵化生命周期。"""
 
     return DEFAULT_INCUBATION_LIFECYCLE
+
+
+def create_incubation_run(agent_key: str, run_title: str) -> IncubationRun:
+    """根据默认生命周期生成一条新的孵化记录。"""
+
+    return IncubationRun(
+        agent_key=agent_key,
+        run_title=run_title,
+        stages=[
+            IncubationStageRecord(stage=definition.stage)
+            for definition in DEFAULT_INCUBATION_LIFECYCLE
+        ],
+    )
