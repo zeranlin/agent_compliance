@@ -234,6 +234,8 @@ src/agent_compliance/incubator/
   - 根据蓝图生成最小智能体骨架
 - `factory.py`
   - 把蓝图、脚手架、生命周期和蒸馏报告串成统一启动入口
+- `report_writer.py`
+  - 把蒸馏报告落成标准 JSON 和 Markdown 产物
 - `blueprints/`
   - 定义不同智能体类型的标准蓝图
   - 提供蓝图注册表与标准查询入口
@@ -344,6 +346,22 @@ src/agent_compliance/incubator/
 - 商务链路引擎
 - 仲裁归并层
 - 通用 review 主链
+
+
+## 13. 标准产物落盘
+
+为了让孵化过程可复盘、可追溯、可中断恢复，`incubator` 层应把蒸馏报告落成标准产物。
+
+第一版建议通过：
+
+- `write_distillation_report()`
+
+统一输出：
+
+- `*-distillation-report.json`
+- `*-distillation-report.md`
+
+这样后续每一轮孵化与蒸馏，都能留下结构化痕迹和人类可读报告。
 - 导出
 
 第一版对应实现：

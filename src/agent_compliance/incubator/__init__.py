@@ -39,6 +39,10 @@ from agent_compliance.incubator.sample_registry import (
     build_sample_manifest,
     summarize_sample_manifest,
 )
+from agent_compliance.incubator.report_writer import (
+    DistillationArtifactPaths,
+    write_distillation_report,
+)
 from agent_compliance.incubator.scaffold_generator import (
     ScaffoldPlan,
     build_scaffold_plan,
@@ -50,6 +54,7 @@ __all__ = [
     "AgentBlueprint",
     "BUDGET_AGENT_BLUEPRINT",
     "DistillationRecommendation",
+    "DistillationArtifactPaths",
     "FactoryBootstrapResult",
     "IncubationStage",
     "IncubationStageDefinition",
@@ -76,4 +81,5 @@ __all__ = [
     "review_agent_blueprint",
     "summarize_sample_manifest",
     "summarize_validation_gaps",
+    "write_distillation_report",
 ]

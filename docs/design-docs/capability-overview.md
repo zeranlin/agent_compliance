@@ -615,6 +615,8 @@
 - 已具备最小差异归纳能力：
   - `summarize_validation_gaps()`
   - `build_distillation_recommendations()`
+- 已具备标准蒸馏报告落盘能力：
+  - `write_distillation_report()`
 - 已具备按蓝图生成最小骨架能力
 - 已具备统一蒸馏报告能力：
   - `build_distillation_report()`
