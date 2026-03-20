@@ -4678,12 +4678,14 @@ def _review_buyer_html() -> str:
     }
     .document-brief strong {
       font-size: 16px;
-      line-height: 1.5;
-      word-break: break-word;
+      line-height: 1.4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .summary-metrics {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(280px, 1.35fr);
       gap: 10px;
       margin-top: 12px;
     }
@@ -4738,19 +4740,42 @@ def _review_buyer_html() -> str:
     .stat {
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 12px;
+      padding: 10px 12px;
       background: #fff;
-      min-height: 88px;
+      min-height: 72px;
     }
     .stat .label { color: var(--muted); font-size: 12px; }
-    .stat .value { margin-top: 8px; font-size: 20px; font-weight: 800; }
+    .stat .value { margin-top: 6px; font-size: 18px; font-weight: 800; }
     .stat.primary {
       background: linear-gradient(180deg, #f6fbff 0%, #ffffff 100%);
       border-color: #c8dced;
     }
+    .stat.section-breakdown {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+    .stat.section-breakdown .value {
+      margin-top: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .section-breakdown-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px 10px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .section-breakdown-grid strong {
+      color: var(--ink);
+      font-weight: 700;
+    }
     .workspace {
       display: none;
-      grid-template-columns: 420px minmax(0, 1fr);
+      grid-template-columns: 390px minmax(0, 1fr);
       gap: 16px;
       align-items: start;
     }
@@ -4791,7 +4816,7 @@ def _review_buyer_html() -> str:
     }
     .issue-group-title { display: grid; gap: 2px; }
     .issue-group-title strong { font-size: 14px; }
-    .issue-group-title span { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .issue-group-title span { font-size: 11px; color: var(--muted); line-height: 1.45; }
     .issue-group-metrics {
       display: flex;
       gap: 8px;
@@ -4816,11 +4841,11 @@ def _review_buyer_html() -> str:
     .issue-card {
       border: 1px solid var(--line);
       border-radius: 14px;
-      padding: 12px 12px 10px;
+      padding: 10px 10px 8px;
       background: #fff;
       cursor: pointer;
       display: grid;
-      gap: 6px;
+      gap: 5px;
     }
     .issue-card.high { border-left: 5px solid var(--high); background: linear-gradient(90deg, rgba(180, 35, 24, 0.06), #fff 16%); }
     .issue-card.medium { border-left: 5px solid var(--medium); background: linear-gradient(90deg, rgba(178, 106, 0, 0.06), #fff 16%); }
@@ -4829,11 +4854,11 @@ def _review_buyer_html() -> str:
       box-shadow: 0 0 0 2px rgba(31, 95, 139, 0.12);
       background: #f7fbff;
     }
-    .issue-title { font-size: 15px; line-height: 1.45; font-weight: 700; }
+    .issue-title { font-size: 14px; line-height: 1.4; font-weight: 700; }
     .badge-row, .mini-meta {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 6px;
       align-items: center;
     }
     .badge, .mini-pill {
@@ -4841,8 +4866,8 @@ def _review_buyer_html() -> str:
       align-items: center;
       gap: 6px;
       border-radius: 999px;
-      padding: 5px 10px;
-      font-size: 12px;
+      padding: 4px 9px;
+      font-size: 11px;
       font-weight: 700;
     }
     .badge.high { background: rgba(163, 61, 34, 0.1); color: var(--high); }
@@ -4859,10 +4884,10 @@ def _review_buyer_html() -> str:
     .mini-pill.action-soften { background: rgba(143, 103, 20, 0.12); color: var(--medium); }
     .mini-pill.action-justify { background: rgba(31, 95, 139, 0.12); color: var(--accent); }
     .mini-pill.action-review { background: rgba(110, 62, 164, 0.12); color: #6e3ea4; }
-    .issue-excerpt { color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .issue-excerpt { color: var(--muted); font-size: 12px; line-height: 1.55; }
     .issue-card.compact .issue-excerpt {
       display: -webkit-box;
-      -webkit-line-clamp: 4;
+      -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
@@ -5008,6 +5033,7 @@ def _review_buyer_html() -> str:
     }
     @media (max-width: 1180px) {
       .hero, .workspace, .summary-grid, .summary-metrics, .summary-topline { grid-template-columns: 1fr; }
+      .document-brief strong { white-space: normal; }
       .left-pane {
         position: static;
         max-height: none;
@@ -5472,10 +5498,7 @@ def _review_buyer_html() -> str:
           ${renderStat('主问题', mainCount, true)}
           ${renderStat('高风险', highCount, true)}
           ${renderStat('中风险', mediumCount)}
-          ${renderStat('资格主问题', bySection.qualification)}
-          ${renderStat('评分主问题', bySection.scoring)}
-          ${renderStat('技术主问题', bySection.technical)}
-          ${renderStat('商务/验收主问题', bySection.commercial)}
+          ${renderSectionBreakdown(bySection)}
         </div>
       `;
       summaryNode.style.display = 'block';
@@ -5483,6 +5506,21 @@ def _review_buyer_html() -> str:
 
     function renderStat(label, value, primary = false) {
       return `<div class="stat ${primary ? 'primary' : ''}"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(String(value))}</div></div>`;
+    }
+
+    function renderSectionBreakdown(bySection) {
+      return `
+        <div class="stat section-breakdown">
+          <div class="label">章节分布</div>
+          <div class="value">按主问题归并后的处理重点</div>
+          <div class="section-breakdown-grid">
+            <div>资格 <strong>${escapeHtml(String(bySection.qualification))}</strong></div>
+            <div>评分 <strong>${escapeHtml(String(bySection.scoring))}</strong></div>
+            <div>技术 <strong>${escapeHtml(String(bySection.technical))}</strong></div>
+            <div>商务/验收 <strong>${escapeHtml(String(bySection.commercial))}</strong></div>
+          </div>
+        </div>
+      `;
     }
 
     function renderToolbarState() {
@@ -5744,10 +5782,10 @@ def _review_buyer_html() -> str:
 
     function sectionDescription(sectionKey) {
       const mapping = {
-        qualification: '查看准入条件、一般门槛、错位资质和场所要求。',
-        scoring: '查看评分结构、主观分档、品牌认证和团队评分问题。',
-        technical: '查看技术标准、证明形式和必要性论证问题。',
-        commercial: '查看付款、验收、责任、费用和履约边界问题。',
+        qualification: '准入门槛、一般资质、场所要求。',
+        scoring: '评分结构、主观分档、品牌认证。',
+        technical: '技术标准、证明形式、必要性论证。',
+        commercial: '付款、验收、责任、费用边界。',
       };
       return mapping[sectionKey] || '当前筛选条件下的问题会按章节归在这里。';
     }
