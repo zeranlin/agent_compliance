@@ -204,6 +204,7 @@
 src/agent_compliance/incubator/
   __init__.py
   lifecycle.py
+  scaffold_generator.py
   blueprints/
     __init__.py
   scaffolds/
@@ -216,6 +217,8 @@ src/agent_compliance/incubator/
 
 - `lifecycle.py`
   - 定义标准生命周期与阶段对象
+- `scaffold_generator.py`
+  - 根据蓝图生成最小智能体骨架
 - `blueprints/`
   - 定义不同智能体类型的标准蓝图
 - `scaffolds/`
@@ -334,7 +337,7 @@ src/agent_compliance/incubator/
 
 按优先级建议继续做：
 
-1. 在 `scaffolds/` 中补最小脚手架生成器
-2. 让脚手架直接消费 `AgentBlueprint`
-3. 给 lifecycle 增加“阶段执行记录”对象
-4. 让 `budget_demand` 第一版严格按该流程起步
+1. 给 lifecycle 增加“阶段执行记录”对象
+2. 让 `budget_demand` 第一版严格按该流程起步
+3. 补 `docs/product-specs` 级别的产品 outline 自动生成
+4. 再把 scaffold 入口接到 CLI 或内部孵化命令
