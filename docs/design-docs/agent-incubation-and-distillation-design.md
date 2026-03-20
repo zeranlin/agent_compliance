@@ -581,6 +581,22 @@ src/agent_compliance/incubator/
   - 让工厂开始回答“哪条建议真的让目标智能体变强”
   - 让多轮 run 对比不只看 gap 数量，也能看能力变化记录
 
+当前进一步补入了 `P0.1` 的第一版自动联动：
+
+- `update-incubation-recommendation` 现在支持在更新建议状态时直接补：
+  - `--sample-id`
+  - `--human-baseline-file`
+  - `--strong-agent-result-file`
+  - `--target-agent-result-file`
+  - `--comparison-summary`
+- 当提供上述输入时，工厂会自动：
+  - 构造新的 `ValidationComparison`
+  - 追加到 `parity_validation`
+  - 基于上一轮同样例对照自动生成：
+    - `regression_result`
+    - `capability_change`
+- 这意味着“建议执行 -> 回归输入 -> 能力变化回挂”已经开始形成最小自动闭环，而不再完全依赖手工填写结论文本。
+
 ## 14. 下一步建议
 
 按优先级建议继续做：

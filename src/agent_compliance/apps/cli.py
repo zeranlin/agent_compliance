@@ -17,6 +17,7 @@ from agent_compliance.incubator import (
     IncubationStage,
     ValidationComparison,
     bootstrap_agent_factory,
+    build_regression_feedback,
     build_sample_manifest,
     build_run_comparison_report,
     build_validation_comparison_from_files,
@@ -147,6 +148,11 @@ def build_parser() -> argparse.ArgumentParser:
     update_recommendation_parser.add_argument("--notes", default="")
     update_recommendation_parser.add_argument("--regression-result", default="")
     update_recommendation_parser.add_argument("--capability-change", default="")
+    update_recommendation_parser.add_argument("--sample-id", default=None)
+    update_recommendation_parser.add_argument("--human-baseline-file", type=Path, default=None)
+    update_recommendation_parser.add_argument("--strong-agent-result-file", type=Path, default=None)
+    update_recommendation_parser.add_argument("--target-agent-result-file", type=Path, default=None)
+    update_recommendation_parser.add_argument("--comparison-summary", default="")
     update_recommendation_parser.add_argument("--json", action="store_true")
 
     web_parser = subparsers.add_parser(
@@ -310,13 +316,30 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "update-incubation-recommendation":
         run = load_incubation_run(args.run_manifest)
         stage = IncubationStage(args.stage)
+        regression_result = args.regression_result
+        capability_change = args.capability_change
+        auto_comparison = _build_auto_comparison(args)
+        if auto_comparison is not None:
+            previous_comparison = run.latest_comparison(
+                IncubationStage.PARITY_VALIDATION,
+                auto_comparison.sample_id,
+            )
+            feedback = build_regression_feedback(previous_comparison, auto_comparison)
+            run.add_comparison(IncubationStage.PARITY_VALIDATION, auto_comparison)
+            run.set_stage_status(
+                IncubationStage.PARITY_VALIDATION,
+                "completed",
+                f"已补充样例 {auto_comparison.sample_id} 的回归对照。",
+            )
+            regression_result = regression_result or feedback.regression_result
+            capability_change = capability_change or feedback.capability_change
         run.update_recommendation_status(
             stage,
             args.recommendation_key,
             args.status,
             args.notes,
-            args.regression_result,
-            args.capability_change,
+            regression_result,
+            capability_change,
         )
         write_incubation_run(
             args.run_manifest.parent.parent,
@@ -331,8 +354,9 @@ def main(argv: list[str] | None = None) -> int:
             "stage": stage.value,
             "status": args.status,
             "notes": args.notes,
-            "regression_result": args.regression_result,
-            "capability_change": args.capability_change,
+            "regression_result": regression_result,
+            "capability_change": capability_change,
+            "auto_comparison_added": auto_comparison is not None,
         }
         return _print_result(payload, args.json)
 
@@ -401,7 +425,8 @@ def _build_auto_comparison(args: argparse.Namespace) -> ValidationComparison | N
         raise ValueError(
             "human-baseline-file, strong-agent-result-file and target-agent-result-file must be provided together"
         )
-    sample_id = args.sample_id or f"{args.agent_key}-auto-001"
+    agent_key = getattr(args, "agent_key", "agent")
+    sample_id = args.sample_id or f"{agent_key}-auto-001"
     return build_validation_comparison_from_files(
         sample_id=sample_id,
         human_baseline_path=args.human_baseline_file,

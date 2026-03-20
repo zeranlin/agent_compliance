@@ -303,6 +303,91 @@ class IncubatorCliTests(unittest.TestCase):
             self.assertEqual(recommendation["regression_result"], "评分样例回归通过")
             self.assertEqual(recommendation["capability_change"], "已开始输出评分主问题")
 
+    def test_update_incubation_recommendation_can_auto_attach_regression_comparison(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            comparisons_path = temp_path / "comparisons.json"
+            comparisons_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "sample_id": "case-005",
+                            "human_baseline": "输出项目概述\\n输出技术需求框架\\n输出验收需求框架",
+                            "strong_agent_result": "建议形成结构化需求初稿。",
+                            "target_agent_result": "输出项目概述",
+                            "gap_points": ["输出技术需求框架", "输出验收需求框架"],
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            first_stdout = StringIO()
+            with redirect_stdout(first_stdout):
+                main(
+                    [
+                        "incubate-agent",
+                        "demand_research",
+                        "--agents-dir",
+                        str(temp_path / "agents"),
+                        "--output-dir",
+                        str(temp_path / "outputs"),
+                        "--comparisons-json",
+                        str(comparisons_path),
+                        "--json",
+                    ]
+                )
+            payload = json.loads(first_stdout.getvalue())
+            run_manifest = Path(payload["outputs"]["run_manifest"])
+            report = json.loads(Path(payload["outputs"]["json"]).read_text(encoding="utf-8"))
+            recommendation_key = report["stages"][5]["recommendations"][0]["recommendation_key"]
+
+            human_path = temp_path / "human.txt"
+            strong_path = temp_path / "strong.txt"
+            target_path = temp_path / "target.txt"
+            human_path.write_text(
+                "输出项目概述\n输出技术需求框架\n输出验收需求框架",
+                encoding="utf-8",
+            )
+            strong_path.write_text("建议形成结构化需求初稿。", encoding="utf-8")
+            target_path.write_text(
+                "输出项目概述\n输出技术需求框架",
+                encoding="utf-8",
+            )
+
+            update_stdout = StringIO()
+            with redirect_stdout(update_stdout):
+                exit_code = main(
+                    [
+                        "update-incubation-recommendation",
+                        str(run_manifest),
+                        recommendation_key,
+                        "--status",
+                        "validated",
+                        "--sample-id",
+                        "case-005",
+                        "--human-baseline-file",
+                        str(human_path),
+                        "--strong-agent-result-file",
+                        str(strong_path),
+                        "--target-agent-result-file",
+                        str(target_path),
+                        "--json",
+                    ]
+                )
+
+            update_payload = json.loads(update_stdout.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(update_payload["auto_comparison_added"])
+            self.assertIn("差异点已从 2 个下降到 0 个", update_payload["regression_result"])
+
+            updated_run = json.loads(run_manifest.read_text(encoding="utf-8"))
+            parity_stage = updated_run["stages"][4]
+            self.assertEqual(len(parity_stage["comparisons"]), 2)
+            recommendation = updated_run["stages"][5]["recommendations"][0]
+            self.assertEqual(recommendation["status"], "validated")
+            self.assertIn("已达到该样例的人工基准", recommendation["capability_change"])
+
 
 if __name__ == "__main__":
     unittest.main()

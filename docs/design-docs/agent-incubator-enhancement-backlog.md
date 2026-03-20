@@ -23,15 +23,21 @@
 
 ### 2.1 建议执行后自动触发回归
 
+当前状态：
+- 第一版已完成。
+- 现在 `update-incubation-recommendation` 在更新建议状态时，已可直接接收回归样例三方文本并自动：
+  - 生成新的 `ValidationComparison`
+  - 追加到 `parity_validation`
+  - 写回 `regression_result / capability_change`
+
 目标：
 - 不再只手工更新 `recommendation status`
 - 当一条建议被标记为 `implemented` 或 `validated` 时，能自动关联一轮回归输入
 
 当前缺口：
-- 现在只能手工回挂：
-  - `regression_result`
-  - `capability_change`
-- 还没有“建议 -> 回归任务 -> 结果”自动联动
+- 当前仍缺：
+  - 自动触发标准回归任务，而不只是自动写回一轮 comparison
+  - 将回归结果进一步自动沉入多轮趋势报告和建议收敛判断
 
 建议落点：
 - `src/agent_compliance/incubator/regression_runner.py`

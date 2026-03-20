@@ -172,6 +172,7 @@
 - `incubator` 现已补入最小多轮蒸馏比较能力，可通过 `compare-incubation-runs <run1> <run2> ...` 比较同一目标智能体不同 run 的 `gap_count / recommendation_count / completed_stages` 变化，并识别重复出现的 gap 与反复成为增强重点的目标层
 - `incubator` 现已补入蒸馏建议执行状态跟踪能力，每条 `DistillationRecommendation` 均带 `recommendation_key / status / resolution_notes`，并可通过 `update-incubation-recommendation` 将建议标记为 `accepted / implemented / validated / dropped`，开始记录“建议是否真的变成能力”
 - `incubator` 现已开始支持把 `regression_result / capability_change` 回挂到单条蒸馏建议，并同步反映到蒸馏报告和多轮 run 比较中，开始回答“哪条建议经过实现和回归后，确实让目标智能体能力增强了”
+- `incubator` 现已开始支持在更新蒸馏建议状态时，直接通过 `sample_id + human_baseline + strong_agent_result + target_agent_result` 自动追加一轮回归对照，并自动生成 `regression_result / capability_change`，把 “建议执行 -> 回归输入 -> 能力变化回挂” 收成最小自动闭环
 - 面向规则治理增强的 [rule-governance-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/rule-governance-layer-design.md)，用于定义 `rule_registry`、`rule_priority_profile` 和 `catalog_sensitive_rule_router`
 - 面向大模型混合审查模式的 [llm-fast-path-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/llm-fast-path-design.md)，用于明确“代码审查主骨架 + 大模型关键节点同步介入 + 统一仲裁输出”的主思路
 

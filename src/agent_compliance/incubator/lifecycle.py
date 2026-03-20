@@ -108,6 +108,13 @@ class IncubationRun:
     def add_comparison(self, stage: IncubationStage, comparison: ValidationComparison) -> None:
         self.get_stage(stage).comparisons.append(comparison)
 
+    def latest_comparison(self, stage: IncubationStage, sample_id: str) -> ValidationComparison | None:
+        comparisons = self.get_stage(stage).comparisons
+        for comparison in reversed(comparisons):
+            if comparison.sample_id == sample_id:
+                return comparison
+        return None
+
     def add_recommendation(
         self,
         stage: IncubationStage,

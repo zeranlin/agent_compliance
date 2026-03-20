@@ -37,6 +37,10 @@ from agent_compliance.incubator.comparison_builder import (
     build_validation_comparison,
     build_validation_comparison_from_files,
 )
+from agent_compliance.incubator.regression_runner import (
+    RegressionFeedback,
+    build_regression_feedback,
+)
 from agent_compliance.incubator.factory import (
     FactoryBootstrapResult,
     bootstrap_agent_factory,
@@ -77,6 +81,7 @@ __all__ = [
     "IncubationRun",
     "IncubationRunPaths",
     "IncubationStageRecord",
+    "RegressionFeedback",
     "REVIEW_AGENT_BLUEPRINT",
     "SampleSet",
     "ScaffoldPlan",
@@ -89,6 +94,7 @@ __all__ = [
     "build_distillation_recommendations",
     "build_sample_manifest",
     "bootstrap_agent_factory",
+    "build_regression_feedback",
     "build_validation_comparison",
     "build_validation_comparison_from_files",
     "budget_agent_blueprint",
