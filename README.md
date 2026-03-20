@@ -79,6 +79,11 @@
 - `PYTHONPATH=src python3 -m agent_compliance incubate-agent <agent_key>`
 - `PYTHONPATH=src python3 -m agent_compliance web`
 
+智能体孵化与蒸馏工厂当前也已把脚手架升级到“可验证骨架”：
+- 默认生成 `product_outline.md`
+- 默认生成 `evals/README.md`
+- 默认生成 `tests/test_agent_smoke.py`
+
 测试阶段默认关闭 review 缓存；如需复用缓存，可显式加：
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-cache`
 

@@ -85,6 +85,7 @@ from agent_compliance.incubator.scaffold_generator import (
     build_scaffold_plan,
     generate_agent_scaffold,
 )
+from agent_compliance.incubator.scaffolds import render_scaffold_file
 
 __all__ = [
     "DEFAULT_INCUBATION_LIFECYCLE",
@@ -141,6 +142,7 @@ __all__ = [
     "render_run_comparison_markdown",
     "resume_agent_factory",
     "review_agent_blueprint",
+    "render_scaffold_file",
     "serialize_incubation_run",
     "serialize_sample_manifest",
     "summarize_sample_manifest",

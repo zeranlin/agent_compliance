@@ -233,6 +233,7 @@ src/agent_compliance/incubator/
   - 管理正样例 / 负样例 / 边界样例的登记与摘要
 - `scaffold_generator.py`
   - 根据蓝图生成最小智能体骨架
+  - 当前默认已补齐 `product_outline.md`、`evals/README.md`、`tests/test_agent_smoke.py`
 - `factory.py`
   - 把蓝图、脚手架、生命周期和蒸馏报告串成统一启动入口
 - `report_writer.py`
@@ -485,7 +486,9 @@ src/agent_compliance/incubator/
 - `service.py`
 - `rules/__init__.py`
 - `analyzers/__init__.py`
-- `docs/product-specs/<agent>-product-outline.md`
+- `product_outline.md`
+- `evals/README.md`
+- `tests/test_agent_smoke.py`
 
 ## 12. 评测与蒸馏要求
 

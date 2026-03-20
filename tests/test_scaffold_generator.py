@@ -21,8 +21,13 @@ class ScaffoldGeneratorTests(unittest.TestCase):
             plan = build_scaffold_plan(base_dir, REVIEW_AGENT_BLUEPRINT)
             self.assertEqual(plan.target_root, base_dir / "compliance_review")
             self.assertIn(base_dir / "compliance_review" / "rules", plan.directories)
+            self.assertIn(base_dir / "compliance_review" / "tests", plan.directories)
             self.assertIn(
                 base_dir / "compliance_review" / "pipeline.py",
+                plan.files,
+            )
+            self.assertIn(
+                base_dir / "compliance_review" / "product_outline.md",
                 plan.files,
             )
 
@@ -35,8 +40,20 @@ class ScaffoldGeneratorTests(unittest.TestCase):
             self.assertTrue((plan.target_root / "service.py").exists())
             self.assertTrue((plan.target_root / "rules" / "__init__.py").exists())
             self.assertTrue((plan.target_root / "analyzers" / "__init__.py").exists())
+            self.assertTrue((plan.target_root / "product_outline.md").exists())
+            self.assertTrue((plan.target_root / "evals" / "README.md").exists())
+            self.assertTrue((plan.target_root / "tests" / "__init__.py").exists())
+            self.assertTrue((plan.target_root / "tests" / "test_agent_smoke.py").exists())
             content = (plan.target_root / "pipeline.py").read_text(encoding="utf-8")
             self.assertIn("budget_demand", content)
+            outline = (plan.target_root / "product_outline.md").read_text(encoding="utf-8")
+            self.assertIn("budget_analysis scaffold", outline)
+            eval_readme = (plan.target_root / "evals" / "README.md").read_text(encoding="utf-8")
+            self.assertIn("budget_demand", eval_readme)
+            smoke_test = (plan.target_root / "tests" / "test_agent_smoke.py").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("run_pipeline", smoke_test)
 
 
 if __name__ == "__main__":

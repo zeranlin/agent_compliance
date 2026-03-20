@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agent_compliance.incubator.blueprints.base import AgentBlueprint
+from agent_compliance.incubator.scaffolds import render_scaffold_file
 
 
 @dataclass(frozen=True)
@@ -53,75 +54,10 @@ def generate_agent_scaffold(
 
 
 def _render_stub(file_path: Path, blueprint: AgentBlueprint) -> str:
-    name = file_path.name
-    if name == "__init__.py":
-        return _render_init_stub(blueprint)
-    if name == "schemas.py":
-        return _render_schemas_stub(blueprint)
-    if name == "pipeline.py":
-        return _render_pipeline_stub(blueprint)
-    if name == "service.py":
-        return _render_service_stub(blueprint)
+    rendered = render_scaffold_file(file_path, blueprint)
+    if rendered is not None:
+        return rendered
     return _render_generic_stub(blueprint)
-
-
-def _render_init_stub(blueprint: AgentBlueprint) -> str:
-    return (
-        '"""'
-        f"{blueprint.agent_name} 包骨架。"
-        '"""\n'
-    )
-
-
-def _render_schemas_stub(blueprint: AgentBlueprint) -> str:
-    class_name = _pascal_case(blueprint.agent_key)
-    return f'''from __future__ import annotations
-
-from dataclasses import dataclass, field
-
-
-@dataclass
-class {class_name}Finding:
-    """{blueprint.agent_name} 的最小 finding 骨架。"""
-
-    title: str
-    detail: str = ""
-
-
-@dataclass
-class {class_name}Result:
-    """{blueprint.agent_name} 的最小结果骨架。"""
-
-    findings: list[{class_name}Finding] = field(default_factory=list)
-'''
-
-
-def _render_pipeline_stub(blueprint: AgentBlueprint) -> str:
-    return f'''from __future__ import annotations
-
-
-def run_pipeline(input_path: str) -> dict[str, object]:
-    """{blueprint.agent_name} 的最小 pipeline 入口。"""
-
-    return {{
-        "agent_key": "{blueprint.agent_key}",
-        "input_path": input_path,
-        "status": "bootstrap",
-    }}
-'''
-
-
-def _render_service_stub(blueprint: AgentBlueprint) -> str:
-    return f'''from __future__ import annotations
-
-from agent_compliance.agents.{blueprint.agent_key}.pipeline import run_pipeline
-
-
-def review(input_path: str) -> dict[str, object]:
-    """{blueprint.agent_name} 的最小 service 入口。"""
-
-    return run_pipeline(input_path)
-'''
 
 
 def _render_generic_stub(blueprint: AgentBlueprint) -> str:
@@ -130,7 +66,3 @@ def _render_generic_stub(blueprint: AgentBlueprint) -> str:
         f"{blueprint.agent_name} 自动生成骨架文件。"
         '"""\n'
     )
-
-
-def _pascal_case(value: str) -> str:
-    return "".join(part.capitalize() for part in value.split("_"))

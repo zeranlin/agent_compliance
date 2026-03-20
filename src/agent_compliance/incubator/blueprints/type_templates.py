@@ -17,12 +17,16 @@ COMMON_REQUIRED_FILES = (
     "schemas.py",
     "pipeline.py",
     "service.py",
+    "product_outline.md",
     "rules/__init__.py",
     "analyzers/__init__.py",
     "web/__init__.py",
+    "evals/README.md",
+    "tests/__init__.py",
+    "tests/test_agent_smoke.py",
 )
 
-COMMON_DIRECTORIES = ("rules", "analyzers", "web")
+COMMON_DIRECTORIES = ("rules", "analyzers", "web", "evals", "tests")
 
 
 REVIEW_AGENT_TEMPLATE = AgentBlueprintTemplate(

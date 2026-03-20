@@ -198,10 +198,14 @@
 
 目标：
 - 当前脚手架能起最小骨架
-- 继续补：
+- 已完成补齐：
   - 默认测试文件
   - 默认 product outline
   - 默认 eval skeleton
+  - 当前落地文件：
+    - `product_outline.md`
+    - `evals/README.md`
+    - `tests/test_agent_smoke.py`
 
 建议落点：
 - `src/agent_compliance/incubator/scaffolds/`

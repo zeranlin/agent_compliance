@@ -1,1 +1,5 @@
-"""智能体脚手架层：承载新智能体骨架生成模板与生成入口。"""
+"""标准脚手架模板。"""
+
+from agent_compliance.incubator.scaffolds.templates import render_scaffold_file
+
+__all__ = ["render_scaffold_file"]
