@@ -9,12 +9,17 @@ from urllib.parse import parse_qs
 
 from agent_compliance.core.config import detect_paths
 from agent_compliance.incubator import (
+    IncubationStage,
     bootstrap_agent_factory,
     build_distillation_report,
+    build_regression_feedback,
+    build_run_comparison_report,
     build_sample_manifest,
     build_validation_comparison,
+    collect_validation_comparisons_from_root,
     list_blueprints,
     load_incubation_run,
+    render_distillation_report_markdown,
     resume_agent_factory,
     serialize_incubation_run,
     write_distillation_report,
@@ -195,6 +200,99 @@ def handle_incubator_run_detail(handler, query: str) -> None:
         handler._send_json({"error": f"读取 run 详情失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
 
 
+def handle_incubator_run_compare(handler, query: str) -> None:
+    params = parse_qs(query)
+    requested_path = (params.get("path") or [""])[0]
+    requested_agent_key = (params.get("agent_key") or [""])[0]
+    try:
+        runs = _load_runs_for_compare(
+            requested_path=requested_path,
+            requested_agent_key=requested_agent_key,
+        )
+        handler._send_json({"report": build_run_comparison_report(runs)})
+    except Exception as exc:
+        handler._send_json({"error": f"读取 run 趋势失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
+
+
+def handle_incubator_recommendation_update(handler) -> None:
+    try:
+        length = int(handler.headers.get("Content-Length", "0"))
+        payload = json.loads(handler.rfile.read(length).decode("utf-8") or "{}")
+        requested_path = str(payload.get("run_manifest", "")).strip()
+        recommendation_key = str(payload.get("recommendation_key", "")).strip()
+        if not requested_path:
+            handler._send_json({"error": "缺少 run_manifest"}, status=HTTPStatus.BAD_REQUEST)
+            return
+        if not recommendation_key:
+            handler._send_json({"error": "缺少 recommendation_key"}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        paths = detect_paths()
+        output_dir = paths.repo_root / "docs" / "generated" / "incubator"
+        manifest_path = safe_incubator_path(requested_path, output_dir)
+        run = load_incubation_run(manifest_path)
+        stage = IncubationStage(
+            str(payload.get("stage", IncubationStage.DISTILLATION_ITERATION.value)).strip()
+        )
+        status = str(payload.get("status", "")).strip()
+        notes = str(payload.get("notes", "")).strip()
+        regression_result = str(payload.get("regression_result", "")).strip()
+        capability_change = str(payload.get("capability_change", "")).strip()
+
+        auto_comparison = _build_comparison_from_payload(payload)
+        if auto_comparison is None:
+            comparisons = _collect_comparisons_from_payload(payload)
+            auto_comparison = comparisons[0] if comparisons else None
+        if auto_comparison is not None:
+            previous = run.latest_comparison(
+                IncubationStage.PARITY_VALIDATION,
+                auto_comparison.sample_id,
+            )
+            feedback = build_regression_feedback(previous, auto_comparison)
+            run.add_comparison(IncubationStage.PARITY_VALIDATION, auto_comparison)
+            run.set_stage_status(
+                IncubationStage.PARITY_VALIDATION,
+                "completed",
+                f"已补充样例 {auto_comparison.sample_id} 的回归对照。",
+            )
+            regression_result = regression_result or feedback.regression_result
+            capability_change = capability_change or feedback.capability_change
+
+        run.update_recommendation_status(
+            stage,
+            recommendation_key,
+            status,
+            notes,
+            regression_result,
+            capability_change,
+        )
+        run_key = run_key_from_manifest(manifest_path)
+        report = build_distillation_report(run)
+        report_markdown = render_distillation_report_markdown(report)
+        artifact_paths = write_distillation_report(
+            output_dir,
+            run.agent_key,
+            run_key,
+            report,
+            report_markdown,
+        )
+        run_paths = write_incubation_run(output_dir, run.agent_key, run_key, run)
+        handler._send_json(
+            {
+                "run_manifest": str(run_paths.manifest_path),
+                "report_markdown": str(artifact_paths.markdown_path),
+                "recommendation_key": recommendation_key,
+                "status": status,
+                "notes": notes,
+                "regression_result": regression_result,
+                "capability_change": capability_change,
+                "auto_comparison_added": auto_comparison is not None,
+            }
+        )
+    except Exception as exc:
+        handler._send_json({"error": f"更新蒸馏建议失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
+
+
 def list_incubator_runs() -> list[dict[str, Any]]:
     base_dir = detect_paths().repo_root / "docs" / "generated" / "incubator"
     if not base_dir.exists():
@@ -221,6 +319,24 @@ def list_incubator_runs() -> list[dict[str, Any]]:
             }
         )
     return runs
+
+
+def _load_runs_for_compare(*, requested_path: str, requested_agent_key: str):
+    if requested_path:
+        paths = detect_paths()
+        base_dir = paths.repo_root / "docs" / "generated" / "incubator"
+        manifest_path = safe_incubator_path(requested_path, base_dir)
+        requested_agent_key = load_incubation_run(manifest_path).agent_key
+    if not requested_agent_key:
+        raise ValueError("缺少 path 或 agent_key")
+    manifests = [
+        Path(item["run_manifest"])
+        for item in list_incubator_runs()
+        if item["agent_key"] == requested_agent_key
+    ]
+    if not manifests:
+        raise ValueError(f"未找到 agent_key={requested_agent_key} 的 run")
+    return tuple(load_incubation_run(path) for path in manifests)
 
 
 def slugify_run_key(run_title: str) -> str:
@@ -287,3 +403,14 @@ def _build_comparison_from_payload(payload: dict[str, Any]):
         target_agent_result=target_agent_result,
         summary=comparison_summary,
     )
+
+
+def _collect_comparisons_from_payload(payload: dict[str, Any]) -> tuple:
+    comparison_root = str(payload.get("comparison_root", "")).strip()
+    sample_id = str(payload.get("comparison_sample_id", "")).strip()
+    if not comparison_root:
+        return ()
+    root = Path(comparison_root)
+    if sample_id:
+        return collect_validation_comparisons_from_root(root, sample_ids=(sample_id,))
+    return collect_validation_comparisons_from_root(root)

@@ -83,6 +83,7 @@
 - 默认生成 `product_outline.md`
 - 默认生成 `evals/README.md`
 - 默认生成 `tests/test_agent_smoke.py`
+- `/incubator` 已支持查看趋势摘要、多轮 run 对比和更新蒸馏建议状态
 
 测试阶段默认关闭 review 缓存；如需复用缓存，可显式加：
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-cache`

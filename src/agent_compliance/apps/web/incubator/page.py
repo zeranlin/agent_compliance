@@ -243,6 +243,48 @@ def incubator_html() -> str:
       font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       font-size: 13px;
     }
+    .section-block {
+      display: grid;
+      gap: 12px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .trend-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .mini-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: #fbfdff;
+      display: grid;
+      gap: 6px;
+    }
+    .mini-card strong {
+      font-size: 14px;
+    }
+    .recommendation-list {
+      display: grid;
+      gap: 10px;
+      max-height: 320px;
+      overflow: auto;
+    }
+    .recommendation-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfdff;
+      padding: 12px 14px;
+      display: grid;
+      gap: 8px;
+    }
+    .rec-head {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
     .empty {
       border: 1px dashed var(--line);
       border-radius: 14px;
@@ -257,6 +299,9 @@ def incubator_html() -> str:
       }
       .detail-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .trend-grid {
+        grid-template-columns: 1fr;
       }
     }
     @media (max-width: 720px) {
@@ -342,6 +387,49 @@ def incubator_html() -> str:
             <button id="continue-run-btn" type="button">补充并续跑</button>
           </div>
         </div>
+        <div class="subform">
+          <div>
+            <h3>更新蒸馏建议状态</h3>
+            <p>选中一个已有 run 后，可以把某条蒸馏建议直接更新为 accepted / implemented / validated，并补回归结果与能力变化。</p>
+          </div>
+          <label>
+            蒸馏建议
+            <select id="recommendation-select">
+              <option value="">请先选择右侧 run</option>
+            </select>
+          </label>
+          <label>
+            所属阶段
+            <select id="recommendation-stage-select">
+              <option value="distillation_iteration">distillation_iteration</option>
+              <option value="productization">productization</option>
+            </select>
+          </label>
+          <label>
+            建议状态
+            <select id="recommendation-status-select">
+              <option value="accepted">accepted</option>
+              <option value="implemented">implemented</option>
+              <option value="validated">validated</option>
+              <option value="dropped">dropped</option>
+            </select>
+          </label>
+          <label>
+            备注
+            <textarea id="recommendation-notes-input" placeholder="例如：已补规则扫描第一版。"></textarea>
+          </label>
+          <label>
+            回归结果（可选）
+            <textarea id="recommendation-regression-input" placeholder="例如：评分样例回归通过。"></textarea>
+          </label>
+          <label>
+            能力变化（可选）
+            <textarea id="recommendation-change-input" placeholder="例如：已稳定输出评分主问题。"></textarea>
+          </label>
+          <div class="button-row">
+            <button id="update-recommendation-btn" type="button">更新建议状态</button>
+          </div>
+        </div>
         <div>
           <h2 style="font-size:20px;">历史 runs</h2>
           <p>点击左侧任一 run，可直接查看 run manifest 摘要和蒸馏报告正文。</p>
@@ -365,12 +453,19 @@ def incubator_html() -> str:
     const strongAgentResultNode = document.getElementById('strong-agent-result-input');
     const targetAgentResultNode = document.getElementById('target-agent-result-input');
     const comparisonSummaryNode = document.getElementById('comparison-summary-input');
+    const recommendationSelectNode = document.getElementById('recommendation-select');
+    const recommendationStageSelectNode = document.getElementById('recommendation-stage-select');
+    const recommendationStatusSelectNode = document.getElementById('recommendation-status-select');
+    const recommendationNotesNode = document.getElementById('recommendation-notes-input');
+    const recommendationRegressionNode = document.getElementById('recommendation-regression-input');
+    const recommendationChangeNode = document.getElementById('recommendation-change-input');
     const statusNode = document.getElementById('incubator-status');
     const runListNode = document.getElementById('run-list');
     const runDetailNode = document.getElementById('run-detail');
     let blueprints = [];
     let runs = [];
     let selectedRunPath = null;
+    let selectedRun = null;
 
     loadBlueprints();
     loadRuns();
@@ -378,6 +473,7 @@ def incubator_html() -> str:
     document.getElementById('start-run-btn').addEventListener('click', startIncubationRun);
     document.getElementById('refresh-runs-btn').addEventListener('click', loadRuns);
     document.getElementById('continue-run-btn').addEventListener('click', continueIncubationRun);
+    document.getElementById('update-recommendation-btn').addEventListener('click', updateRecommendationStatus);
     blueprintNode.addEventListener('change', applyDefaultRunTitle);
 
     async function loadBlueprints() {
@@ -457,7 +553,10 @@ def incubator_html() -> str:
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || '读取 run 详情失败');
         const run = payload.run || {};
+        selectedRun = run;
         const summary = summarizeRun(run);
+        syncRecommendationOptions(run);
+        const trend = await loadRunTrend(payload.run_manifest, payload.agent_key);
         runDetailNode.innerHTML = `
           <div class="detail-head">
             <h2>${escapeHtml(payload.run_title || '')}</h2>
@@ -472,6 +571,8 @@ def incubator_html() -> str:
             <div class="metric"><div class="label">对照结果</div><div class="value">${summary.comparisons}</div></div>
             <div class="metric"><div class="label">蒸馏建议</div><div class="value">${summary.recommendations}</div></div>
           </div>
+          ${renderTrendBlock(trend)}
+          ${renderRecommendationBlock(run)}
           <div>
             <h2 style="font-size:20px; margin-bottom:8px;">蒸馏报告</h2>
             <div class="viewer">${escapeHtml(payload.report_markdown || '暂无 Markdown 报告。')}</div>
@@ -479,6 +580,42 @@ def incubator_html() -> str:
         `;
       } catch (error) {
         runDetailNode.innerHTML = `<div class="empty">读取 run 详情失败：${escapeHtml(error.message)}</div>`;
+      }
+    }
+
+    async function updateRecommendationStatus() {
+      if (!selectedRunPath) {
+        statusNode.textContent = '请先选择一个已有 run。';
+        return;
+      }
+      if (!recommendationSelectNode.value) {
+        statusNode.textContent = '请先选择一条蒸馏建议。';
+        return;
+      }
+      statusNode.textContent = '正在更新蒸馏建议状态...';
+      try {
+        const response = await fetch('/api/incubator/recommendation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            run_manifest: selectedRunPath,
+            recommendation_key: recommendationSelectNode.value,
+            stage: recommendationStageSelectNode.value,
+            status: recommendationStatusSelectNode.value,
+            notes: recommendationNotesNode.value.trim(),
+            regression_result: recommendationRegressionNode.value.trim(),
+            capability_change: recommendationChangeNode.value.trim(),
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '更新蒸馏建议失败');
+        statusNode.textContent = `已更新建议：${payload.recommendation_key} -> ${payload.status}`;
+        await loadRuns();
+        if (payload.run_manifest) {
+          await showRunDetail(payload.run_manifest);
+        }
+      } catch (error) {
+        statusNode.textContent = `更新蒸馏建议失败：${error.message}`;
       }
     }
 
@@ -551,6 +688,107 @@ def incubator_html() -> str:
         comparisons: stages.reduce((sum, item) => sum + ((item.comparisons || []).length), 0),
         recommendations: stages.reduce((sum, item) => sum + ((item.recommendations || []).length), 0),
       };
+    }
+
+    function syncRecommendationOptions(run) {
+      const recommendations = collectRecommendations(run);
+      recommendationSelectNode.innerHTML = recommendations.length
+        ? recommendations.map((item) => (
+            `<option value="${escapeHtml(item.recommendation_key)}">${escapeHtml(item.title)} · ${escapeHtml(item.status)} · ${escapeHtml(item.target_layer)}</option>`
+          )).join('')
+        : '<option value="">当前 run 暂无蒸馏建议</option>';
+      if (!recommendations.length) return;
+      recommendationSelectNode.onchange = () => {
+        const selected = recommendations.find((item) => item.recommendation_key === recommendationSelectNode.value);
+        if (!selected) return;
+        recommendationStageSelectNode.value = selected.stage;
+        recommendationStatusSelectNode.value = selected.status === 'proposed' ? 'accepted' : selected.status;
+        recommendationNotesNode.value = selected.resolution_notes || '';
+        recommendationRegressionNode.value = selected.regression_result || '';
+        recommendationChangeNode.value = selected.capability_change || '';
+      };
+      recommendationSelectNode.dispatchEvent(new Event('change'));
+    }
+
+    function collectRecommendations(run) {
+      const stages = Array.isArray(run.stages) ? run.stages : [];
+      return stages.flatMap((stage) => (
+        (stage.recommendations || []).map((recommendation) => ({
+          ...recommendation,
+          stage: stage.stage,
+        }))
+      ));
+    }
+
+    async function loadRunTrend(runManifest, agentKey) {
+      try {
+        const response = await fetch(`/api/incubator/run-compare?path=${encodeURIComponent(runManifest)}&agent_key=${encodeURIComponent(agentKey || '')}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '读取趋势失败');
+        return payload.report || null;
+      } catch (error) {
+        return { error: error.message };
+      }
+    }
+
+    function renderTrendBlock(report) {
+      if (!report) return '';
+      if (report.error) {
+        return `<section class="section-block"><h2 style="font-size:20px; margin:0;">趋势摘要</h2><div class="empty">读取趋势失败：${escapeHtml(report.error)}</div></section>`;
+      }
+      const trajectory = report.trajectory || {};
+      const trend = report.trend || {};
+      const dominantLayers = (trajectory.dominant_target_layers || []).map((item) => `${item.name}(${item.count})`).join('，') || '暂无';
+      return `
+        <section class="section-block">
+          <h2 style="font-size:20px; margin:0;">趋势摘要</h2>
+          <div class="trend-grid">
+            <div class="mini-card">
+              <strong>gap 走势</strong>
+              <div>${escapeHtml(trajectory.gap_trend || '暂无')}</div>
+            </div>
+            <div class="mini-card">
+              <strong>能力增强走势</strong>
+              <div>${escapeHtml(trajectory.validated_change_trend || '暂无')}</div>
+            </div>
+            <div class="mini-card">
+              <strong>重点目标层</strong>
+              <div>${escapeHtml(dominantLayers)}</div>
+            </div>
+          </div>
+          <div class="summary-strip">
+            <span class="pill">run ${escapeHtml(report.run_count || 0)}</span>
+            <span class="pill warn">gap 序列 ${escapeHtml(JSON.stringify(trend.gap_series || []))}</span>
+            <span class="pill ok">能力变化序列 ${escapeHtml(JSON.stringify(trend.validated_change_series || []))}</span>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderRecommendationBlock(run) {
+      const recommendations = collectRecommendations(run);
+      if (!recommendations.length) {
+        return `<section class="section-block"><h2 style="font-size:20px; margin:0;">蒸馏建议</h2><div class="empty">当前 run 暂无蒸馏建议。</div></section>`;
+      }
+      return `
+        <section class="section-block">
+          <h2 style="font-size:20px; margin:0;">蒸馏建议</h2>
+          <div class="recommendation-list">
+            ${recommendations.map((item) => `
+              <article class="recommendation-card">
+                <div class="rec-head">
+                  <span class="pill">${escapeHtml(item.stage)}</span>
+                  <span class="pill warn">${escapeHtml(item.priority || 'P1')}</span>
+                  <span class="pill ok">${escapeHtml(item.status || 'proposed')}</span>
+                </div>
+                <strong>${escapeHtml(item.title || item.recommendation_key)}</strong>
+                <div>${escapeHtml(item.action || '')}</div>
+                <div style="color:var(--muted);">${escapeHtml(item.rationale || '')}</div>
+              </article>
+            `).join('')}
+          </div>
+        </section>
+      `;
     }
 
     function escapeHtml(text) {

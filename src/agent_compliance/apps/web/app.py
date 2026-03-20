@@ -7,7 +7,9 @@ from urllib.parse import urlparse
 from agent_compliance.apps.web.incubator.page import incubator_html
 from agent_compliance.apps.web.incubator.routes import (
     handle_incubator_continue,
+    handle_incubator_recommendation_update,
     handle_incubator_run_detail,
+    handle_incubator_run_compare,
     handle_incubator_start,
     incubator_blueprints_payload,
     list_incubator_runs,
@@ -76,6 +78,9 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         if path == "/api/incubator/run":
             handle_incubator_run_detail(self, parsed.query)
             return
+        if path == "/api/incubator/run-compare":
+            handle_incubator_run_compare(self, parsed.query)
+            return
         if path == "/api/review-status":
             handle_review_status(self, parsed.query)
             return
@@ -100,6 +105,9 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/incubator/continue":
             handle_incubator_continue(self)
+            return
+        if path == "/api/incubator/recommendation":
+            handle_incubator_recommendation_update(self)
             return
         if path == "/api/review-start":
             handle_review_start(self)
