@@ -324,6 +324,26 @@ src/agent_compliance/incubator/
 - `summarize_sample_manifest()`
 
 实现样例资产登记与摘要输出，再把结果转给生命周期中的 `SampleSet` 使用。
+
+
+## 12. 差异到蒸馏建议的转换
+
+为了让“对照验证 -> 持续蒸馏”真正闭环，`incubator` 层应提供最小的差异归纳引擎。
+
+第一版建议通过：
+
+- `summarize_validation_gaps()`
+- `build_distillation_recommendations()`
+
+把 `ValidationComparison` 中的差异点先统一汇总，再生成第一版蒸馏建议。
+
+第一版目标不是替代强通用智能体设计，而是先把高频差异稳定映射到：
+
+- 评分语义引擎
+- 混合边界引擎
+- 商务链路引擎
+- 仲裁归并层
+- 通用 review 主链
 - 导出
 
 第一版对应实现：
