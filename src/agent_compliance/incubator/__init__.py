@@ -31,6 +31,10 @@ from agent_compliance.incubator.distillation_engine import (
     build_distillation_recommendations,
     summarize_validation_gaps,
 )
+from agent_compliance.incubator.comparison_builder import (
+    build_validation_comparison,
+    build_validation_comparison_from_files,
+)
 from agent_compliance.incubator.factory import (
     FactoryBootstrapResult,
     bootstrap_agent_factory,
@@ -82,6 +86,8 @@ __all__ = [
     "build_distillation_recommendations",
     "build_sample_manifest",
     "bootstrap_agent_factory",
+    "build_validation_comparison",
+    "build_validation_comparison_from_files",
     "budget_agent_blueprint",
     "demand_research_agent_blueprint",
     "create_incubation_run",

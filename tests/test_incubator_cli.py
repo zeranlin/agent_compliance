@@ -117,6 +117,53 @@ class IncubatorCliTests(unittest.TestCase):
                 Path(first_payload["outputs"]["run_manifest"]).name,
             )
 
+    def test_incubate_agent_command_can_build_auto_comparison_from_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            human_path = temp_path / "human.txt"
+            strong_path = temp_path / "strong.txt"
+            target_path = temp_path / "target.txt"
+            human_path.write_text(
+                "输出项目概述\n输出技术需求框架\n输出待人工补充项",
+                encoding="utf-8",
+            )
+            strong_path.write_text(
+                "建议先形成结构化需求初稿骨架和待补充项。",
+                encoding="utf-8",
+            )
+            target_path.write_text(
+                "输出项目概述\n输出待人工补充项",
+                encoding="utf-8",
+            )
+
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                exit_code = main(
+                    [
+                        "incubate-agent",
+                        "demand_research",
+                        "--agents-dir",
+                        str(temp_path / "agents"),
+                        "--output-dir",
+                        str(temp_path / "outputs"),
+                        "--sample-id",
+                        "demand-case-001",
+                        "--human-baseline-file",
+                        str(human_path),
+                        "--strong-agent-result-file",
+                        str(strong_path),
+                        "--target-agent-result-file",
+                        str(target_path),
+                        "--json",
+                    ]
+                )
+
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(exit_code, 0)
+            report_json = json.loads(Path(payload["outputs"]["json"]).read_text(encoding="utf-8"))
+            self.assertEqual(report_json["summary"]["comparison_count"], 1)
+            self.assertGreaterEqual(report_json["summary"]["recommendation_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

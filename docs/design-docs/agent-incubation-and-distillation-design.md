@@ -526,6 +526,19 @@ src/agent_compliance/incubator/
   - 已能产出首轮蒸馏建议
   - 已能写出标准报告与恢复执行所需 manifest
 
+当前也已开始补齐“自动对照生成”最小能力：
+
+- 可由三份标准文本自动生成一条 `ValidationComparison`
+- 输入对象：
+  - `human_baseline`
+  - `strong_agent_result`
+  - `target_agent_result`
+- 当前接入方式：
+  - `incubate-agent --human-baseline-file --strong-agent-result-file --target-agent-result-file`
+- 当前目标：
+  - 先替代手工书写最基础的 `comparisons.json`
+  - 让工厂更快进入“样例 -> 对照 -> 蒸馏建议”闭环
+
 ## 14. 下一步建议
 
 按优先级建议继续做：

@@ -17,6 +17,7 @@ from agent_compliance.incubator import (
     ValidationComparison,
     bootstrap_agent_factory,
     build_sample_manifest,
+    build_validation_comparison_from_files,
     load_incubation_run,
     resume_agent_factory,
     write_incubation_run,
@@ -110,6 +111,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Path to a JSON file containing ValidationComparison items",
     )
+    incubate_parser.add_argument("--sample-id", default=None)
+    incubate_parser.add_argument("--human-baseline-file", type=Path, default=None)
+    incubate_parser.add_argument("--strong-agent-result-file", type=Path, default=None)
+    incubate_parser.add_argument("--target-agent-result-file", type=Path, default=None)
+    incubate_parser.add_argument("--comparison-summary", default="")
     incubate_parser.add_argument("--json", action="store_true")
 
     web_parser = subparsers.add_parser(
@@ -206,6 +212,9 @@ def main(argv: list[str] | None = None) -> int:
                 boundary_paths=tuple(args.boundary_sample),
             )
         comparisons = _load_comparisons(args.comparisons_json)
+        auto_comparison = _build_auto_comparison(args)
+        if auto_comparison is not None:
+            comparisons = comparisons + (auto_comparison,)
         if args.resume_run is not None:
             run = load_incubation_run(args.resume_run)
             if run.agent_key != args.agent_key:
@@ -310,6 +319,28 @@ def _load_comparisons(path: Path | None) -> tuple[ValidationComparison, ...]:
             )
         )
     return tuple(comparisons)
+
+
+def _build_auto_comparison(args: argparse.Namespace) -> ValidationComparison | None:
+    files = (
+        args.human_baseline_file,
+        args.strong_agent_result_file,
+        args.target_agent_result_file,
+    )
+    if not any(files):
+        return None
+    if not all(files):
+        raise ValueError(
+            "human-baseline-file, strong-agent-result-file and target-agent-result-file must be provided together"
+        )
+    sample_id = args.sample_id or f"{args.agent_key}-auto-001"
+    return build_validation_comparison_from_files(
+        sample_id=sample_id,
+        human_baseline_path=args.human_baseline_file,
+        strong_agent_result_path=args.strong_agent_result_file,
+        target_agent_result_path=args.target_agent_result_file,
+        summary=args.comparison_summary or "",
+    )
 
 
 def _slugify_run_key(run_title: str) -> str:
