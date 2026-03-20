@@ -107,6 +107,9 @@
   用于把三份标准文本自动转换成一条 `ValidationComparison`
 - 当前已形成独立的 MVP 验收总结：
   - `docs/design-docs/agent-incubator-mvp-acceptance.md`
+- 当前也已提供一个轻量 Web 控制台：
+  - `/incubator`
+  - 只负责启动一轮孵化、列出现有 run、查看 run manifest 和蒸馏报告
 
 本地大模型兜底接口已预留，默认关闭；如需显式启用：
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-llm`

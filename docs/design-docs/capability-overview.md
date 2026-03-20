@@ -635,3 +635,8 @@
 - 已具备统一蒸馏报告能力：
   - `build_distillation_report()`
   - `render_distillation_report_markdown()`
+- 已提供轻量 incubator Web 控制台：
+  - `/incubator`
+  - 支持启动一轮孵化
+  - 查看历史 run
+  - 查看 run manifest 和蒸馏报告
