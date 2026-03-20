@@ -187,6 +187,18 @@
 - 页面入口
 - 运维方式
 
+当前已落第一版产品化固化模板能力：
+- 可通过 `productize-incubation-run <run_manifest>` 从单轮 run 自动生成：
+  - `*-productization.json`
+  - `*-productization.md`
+- 当前模板至少包含：
+  - `readiness_level`
+  - 发布 checklist
+  - 运维口径
+  - 交付模板
+  - 验收模板
+- 生成后会自动把 run 的 `productization` 阶段标记为 `completed`
+
 
 ## 6. 与仓库四层架构的关系
 
@@ -238,6 +250,9 @@ src/agent_compliance/incubator/
   - 把蓝图、脚手架、生命周期和蒸馏报告串成统一启动入口
 - `report_writer.py`
   - 把蒸馏报告落成标准 JSON 和 Markdown 产物
+- `productize.py`
+  - 把单轮 run 继续固化成产品化模板
+  - 输出发布 checklist、运维口径、交付模板和验收模板
 - `blueprints/`
   - 定义不同智能体类型的标准蓝图
   - 提供蓝图注册表与标准查询入口

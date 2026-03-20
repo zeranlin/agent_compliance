@@ -242,6 +242,19 @@
   - 交付模板
   - 验收模板
 
+当前已完成首版：
+- 已新增 `productize-incubation-run <run.json>`
+- 可从单轮 `run manifest` 自动生成：
+  - `*-productization.json`
+  - `*-productization.md`
+- 生成后会自动把 `productization` 阶段标记为 `completed`
+- 当前会同步沉淀：
+  - `readiness_level`
+  - 发布 checklist
+  - 运维口径
+  - 交付模板
+  - 验收模板
+
 建议落点：
 - `docs/product-specs/`
 - `src/agent_compliance/incubator/productize.py`

@@ -99,6 +99,7 @@
 - 标准命令：`PYTHONPATH=src python3 -m agent_compliance incubate-agent <agent_key>`
 - 多轮比较命令：`PYTHONPATH=src python3 -m agent_compliance compare-incubation-runs <run1> <run2> ...`
 - 建议状态命令：`PYTHONPATH=src python3 -m agent_compliance update-incubation-recommendation <run.json> <recommendation_key> --status ...`
+- 产品化固化命令：`PYTHONPATH=src python3 -m agent_compliance productize-incubation-run <run_manifest>`
 - 回归回挂字段：
   - `--regression-result`
   - `--capability-change`
@@ -106,6 +107,8 @@
   - `*-distillation-report.md`
   - `*-distillation-report.json`
   - `*-run.json`
+  - `*-productization.md`
+  - `*-productization.json`
 - 当前已用 `政府采购需求调查智能体` 跑通第一轮真实 MVP 孵化验证，产物位于：
   - `docs/generated/incubator/demand_research/`
 - 当前也已支持最小自动对照生成：
@@ -136,6 +139,11 @@
 - 当前也已提供一个轻量 Web 控制台：
   - `/incubator`
   - 只负责启动一轮孵化、列出现有 run、查看 run manifest 和蒸馏报告
+- 当前也已开始支持从单轮 run 自动生成产品化固化模板：
+  - 发布 checklist
+  - 运维口径
+  - 交付模板
+  - 验收模板
 
 本地大模型兜底接口已预留，默认关闭；如需显式启用：
 - `PYTHONPATH=src python3 -m agent_compliance review <file> --json --use-llm`

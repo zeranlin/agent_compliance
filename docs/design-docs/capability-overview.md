@@ -27,6 +27,17 @@
 - 可查看同一智能体多轮 run 的 gap/能力变化序列
 - 可直接在页面内更新蒸馏建议状态并回写 run manifest 与蒸馏报告
 
+当前孵化工厂也已开始具备产品化固化模板能力：
+- 可从单轮 `run manifest` 生成：
+  - 发布 checklist
+  - 运维口径
+  - 交付模板
+  - 验收模板
+- 并把结果同步写成标准：
+  - `*-productization.json`
+  - `*-productization.md`
+- 生成后会把 `productization` 阶段自动回写为 `completed`
+
 它当前阶段重点不是做争议裁判，而是帮助采购人在发布前：
 - 发现风险
 - 完成改稿

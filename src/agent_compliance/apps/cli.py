@@ -17,6 +17,7 @@ from agent_compliance.incubator import (
     IncubationStage,
     ValidationComparison,
     bootstrap_agent_factory,
+    build_productization_package,
     collect_validation_comparisons_from_manifest,
     collect_validation_comparisons_from_root,
     build_regression_feedback,
@@ -25,8 +26,10 @@ from agent_compliance.incubator import (
     build_validation_comparison_from_files,
     load_incubation_run,
     load_sample_manifest,
+    render_productization_markdown,
     render_run_comparison_markdown,
     resume_agent_factory,
+    write_productization_package,
     write_incubation_run,
     write_distillation_report,
     write_sample_manifest,
@@ -146,6 +149,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     compare_runs_parser.add_argument("run_manifests", nargs="+", type=Path)
     compare_runs_parser.add_argument("--json", action="store_true")
+
+    productize_parser = subparsers.add_parser(
+        "productize-incubation-run",
+        help="Generate productization templates from an incubation run manifest",
+    )
+    productize_parser.add_argument("run_manifest", type=Path)
+    productize_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("docs/generated/incubator-productization"),
+    )
+    productize_parser.add_argument("--json", action="store_true")
 
     update_recommendation_parser = subparsers.add_parser(
         "update-incubation-recommendation",
@@ -344,6 +359,44 @@ def main(argv: list[str] | None = None) -> int:
             return _print_result(report, True)
         print(render_run_comparison_markdown(report))
         return 0
+
+    if args.command == "productize-incubation-run":
+        run = load_incubation_run(args.run_manifest)
+        package = build_productization_package(run)
+        markdown = render_productization_markdown(package)
+        run_key = _run_key_from_manifest(args.run_manifest)
+        artifact_paths = write_productization_package(
+            args.output_dir,
+            run.agent_key,
+            run_key,
+            package,
+            markdown,
+        )
+        run.set_stage_status(
+            IncubationStage.PRODUCTIZATION,
+            "completed",
+            f"已生成产品化固化模板：{artifact_paths.markdown_path}",
+        )
+        run.add_stage_output(
+            IncubationStage.PRODUCTIZATION,
+            str(artifact_paths.markdown_path),
+        )
+        write_incubation_run(
+            args.run_manifest.parent.parent,
+            run.agent_key,
+            run_key,
+            run,
+        )
+        payload = {
+            "agent_key": run.agent_key,
+            "run_manifest": str(args.run_manifest),
+            "readiness_level": package["readiness_level"],
+            "outputs": {
+                "json": str(artifact_paths.json_path),
+                "markdown": str(artifact_paths.markdown_path),
+            },
+        }
+        return _print_result(payload, args.json)
 
     if args.command == "update-incubation-recommendation":
         run = load_incubation_run(args.run_manifest)
