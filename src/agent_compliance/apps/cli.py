@@ -17,6 +17,8 @@ from agent_compliance.incubator import (
     IncubationStage,
     ValidationComparison,
     bootstrap_agent_factory,
+    collect_validation_comparisons_from_manifest,
+    collect_validation_comparisons_from_root,
     build_regression_feedback,
     build_sample_manifest,
     build_run_comparison_report,
@@ -115,6 +117,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Path to a JSON file containing ValidationComparison items",
     )
+    incubate_parser.add_argument(
+        "--comparison-root",
+        type=Path,
+        default=None,
+        help="Root directory containing standard comparison subfolders",
+    )
     incubate_parser.add_argument("--sample-id", default=None)
     incubate_parser.add_argument("--human-baseline-file", type=Path, default=None)
     incubate_parser.add_argument("--strong-agent-result-file", type=Path, default=None)
@@ -149,6 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
     update_recommendation_parser.add_argument("--regression-result", default="")
     update_recommendation_parser.add_argument("--capability-change", default="")
     update_recommendation_parser.add_argument("--sample-id", default=None)
+    update_recommendation_parser.add_argument("--comparison-root", type=Path, default=None)
     update_recommendation_parser.add_argument("--human-baseline-file", type=Path, default=None)
     update_recommendation_parser.add_argument("--strong-agent-result-file", type=Path, default=None)
     update_recommendation_parser.add_argument("--target-agent-result-file", type=Path, default=None)
@@ -249,6 +258,7 @@ def main(argv: list[str] | None = None) -> int:
                 boundary_paths=tuple(args.boundary_sample),
             )
         comparisons = _load_comparisons(args.comparisons_json)
+        comparisons = comparisons + _collect_comparisons(args, sample_manifest)
         auto_comparison = _build_auto_comparison(args)
         if auto_comparison is not None:
             comparisons = comparisons + (auto_comparison,)
@@ -318,7 +328,18 @@ def main(argv: list[str] | None = None) -> int:
         stage = IncubationStage(args.stage)
         regression_result = args.regression_result
         capability_change = args.capability_change
+        collected_comparisons = _collect_comparisons(args)
         auto_comparison = _build_auto_comparison(args)
+        selected_comparison = None
+        if collected_comparisons:
+            if args.sample_id:
+                for comparison in collected_comparisons:
+                    if comparison.sample_id == args.sample_id:
+                        selected_comparison = comparison
+                        break
+            if selected_comparison is None:
+                selected_comparison = collected_comparisons[0]
+        auto_comparison = selected_comparison or auto_comparison
         if auto_comparison is not None:
             previous_comparison = run.latest_comparison(
                 IncubationStage.PARITY_VALIDATION,
@@ -434,6 +455,24 @@ def _build_auto_comparison(args: argparse.Namespace) -> ValidationComparison | N
         target_agent_result_path=args.target_agent_result_file,
         summary=args.comparison_summary or "",
     )
+
+
+def _collect_comparisons(
+    args: argparse.Namespace,
+    sample_manifest=None,
+) -> tuple[ValidationComparison, ...]:
+    comparison_root = getattr(args, "comparison_root", None)
+    if comparison_root is None:
+        return ()
+    if sample_manifest is not None:
+        return collect_validation_comparisons_from_manifest(comparison_root, sample_manifest)
+    sample_id = getattr(args, "sample_id", None)
+    if sample_id:
+        return collect_validation_comparisons_from_root(
+            comparison_root,
+            sample_ids=(sample_id,),
+        )
+    return collect_validation_comparisons_from_root(comparison_root)
 
 
 def _slugify_run_key(run_title: str) -> str:

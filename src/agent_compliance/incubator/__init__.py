@@ -37,6 +37,10 @@ from agent_compliance.incubator.comparison_builder import (
     build_validation_comparison,
     build_validation_comparison_from_files,
 )
+from agent_compliance.incubator.comparison_collector import (
+    collect_validation_comparisons_from_manifest,
+    collect_validation_comparisons_from_root,
+)
 from agent_compliance.incubator.regression_runner import (
     RegressionFeedback,
     build_regression_feedback,
@@ -97,6 +101,8 @@ __all__ = [
     "build_regression_feedback",
     "build_validation_comparison",
     "build_validation_comparison_from_files",
+    "collect_validation_comparisons_from_manifest",
+    "collect_validation_comparisons_from_root",
     "budget_agent_blueprint",
     "demand_research_agent_blueprint",
     "create_incubation_run",

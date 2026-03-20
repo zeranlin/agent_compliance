@@ -35,6 +35,10 @@ class SampleManifest:
     def boundary_examples(self) -> tuple[str, ...]:
         return tuple(asset.sample_id for asset in self.assets if asset.label == "boundary")
 
+    @property
+    def sample_ids(self) -> tuple[str, ...]:
+        return tuple(asset.sample_id for asset in self.assets)
+
     def to_sample_set(self, *, benchmark_refs: tuple[str, ...] = ()) -> SampleSet:
         """把样例清单转成孵化闭环使用的 `SampleSet`。"""
 

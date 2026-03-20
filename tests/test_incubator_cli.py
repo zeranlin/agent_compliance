@@ -164,6 +164,49 @@ class IncubatorCliTests(unittest.TestCase):
             self.assertEqual(report_json["summary"]["comparison_count"], 1)
             self.assertGreaterEqual(report_json["summary"]["recommendation_count"], 1)
 
+    def test_incubate_agent_command_can_collect_comparisons_from_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            comparison_root = temp_path / "comparisons"
+            sample_dir = comparison_root / "positive-a"
+            sample_dir.mkdir(parents=True, exist_ok=True)
+            (sample_dir / "human_baseline.txt").write_text(
+                "输出项目概述\n输出技术需求框架",
+                encoding="utf-8",
+            )
+            (sample_dir / "strong_agent_result.txt").write_text(
+                "建议输出结构化需求骨架。",
+                encoding="utf-8",
+            )
+            (sample_dir / "target_agent_result.txt").write_text(
+                "输出项目概述",
+                encoding="utf-8",
+            )
+
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                exit_code = main(
+                    [
+                        "incubate-agent",
+                        "demand_research",
+                        "--agents-dir",
+                        str(temp_path / "agents"),
+                        "--output-dir",
+                        str(temp_path / "outputs"),
+                        "--positive-sample",
+                        "samples/positive/positive-a.docx",
+                        "--comparison-root",
+                        str(comparison_root),
+                        "--json",
+                    ]
+                )
+
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(exit_code, 0)
+            report_json = json.loads(Path(payload["outputs"]["json"]).read_text(encoding="utf-8"))
+            self.assertEqual(report_json["summary"]["comparison_count"], 1)
+            self.assertGreaterEqual(report_json["summary"]["recommendation_count"], 1)
+
     def test_compare_incubation_runs_command_outputs_json(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

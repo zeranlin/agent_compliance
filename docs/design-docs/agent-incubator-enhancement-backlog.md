@@ -50,17 +50,21 @@
 
 ### 2.2 ValidationComparison 自动采集二阶段
 
+当前状态：
+- 第一版已完成。
+- 现在工厂已支持：
+  - `--comparison-root <dir>` 从标准目录结构自动采集 comparison
+  - 有 `SampleManifest` 时优先只采集 manifest 声明的样例
+
 目标：
 - 不只从三份标准文本构造 comparison
 - 还能从标准目录、标准样例记录或现有 run 产物自动采集对照输入
 
 当前缺口：
-- 目前自动对照生成只支持：
-  - `human_baseline`
-  - `strong_agent_result`
-  - `target_agent_result`
-  三份文本直接输入
-- 还没有形成更标准的“对照采集层”
+- 当前仍缺：
+  - 从现有 run 产物自动反查 comparison 输入
+  - 从样例资产 registry/版本目录直接采集 comparison
+  - 对照采集质量校验与缺失项报告
 
 建议落点：
 - `src/agent_compliance/incubator/comparison_collector.py`

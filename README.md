@@ -106,6 +106,10 @@
   - `--strong-agent-result-file`
   - `--target-agent-result-file`
   用于把三份标准文本自动转换成一条 `ValidationComparison`
+- 当前也已支持从标准目录自动采集对照：
+  - `--comparison-root <dir>`
+  - 目录约定为 `<dir>/<sample_id>/human_baseline.txt|strong_agent_result.txt|target_agent_result.txt`
+  - 如同时提供样例清单，则优先只采集 manifest 中声明的样例
 - 当前已形成独立的 MVP 验收总结：
   - `docs/design-docs/agent-incubator-mvp-acceptance.md`
 - 当前也已提供一个轻量 Web 控制台：

@@ -539,6 +539,24 @@ src/agent_compliance/incubator/
   - 先替代手工书写最基础的 `comparisons.json`
   - 让工厂更快进入“样例 -> 对照 -> 蒸馏建议”闭环
 
+当前进一步补入了 `P0.2` 的第一版自动采集：
+
+- 现已支持从标准目录结构自动采集多条 `ValidationComparison`
+- 目录约定：
+  - `<comparison_root>/<sample_id>/human_baseline.txt`
+  - `<comparison_root>/<sample_id>/strong_agent_result.txt`
+  - `<comparison_root>/<sample_id>/target_agent_result.txt`
+  - `<comparison_root>/<sample_id>/summary.txt`（可选）
+- 当前接入方式：
+  - `incubate-agent --comparison-root <dir>`
+  - `update-incubation-recommendation --comparison-root <dir> --sample-id <id>`
+- 当前能力：
+  - 若已提供 `SampleManifest`，则优先只采集 manifest 中声明的 `sample_id`
+  - 若未提供样例清单，则按标准目录自动发现样例
+- 当前目标：
+  - 把自动对照从“三份文本直接输入”推进到“标准目录与样例资产可复用”
+  - 为后续样例资产版本化和自动对照采集层继续铺路
+
 当前也已开始补齐“多轮蒸馏比较”最小能力：
 
 - 可输入两轮或多轮 `run.json`
