@@ -264,7 +264,7 @@ def incubator_html() -> str:
       <section class="panel">
         <div>
           <h2>启动一轮孵化</h2>
-          <p>先选蓝图，再给一轮 run 起一个标题。当前页面只提供最小启动和查看，不做复杂样例配置。</p>
+          <p>先选蓝图，再给一轮 run 起一个标题。当前页面只做首轮骨架孵化与查看；样例登记、对照验证和蒸馏建议执行仍走命令行续跑。</p>
         </div>
         <label>
           智能体蓝图
@@ -425,7 +425,7 @@ def incubator_html() -> str:
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || '启动孵化失败');
-        statusNode.textContent = `已启动：${payload.run_title}；已完成阶段 ${payload.summary.completed_stages}/${payload.summary.total_stages}。`;
+        statusNode.textContent = `已启动：${payload.run_title}；当前完成的是首轮骨架孵化。样例准备、对照验证、蒸馏迭代和产品化阶段需在后续续跑中继续完成。`;
         await loadRuns();
         if (payload.outputs && payload.outputs.run_manifest) {
           await showRunDetail(payload.outputs.run_manifest);

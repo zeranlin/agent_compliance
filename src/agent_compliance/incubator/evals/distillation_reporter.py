@@ -2,7 +2,24 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from agent_compliance.incubator.lifecycle import IncubationRun
+from agent_compliance.incubator.lifecycle import IncubationRun, default_incubation_lifecycle
+
+
+_STAGE_TITLES = {
+    definition.stage.value: definition.title
+    for definition in default_incubation_lifecycle()
+}
+
+_PENDING_HINTS = {
+    "sample_preparation": "尚未补充正样例、负样例或边界样例。",
+    "parity_validation": "尚未提供人工基准、强通用智能体结果和目标智能体结果的对照。",
+    "distillation_iteration": "尚未基于对照差异生成或执行蒸馏建议。",
+    "productization": "尚未完成稳定回归、发布口径和固化发布准备。",
+}
+
+_IN_PROGRESS_HINTS = {
+    "distillation_iteration": "已进入蒸馏迭代，可继续实现建议并回挂回归结果。",
+}
 
 
 def build_distillation_report(run: IncubationRun) -> dict[str, object]:
@@ -108,9 +125,17 @@ def render_distillation_report_markdown(report: dict[str, object]) -> str:
     for stage in report["stages"]:
         lines.append(f"### {stage['stage']}")
         lines.append("")
+        stage_key = stage["stage"]
+        stage_title = _STAGE_TITLES.get(stage_key)
+        if stage_title:
+            lines.append(f"- 阶段名称：{stage_title}")
         lines.append(f"- 状态：`{stage['status']}`")
         if stage["notes"]:
             lines.append(f"- 备注：{stage['notes']}")
+        elif stage["status"] == "pending" and stage_key in _PENDING_HINTS:
+            lines.append(f"- 说明：{_PENDING_HINTS[stage_key]}")
+        elif stage["status"] == "in_progress" and stage_key in _IN_PROGRESS_HINTS:
+            lines.append(f"- 说明：{_IN_PROGRESS_HINTS[stage_key]}")
         if stage["outputs"]:
             outputs = "，".join(stage["outputs"])
             lines.append(f"- 产物：{outputs}")

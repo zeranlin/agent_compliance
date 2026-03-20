@@ -76,6 +76,8 @@ class DistillationReporterTests(unittest.TestCase):
         self.assertIn("# 预算智能体蒸馏 蒸馏报告", markdown)
         self.assertIn("## 阶段明细", markdown)
         self.assertIn("### requirement_definition", markdown)
+        self.assertIn("阶段名称：业务需求定义", markdown)
+        self.assertIn("尚未提供人工基准、强通用智能体结果和目标智能体结果的对照。", markdown)
 
 
 if __name__ == "__main__":
