@@ -43,6 +43,16 @@
 - 已成功生成 `special_checks` 最小目标智能体骨架
 - 已输出对应 run manifest、蒸馏报告和产品化固化模板
 
+当前也已补入一份独立的六层映射说明：
+- [incubator 六层闭环映射](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/incubator-six-layer-mapping.md)
+- 用于把当前 `incubator/` 已有文件明确映射到：
+  - 业务需求定义
+  - 样例驱动
+  - 强通用智能体设计
+  - 本地目标智能体生成
+  - 对照验证
+  - 持续蒸馏与固化发布
+
 它当前阶段重点不是做争议裁判，而是帮助采购人在发布前：
 - 发现风险
 - 完成改稿

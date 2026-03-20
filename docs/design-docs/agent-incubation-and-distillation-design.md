@@ -10,6 +10,10 @@
 
 - **智能体孵化与蒸馏工厂**
 
+配套映射文档：
+
+- [incubator 六层闭环映射](/Users/linzeran/code/2026-zn/agent_compliance/docs/design-docs/incubator-six-layer-mapping.md)
+
 
 ## 2. 核心结论
 

@@ -54,6 +54,7 @@
 - [budget-demand-agent-architecture.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/budget-demand-agent-architecture.md)
 - [repo-layered-architecture.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/repo-layered-architecture.md)
 - [agent-incubation-and-distillation-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/agent-incubation-and-distillation-design.md)
+- [incubator-six-layer-mapping.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/incubator-six-layer-mapping.md)
 - [agent-incubator-mvp-acceptance.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/agent-incubator-mvp-acceptance.md)
 - [agent-incubator-enhancement-backlog.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/agent-incubator-enhancement-backlog.md)
 - [llm-fast-path-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/llm-fast-path-design.md)
