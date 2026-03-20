@@ -14,6 +14,7 @@ from agent_compliance.incubator.blueprints import (
 from agent_compliance.incubator.lifecycle import (
     DEFAULT_INCUBATION_LIFECYCLE,
     DistillationRecommendation,
+    IncubationEvent,
     IncubationStage,
     IncubationStageDefinition,
     IncubationRun,
@@ -79,6 +80,7 @@ __all__ = [
     "DEMAND_RESEARCH_AGENT_BLUEPRINT",
     "DistillationRecommendation",
     "DistillationArtifactPaths",
+    "IncubationEvent",
     "FactoryBootstrapResult",
     "IncubationStage",
     "IncubationStageDefinition",

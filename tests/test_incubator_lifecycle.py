@@ -55,12 +55,15 @@ class IncubatorLifecycleTests(unittest.TestCase):
         self.assertEqual(sample_stage.status, "completed")
         self.assertEqual(sample_stage.notes, "样例已归档")
         self.assertEqual(sample_stage.sample_sets[0].name, "第一批样例")
+        self.assertGreaterEqual(len(sample_stage.events), 2)
 
         validation_stage = run.get_stage(IncubationStage.PARITY_VALIDATION)
         self.assertEqual(validation_stage.comparisons[0].sample_id, "case-001")
+        self.assertEqual(validation_stage.events[-1].action, "add_comparison")
 
         distill_stage = run.get_stage(IncubationStage.DISTILLATION_ITERATION)
         self.assertEqual(distill_stage.recommendations[0].priority, "P0")
+        self.assertEqual(distill_stage.events[-1].action, "add_recommendation")
 
     def test_run_can_update_recommendation_status(self) -> None:
         run = create_incubation_run("budget_demand", "预算智能体复盘")
@@ -89,6 +92,10 @@ class IncubatorLifecycleTests(unittest.TestCase):
         self.assertEqual(recommendation.resolution_notes, "已完成第一版实现")
         self.assertEqual(recommendation.regression_result, "预算边界样例回归通过")
         self.assertEqual(recommendation.capability_change, "目标智能体现已能输出预算边界约束")
+        self.assertEqual(
+            run.get_stage(IncubationStage.DISTILLATION_ITERATION).events[-1].action,
+            "update_recommendation_status",
+        )
 
 
 if __name__ == "__main__":

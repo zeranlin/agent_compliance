@@ -66,6 +66,10 @@ class RunStoreTests(unittest.TestCase):
             loaded.get_stage(IncubationStage.PARITY_VALIDATION).comparisons[0].sample_id,
             "case-001",
         )
+        self.assertGreaterEqual(
+            len(loaded.get_stage(IncubationStage.PARITY_VALIDATION).events),
+            1,
+        )
         loaded_recommendation = loaded.get_stage(IncubationStage.DISTILLATION_ITERATION).recommendations[0]
         self.assertEqual(loaded_recommendation.recommendation_key, "case-001:score-gap")
         self.assertEqual(loaded_recommendation.status, "accepted")

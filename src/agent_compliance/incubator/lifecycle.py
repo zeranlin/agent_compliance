@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 
 
@@ -66,6 +67,15 @@ class DistillationRecommendation:
     capability_change: str = ""
 
 
+@dataclass(frozen=True)
+class IncubationEvent:
+    """记录一条阶段级执行痕迹。"""
+
+    timestamp: str
+    action: str
+    summary: str
+
+
 @dataclass
 class IncubationStageRecord:
     """记录某个孵化阶段的执行情况。"""
@@ -77,6 +87,7 @@ class IncubationStageRecord:
     sample_sets: list[SampleSet] = field(default_factory=list)
     comparisons: list[ValidationComparison] = field(default_factory=list)
     recommendations: list[DistillationRecommendation] = field(default_factory=list)
+    events: list[IncubationEvent] = field(default_factory=list)
 
 
 @dataclass
@@ -98,15 +109,34 @@ class IncubationRun:
         record.status = status
         if notes:
             record.notes = notes
+        self._record_event(
+            stage,
+            "set_stage_status",
+            f"阶段状态更新为 {status}" + (f"：{notes}" if notes else ""),
+        )
 
     def add_stage_output(self, stage: IncubationStage, output: str) -> None:
         self.get_stage(stage).outputs.append(output)
+        self._record_event(stage, "add_stage_output", f"新增阶段产物：{output}")
 
     def add_sample_set(self, stage: IncubationStage, sample_set: SampleSet) -> None:
         self.get_stage(stage).sample_sets.append(sample_set)
+        self._record_event(
+            stage,
+            "add_sample_set",
+            (
+                f"新增样例集 {sample_set.name}，包含正样例 {len(sample_set.positive_examples)} / "
+                f"负样例 {len(sample_set.negative_examples)} / 边界样例 {len(sample_set.boundary_examples)}"
+            ),
+        )
 
     def add_comparison(self, stage: IncubationStage, comparison: ValidationComparison) -> None:
         self.get_stage(stage).comparisons.append(comparison)
+        self._record_event(
+            stage,
+            "add_comparison",
+            f"新增对照样例 {comparison.sample_id}，当前对齐点 {len(comparison.aligned_points)} 个，差异点 {len(comparison.gap_points)} 个。",
+        )
 
     def latest_comparison(self, stage: IncubationStage, sample_id: str) -> ValidationComparison | None:
         comparisons = self.get_stage(stage).comparisons
@@ -121,6 +151,11 @@ class IncubationRun:
         recommendation: DistillationRecommendation,
     ) -> None:
         self.get_stage(stage).recommendations.append(recommendation)
+        self._record_event(
+            stage,
+            "add_recommendation",
+            f"新增蒸馏建议 {recommendation.recommendation_key}，目标层为 {recommendation.target_layer}，当前状态为 {recommendation.status}。",
+        )
 
     def update_recommendation_status(
         self,
@@ -146,8 +181,27 @@ class IncubationRun:
                     regression_result=regression_result or recommendation.regression_result,
                     capability_change=capability_change or recommendation.capability_change,
                 )
+                self._record_event(
+                    stage,
+                    "update_recommendation_status",
+                    (
+                        f"蒸馏建议 {recommendation_key} 状态更新为 {status}"
+                        + (f"，备注：{notes}" if notes else "")
+                        + (f"，回归结果：{regression_result}" if regression_result else "")
+                        + (f"，能力变化：{capability_change}" if capability_change else "")
+                    ),
+                )
                 return
         raise KeyError(recommendation_key)
+
+    def _record_event(self, stage: IncubationStage, action: str, summary: str) -> None:
+        self.get_stage(stage).events.append(
+            IncubationEvent(
+                timestamp=datetime.now().isoformat(timespec="seconds"),
+                action=action,
+                summary=summary,
+            )
+        )
 
 
 DEFAULT_INCUBATION_LIFECYCLE: tuple[IncubationStageDefinition, ...] = (

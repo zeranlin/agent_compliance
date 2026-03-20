@@ -29,6 +29,7 @@ def build_distillation_report(run: IncubationRun) -> dict[str, object]:
     sample_set_count = sum(len(stage.sample_sets) for stage in run.stages)
     comparison_count = sum(len(stage.comparisons) for stage in run.stages)
     recommendation_count = sum(len(stage.recommendations) for stage in run.stages)
+    event_count = sum(len(stage.events) for stage in run.stages)
 
     stage_reports = []
     priority_summary: dict[str, int] = {}
@@ -61,6 +62,7 @@ def build_distillation_report(run: IncubationRun) -> dict[str, object]:
                 "recommendations": [
                     asdict(recommendation) for recommendation in stage.recommendations
                 ],
+                "events": [asdict(event) for event in stage.events],
             }
         )
 
@@ -74,6 +76,7 @@ def build_distillation_report(run: IncubationRun) -> dict[str, object]:
             "comparison_count": comparison_count,
             "recommendation_count": recommendation_count,
             "validated_change_count": validated_change_count,
+            "event_count": event_count,
         },
         "priority_summary": priority_summary,
         "target_layer_summary": target_layer_summary,
@@ -95,6 +98,7 @@ def render_distillation_report_markdown(report: dict[str, object]) -> str:
         f"- 对照记录：`{summary['comparison_count']}`",
         f"- 蒸馏建议：`{summary['recommendation_count']}`",
         f"- 已记录回归/能力变化：`{summary['validated_change_count']}`",
+        f"- 执行痕迹：`{summary['event_count']}`",
         "",
     ]
 
@@ -152,6 +156,11 @@ def render_distillation_report_markdown(report: dict[str, object]) -> str:
             ]
             if regression_notes:
                 lines.append(f"- 已记录回归结果数量：{len(regression_notes)}")
+        if stage["events"]:
+            lines.append(f"- 执行事件数量：{len(stage['events'])}")
+            latest_events = stage["events"][-3:]
+            for event in latest_events:
+                lines.append(f"  - `{event['timestamp']}` {event['summary']}")
         lines.append("")
 
     return "\n".join(lines)

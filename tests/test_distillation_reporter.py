@@ -60,6 +60,7 @@ class DistillationReporterTests(unittest.TestCase):
         self.assertEqual(report["summary"]["comparison_count"], 1)
         self.assertEqual(report["summary"]["recommendation_count"], 1)
         self.assertEqual(report["summary"]["validated_change_count"], 1)
+        self.assertGreaterEqual(report["summary"]["event_count"], 4)
         self.assertEqual(report["priority_summary"]["P0"], 1)
         self.assertEqual(report["recommendation_status_summary"]["accepted"], 1)
         self.assertEqual(
@@ -77,6 +78,7 @@ class DistillationReporterTests(unittest.TestCase):
         self.assertIn("## 阶段明细", markdown)
         self.assertIn("### requirement_definition", markdown)
         self.assertIn("阶段名称：业务需求定义", markdown)
+        self.assertIn("执行痕迹", markdown)
         self.assertIn("尚未提供人工基准、强通用智能体结果和目标智能体结果的对照。", markdown)
 
 

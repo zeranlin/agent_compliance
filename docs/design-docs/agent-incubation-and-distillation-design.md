@@ -557,6 +557,23 @@ src/agent_compliance/incubator/
   - 把自动对照从“三份文本直接输入”推进到“标准目录与样例资产可复用”
   - 为后续样例资产版本化和自动对照采集层继续铺路
 
+当前也已开始补齐 `P0.3` 的第一版执行痕迹：
+
+- `run manifest` 的每个阶段现在会继续记录 `events`
+- 当前会自动记录的动作包括：
+  - `set_stage_status`
+  - `add_stage_output`
+  - `add_sample_set`
+  - `add_comparison`
+  - `add_recommendation`
+  - `update_recommendation_status`
+- 蒸馏报告也已开始展示：
+  - 总执行事件数量
+  - 每个阶段最近的执行痕迹
+- 当前目标：
+  - 让一轮 run 不只知道“阶段到了哪里”
+  - 还知道“什么时候补了样例、什么时候加了 comparison、什么时候更新了建议状态”
+
 当前也已开始补齐“多轮蒸馏比较”最小能力：
 
 - 可输入两轮或多轮 `run.json`

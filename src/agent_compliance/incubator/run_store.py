@@ -6,6 +6,7 @@ from pathlib import Path
 
 from agent_compliance.incubator.lifecycle import (
     DistillationRecommendation,
+    IncubationEvent,
     IncubationRun,
     IncubationStage,
     IncubationStageRecord,
@@ -81,6 +82,7 @@ def _serialize_stage(stage: IncubationStageRecord) -> dict[str, object]:
         "recommendations": [
             asdict(recommendation) for recommendation in stage.recommendations
         ],
+        "events": [asdict(event) for event in stage.events],
     }
 
 
@@ -100,5 +102,9 @@ def _deserialize_stage(payload: dict[str, object]) -> IncubationStageRecord:
         recommendations=[
             DistillationRecommendation(**recommendation)
             for recommendation in payload.get("recommendations", [])
+        ],
+        events=[
+            IncubationEvent(**event)
+            for event in payload.get("events", [])
         ],
     )
