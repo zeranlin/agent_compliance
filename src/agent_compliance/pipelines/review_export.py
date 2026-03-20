@@ -128,7 +128,7 @@ def render_export_markdown(
     findings = _pick_findings(review.findings, mode)
     stage_profile = route_procurement_stage(findings=review.findings)
     lines = [
-        f"# {review.document_name} 审查结果导出",
+        f"# {review.document_name} 采购需求合规性检查智能体审查结果导出",
         "",
         "## 文件信息",
         "",

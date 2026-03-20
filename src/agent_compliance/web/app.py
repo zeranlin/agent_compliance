@@ -4364,7 +4364,7 @@ def _review_buyer_html() -> str:
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>采购需求合规性审查工作台</title>
+  <title>采购需求合规性检查智能体</title>
   <style>
     :root {
       --bg: #edf3f8;
@@ -5023,7 +5023,7 @@ def _review_buyer_html() -> str:
     <section class="hero">
       <div class="panel hero-card">
         <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#1f5f8b; font-weight:700;">Review Check</div>
-        <h1>采购需求合规性审查工作台</h1>
+        <h1>采购需求合规性检查智能体</h1>
         <p>这个页面面向采购人使用，优先服务采购需求形成、修改、复核和发布前审查。页面只保留采购人最关心的结论、问题定位、法规依据和改稿建议。</p>
         <div class="hero-actions">
           <a href="/">旧版审查页</a>

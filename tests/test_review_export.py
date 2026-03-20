@@ -125,7 +125,7 @@ class ReviewExportTest(unittest.TestCase):
         markdown = content.decode("utf-8")
         self.assertEqual(content_type, "text/markdown; charset=utf-8")
         self.assertTrue(filename.endswith("-full.md"))
-        self.assertIn("# sample.docx 审查结果导出", markdown)
+        self.assertIn("# sample.docx 采购需求合规性检查智能体审查结果导出", markdown)
         self.assertIn("审查阶段：`采购需求形成与发布前审查`", markdown)
         self.assertIn("导出意图：`采购人改稿与发布前复核优先`", markdown)
         self.assertIn("F-001 多个方案评分项大量使用主观分档且缺少量化锚点", markdown)
