@@ -169,6 +169,7 @@
 - 评分语义、混合边界和商务链路三条主线已开始直接消费 `tender_document_parser` 产出的 `StructuredTenderDocument.sections`，不再只间接依赖 clause 标签；当前会优先按 `scoring_rules / commercial_requirements / acceptance_requirements / contract_terms` 等结构化板块约束 analyzer 输入
 - 已新增 [agent-incubation-and-distillation-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/agent-incubation-and-distillation-design.md)，并在 `src/agent_compliance/incubator/` 落地第一版生命周期骨架、标准蓝图、脚手架生成器、蒸馏报告、run manifest 与恢复执行能力，用于把“业务需求定义 -> 样例驱动 -> 强通用智能体设计 -> 本地目标智能体生成 -> 对照验证 -> 持续蒸馏 -> 固化发布”沉淀成后续新智能体的标准生成方法；当前已用 `政府采购需求调查智能体` 跑通第一轮真实 MVP 孵化验证
 - `incubator` 现已补入最小自动对照生成能力，可根据 `human_baseline / strong_agent_result / target_agent_result` 三份标准文本自动生成一条 `ValidationComparison`，并通过 `incubate-agent --human-baseline-file --strong-agent-result-file --target-agent-result-file` 接入工厂闭环，减少手工维护 `comparisons.json` 的成本
+- `incubator` 现已补入最小多轮蒸馏比较能力，可通过 `compare-incubation-runs <run1> <run2> ...` 比较同一目标智能体不同 run 的 `gap_count / recommendation_count / completed_stages` 变化，并识别重复出现的 gap 与反复成为增强重点的目标层
 - 面向规则治理增强的 [rule-governance-layer-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/rule-governance-layer-design.md)，用于定义 `rule_registry`、`rule_priority_profile` 和 `catalog_sensitive_rule_router`
 - 面向大模型混合审查模式的 [llm-fast-path-design.md](https://github.com/zeranlin/agent_compliance/blob/main/docs/design-docs/llm-fast-path-design.md)，用于明确“代码审查主骨架 + 大模型关键节点同步介入 + 统一仲裁输出”的主思路
 

@@ -539,6 +539,19 @@ src/agent_compliance/incubator/
   - 先替代手工书写最基础的 `comparisons.json`
   - 让工厂更快进入“样例 -> 对照 -> 蒸馏建议”闭环
 
+当前也已开始补齐“多轮蒸馏比较”最小能力：
+
+- 可输入两轮或多轮 `run.json`
+- 输出统一的多轮孵化比较报告
+- 当前比较维度：
+  - `gap_count`
+  - `recommendation_count`
+  - `completed_stages`
+  - 重复出现的 `gap_points`
+  - 重复成为增强重点的 `target_layer`
+- 当前接入方式：
+  - `compare-incubation-runs <run1> <run2> ...`
+
 ## 14. 下一步建议
 
 按优先级建议继续做：

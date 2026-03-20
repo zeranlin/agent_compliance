@@ -17,8 +17,10 @@ from agent_compliance.incubator import (
     ValidationComparison,
     bootstrap_agent_factory,
     build_sample_manifest,
+    build_run_comparison_report,
     build_validation_comparison_from_files,
     load_incubation_run,
+    render_run_comparison_markdown,
     resume_agent_factory,
     write_incubation_run,
     write_distillation_report,
@@ -117,6 +119,13 @@ def build_parser() -> argparse.ArgumentParser:
     incubate_parser.add_argument("--target-agent-result-file", type=Path, default=None)
     incubate_parser.add_argument("--comparison-summary", default="")
     incubate_parser.add_argument("--json", action="store_true")
+
+    compare_runs_parser = subparsers.add_parser(
+        "compare-incubation-runs",
+        help="Compare multiple incubation run manifests for the same agent",
+    )
+    compare_runs_parser.add_argument("run_manifests", nargs="+", type=Path)
+    compare_runs_parser.add_argument("--json", action="store_true")
 
     web_parser = subparsers.add_parser(
         "web",
@@ -267,6 +276,14 @@ def main(argv: list[str] | None = None) -> int:
             },
         }
         return _print_result(payload, args.json)
+
+    if args.command == "compare-incubation-runs":
+        runs = tuple(load_incubation_run(path) for path in args.run_manifests)
+        report = build_run_comparison_report(runs)
+        if args.json:
+            return _print_result(report, True)
+        print(render_run_comparison_markdown(report))
+        return 0
 
     if args.command == "web":
         from agent_compliance.apps.web.app import run_web_server

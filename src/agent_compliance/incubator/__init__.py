@@ -25,7 +25,9 @@ from agent_compliance.incubator.lifecycle import (
 )
 from agent_compliance.incubator.evals import (
     build_distillation_report,
+    build_run_comparison_report,
     render_distillation_report_markdown,
+    render_run_comparison_markdown,
 )
 from agent_compliance.incubator.distillation_engine import (
     build_distillation_recommendations,
@@ -83,6 +85,7 @@ __all__ = [
     "SampleManifest",
     "build_scaffold_plan",
     "build_distillation_report",
+    "build_run_comparison_report",
     "build_distillation_recommendations",
     "build_sample_manifest",
     "bootstrap_agent_factory",
@@ -97,6 +100,7 @@ __all__ = [
     "list_blueprints",
     "load_incubation_run",
     "render_distillation_report_markdown",
+    "render_run_comparison_markdown",
     "resume_agent_factory",
     "review_agent_blueprint",
     "serialize_incubation_run",

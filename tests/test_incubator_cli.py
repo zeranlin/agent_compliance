@@ -164,6 +164,74 @@ class IncubatorCliTests(unittest.TestCase):
             self.assertEqual(report_json["summary"]["comparison_count"], 1)
             self.assertGreaterEqual(report_json["summary"]["recommendation_count"], 1)
 
+    def test_compare_incubation_runs_command_outputs_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            first_stdout = StringIO()
+            with redirect_stdout(first_stdout):
+                main(
+                    [
+                        "incubate-agent",
+                        "budget_demand",
+                        "--agents-dir",
+                        str(temp_path / "agents"),
+                        "--output-dir",
+                        str(temp_path / "outputs"),
+                        "--json",
+                    ]
+                )
+            first_payload = json.loads(first_stdout.getvalue())
+
+            comparisons_path = temp_path / "comparisons.json"
+            comparisons_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "sample_id": "case-003",
+                            "human_baseline": "人工抓到预算边界问题",
+                            "strong_agent_result": "强智能体抓到预算边界问题",
+                            "target_agent_result": "目标智能体漏判",
+                            "gap_points": ["预算边界未覆盖"],
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            second_stdout = StringIO()
+            with redirect_stdout(second_stdout):
+                main(
+                    [
+                        "incubate-agent",
+                        "budget_demand",
+                        "--output-dir",
+                        str(temp_path / "outputs"),
+                        "--resume-run",
+                        first_payload["outputs"]["run_manifest"],
+                        "--comparisons-json",
+                        str(comparisons_path),
+                        "--json",
+                    ]
+                )
+            second_payload = json.loads(second_stdout.getvalue())
+
+            compare_stdout = StringIO()
+            with redirect_stdout(compare_stdout):
+                exit_code = main(
+                    [
+                        "compare-incubation-runs",
+                        first_payload["outputs"]["run_manifest"],
+                        second_payload["outputs"]["run_manifest"],
+                        "--json",
+                    ]
+                )
+
+            compare_payload = json.loads(compare_stdout.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(compare_payload["run_count"], 2)
+            self.assertEqual(compare_payload["agent_key"], "budget_demand")
+
 
 if __name__ == "__main__":
     unittest.main()

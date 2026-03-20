@@ -88,6 +88,7 @@
 智能体孵化与蒸馏工厂当前已支持：
 - 标准蓝图：`review_agent`、`budget_agent`、`demand_research_agent`
 - 标准命令：`PYTHONPATH=src python3 -m agent_compliance incubate-agent <agent_key>`
+- 多轮比较命令：`PYTHONPATH=src python3 -m agent_compliance compare-incubation-runs <run1> <run2> ...`
 - 标准产物：
   - `*-distillation-report.md`
   - `*-distillation-report.json`
