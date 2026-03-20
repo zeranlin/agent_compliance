@@ -205,6 +205,7 @@ class Finding:
     scope_reason: str | None = None
     primary_authority: str | None = None
     secondary_authorities: list[str] | None = None
+    authority_key_points: str | None = None
     applicability_logic: str | None = None
     finding_origin: str = "rule"
 

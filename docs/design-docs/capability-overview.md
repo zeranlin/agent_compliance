@@ -239,6 +239,7 @@
 - 已生成第一版 `data/legal-authorities/index/clause-index.json`，把 `LEGAL-001`、`LEGAL-002` 抽成可检索的条文级索引，为后续 `legal_clause_index`、`issue_type_authority_map` 和 `legal_authority_reasoner` 提供基础数据层
 - 已生成第一版 `data/legal-authorities/index/issue-type-authority-map.json`，先把高频 `issue_type` 稳定映射到主依据、辅依据和条文级索引，减少同类问题在不同文件中的法规引用漂移
 - 已接入第一版 `legal_authority_reasoner`，开始基于 `issue_type_authority_map + clause-index + 当前 finding` 自动生成主依据、辅依据、适用逻辑，并补充法规侧人工复核理由
+- `review-check` 与 `Markdown / JSON / Excel` 导出已开始把法规依据升级为“主依据/辅依据 + 条文要点 + 适用逻辑”三层结构，采购人不再只看到条号
 - 已接入第一版 `confidence_calibrator`，开始把条文级主依据、问题类型边界和人工复核标记合并进 `confidence` 校准
 - 已新增 `rewrite_generator`，开始按“建议直接修改 / 建议弱化表述 / 建议补充必要性论证 / 建议采购与法务复核”统一改写建议前缀，并与 `confidence_calibrator` 联动校准发布前审查场景下的分寸感
 - `review-next`、规则管理页和 benchmark gate 已开始展示主依据、辅依据、适用逻辑和法规侧复核提示，法规语义层不再只停留在后端

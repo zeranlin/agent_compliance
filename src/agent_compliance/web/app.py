@@ -4392,6 +4392,7 @@ def _review_buyer_html() -> str:
       display: grid;
       grid-template-columns: 1.15fr 0.85fr;
       gap: 16px;
+      align-items: start;
       margin-bottom: 16px;
     }
     .panel {
@@ -4508,12 +4509,48 @@ def _review_buyer_html() -> str:
       padding: 16px;
       display: none;
     }
+    .summary > h2 {
+      margin: 0 0 10px;
+    }
     .progress-panel {
       display: none;
       padding: 12px 0 0;
       margin-top: 6px;
       gap: 12px;
       border-top: 1px dashed var(--line);
+    }
+    .progress-panel.is-complete .progress-steps {
+      display: none;
+    }
+    .progress-summary {
+      display: none;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid #c8dced;
+      background: #f5f9fd;
+    }
+    .progress-panel.is-complete .progress-summary {
+      display: grid;
+    }
+    .progress-summary strong {
+      font-size: 14px;
+    }
+    .progress-summary .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .progress-summary .chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #e7f0fa;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
     }
     .progress-head {
       display: flex;
@@ -4604,6 +4641,52 @@ def _review_buyer_html() -> str:
       gap: 10px;
       margin-top: 12px;
     }
+    .summary-topline {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+      gap: 12px;
+      margin-top: 12px;
+      align-items: start;
+    }
+    .summary-brief {
+      display: grid;
+      gap: 8px;
+      padding: 12px 14px;
+      border: 1px solid #d6e2ee;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+    }
+    .summary-brief strong {
+      font-size: 20px;
+      line-height: 1.4;
+    }
+    .summary-brief .meta {
+      line-height: 1.65;
+    }
+    .summary-brief .subline {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    .document-brief {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      display: grid;
+      gap: 6px;
+    }
+    .document-brief strong {
+      font-size: 16px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .summary-metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
     .decision-banner {
       display: grid;
       gap: 6px;
@@ -4657,6 +4740,7 @@ def _review_buyer_html() -> str:
       border-radius: 12px;
       padding: 12px;
       background: #fff;
+      min-height: 88px;
     }
     .stat .label { color: var(--muted); font-size: 12px; }
     .stat .value { margin-top: 8px; font-size: 20px; font-weight: 800; }
@@ -4732,11 +4816,11 @@ def _review_buyer_html() -> str:
     .issue-card {
       border: 1px solid var(--line);
       border-radius: 14px;
-      padding: 14px;
+      padding: 12px 12px 10px;
       background: #fff;
       cursor: pointer;
       display: grid;
-      gap: 8px;
+      gap: 6px;
     }
     .issue-card.high { border-left: 5px solid var(--high); background: linear-gradient(90deg, rgba(180, 35, 24, 0.06), #fff 16%); }
     .issue-card.medium { border-left: 5px solid var(--medium); background: linear-gradient(90deg, rgba(178, 106, 0, 0.06), #fff 16%); }
@@ -4745,7 +4829,7 @@ def _review_buyer_html() -> str:
       box-shadow: 0 0 0 2px rgba(31, 95, 139, 0.12);
       background: #f7fbff;
     }
-    .issue-title { font-size: 16px; line-height: 1.5; font-weight: 700; }
+    .issue-title { font-size: 15px; line-height: 1.45; font-weight: 700; }
     .badge-row, .mini-meta {
       display: flex;
       flex-wrap: wrap;
@@ -4776,6 +4860,12 @@ def _review_buyer_html() -> str:
     .mini-pill.action-justify { background: rgba(31, 95, 139, 0.12); color: var(--accent); }
     .mini-pill.action-review { background: rgba(110, 62, 164, 0.12); color: #6e3ea4; }
     .issue-excerpt { color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .issue-card.compact .issue-excerpt {
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
     .right-pane {
       min-height: 760px;
       display: grid;
@@ -4917,7 +5007,7 @@ def _review_buyer_html() -> str:
       text-align: center;
     }
     @media (max-width: 1180px) {
-      .hero, .workspace, .summary-grid, .summary-metrics { grid-template-columns: 1fr; }
+      .hero, .workspace, .summary-grid, .summary-metrics, .summary-topline { grid-template-columns: 1fr; }
       .left-pane {
         position: static;
         max-height: none;
@@ -4962,6 +5052,7 @@ def _review_buyer_html() -> str:
             </div>
             <div id="progress-mode" class="meta"></div>
           </div>
+          <div id="progress-summary" class="progress-summary"></div>
           <div id="progress-steps" class="progress-steps"></div>
           <details class="progress-tech">
             <summary>查看详细审查过程</summary>
@@ -5054,6 +5145,7 @@ def _review_buyer_html() -> str:
     const progressPanelNode = document.getElementById('progress-panel');
     const progressMessageNode = document.getElementById('progress-message');
     const progressModeNode = document.getElementById('progress-mode');
+    const progressSummaryNode = document.getElementById('progress-summary');
     const progressStepsNode = document.getElementById('progress-steps');
     const progressTechGridNode = document.getElementById('progress-tech-grid');
     const summaryNode = document.getElementById('summary');
@@ -5259,12 +5351,24 @@ def _review_buyer_html() -> str:
       const progress = job && job.progress ? job.progress : null;
       const steps = progress && Array.isArray(progress.steps) ? progress.steps : defaultProgressSteps();
       const technicalSteps = progress && Array.isArray(progress.technical_steps) ? progress.technical_steps : defaultTechnicalSteps();
+      const completedCount = steps.filter((step) => step.status === 'completed').length;
+      const runningStep = steps.find((step) => step.status === 'running');
+      const isCompleted = job && job.status === 'completed';
+      progressPanelNode.classList.toggle('is-complete', Boolean(isCompleted));
       progressModeNode.textContent = job
         ? `${job.mode === 'hybrid' ? '已启用大模型（混合审查）' : '纯代码审查'} ｜ 当前阶段：${(job.stage_profile && job.stage_profile.stage_name) || '采购需求形成与发布前审查'}`
         : '';
       progressMessageNode.textContent = job
         ? (job.last_message || '正在推进审查任务...')
         : '上传文件并启动审查后，这里会动态展示当前进度。';
+      progressSummaryNode.innerHTML = job ? `
+        <strong>${escapeHtml(isCompleted ? '本次审查已完成' : `当前步骤：${(runningStep && runningStep.label) || '正在推进审查'}`)}</strong>
+        <div class="meta">${escapeHtml(isCompleted ? '详细过程已折叠，可按需展开查看。' : '当前只展开关键阶段，避免进度区过长影响阅读。')}</div>
+        <div class="chips">
+          <span class="chip">${escapeHtml(`${completedCount}/${steps.length} 阶段完成`)}</span>
+          <span class="chip">${escapeHtml(job.mode === 'hybrid' ? '混合审查' : '纯代码审查')}</span>
+        </div>
+      ` : '';
       progressStepsNode.innerHTML = steps.map((step) => `
         <div class="progress-step ${escapeHtml(step.status || 'pending')}">
           <div class="step-state">${escapeHtml(stepStatusLabel(step.status))}</div>
@@ -5328,43 +5432,41 @@ def _review_buyer_html() -> str:
       const stage = payload.stage || null;
       const bySection = summarizeBySection(findings);
       const releaseDecision = buildReleaseDecision(findings);
-      const catalogSummary = stage ? [
-        stage.primary_catalog_name || '',
-        stage.is_mixed_scope ? '混合采购' : '',
-        (stage.secondary_catalog_names || []).length ? `次品目：${stage.secondary_catalog_names.slice(0, 2).join(' / ')}` : '',
-      ].filter(Boolean).join(' ｜ ') : '';
-      const stageCard = stage ? `
-        <div class="stage-card">
-          <strong>${escapeHtml(stage.stage_name || '')}</strong>
-          <div class="meta">${escapeHtml(stage.stage_goal || '')}</div>
-          <div class="meta">审查姿态：${escapeHtml(stage.review_posture || '')}</div>
-          <div class="meta">输出倾向：${escapeHtml((stage.output_bias || []).join(' / ') || '采购人改稿与发布前复核')}</div>
-          <div class="chips">
-            ${stage.primary_catalog_name ? `<span class="badge">${escapeHtml(stage.primary_catalog_name)}</span>` : ''}
-            ${stage.is_mixed_scope ? '<span class="badge medium">混合采购</span>' : ''}
-            ${stage.catalog_confidence ? `<span class="badge">识别置信 ${escapeHtml(String(Math.round(Number(stage.catalog_confidence || 0) * 100)))}%</span>` : ''}
-          </div>
-        </div>
-      ` : '';
+      const topSections = [
+        ['评分', bySection.scoring],
+        ['技术', bySection.technical],
+        ['商务/验收', bySection.commercial],
+        ['资格', bySection.qualification],
+      ].filter(([, count]) => count > 0)
+        .sort((left, right) => right[1] - left[1])
+        .slice(0, 2)
+        .map(([label, count]) => `${label} ${count} 条`);
+      const sublineParts = [];
+      if (topSections.length) sublineParts.push(`优先处理：${topSections.join('、')}`);
+      if (stage && stage.primary_catalog_name) sublineParts.push(`主品目：${stage.primary_catalog_name}`);
+      if (stage && stage.is_mixed_scope) sublineParts.push('混合采购，建议重点复核边界条款');
+      else if (stage && stage.catalog_confidence) sublineParts.push(`识别置信 ${Math.round(Number(stage.catalog_confidence || 0) * 100)}%`);
+      if (stage && stage.stage_name) sublineParts.push(stage.stage_name);
       summaryNode.innerHTML = `
         <h2 style="margin:0 0 10px;">审查摘要</h2>
-        <div>${escapeHtml(payload.review.overall_risk_summary || '')}</div>
+        <div class="summary-brief">
+          <strong>${escapeHtml(`${releaseDecision.title}；主问题 ${mainCount} 条，高风险 ${highCount} 条，中风险 ${mediumCount} 条。`)}</strong>
+          <div class="subline">${escapeHtml(sublineParts.join(' ｜ ') || '请优先处理高风险主问题，再回看定位原文和建议改写。')}</div>
+        </div>
         <div class="decision-banner ${escapeHtml(releaseDecision.className)}">
           <div class="meta">发布前审查建议</div>
           <strong>${escapeHtml(releaseDecision.title)}</strong>
           <div class="summary-note">${escapeHtml(releaseDecision.summary)}</div>
           <div class="decision-meta">
             <span class="badge ${escapeHtml(releaseDecision.badgeRisk)}">${escapeHtml(releaseDecision.badgeText)}</span>
-            ${catalogSummary ? `<span class="badge">${escapeHtml(catalogSummary)}</span>` : ''}
+            ${stage && stage.primary_catalog_name ? `<span class="badge">${escapeHtml(stage.primary_catalog_name)}</span>` : ''}
+            ${stage && stage.is_mixed_scope ? '<span class="badge medium">混合采购</span>' : ''}
           </div>
         </div>
-        <div class="summary-topline">
-          ${stageCard}
-          <div class="document-brief">
-            <div class="meta">当前文件</div>
-            <strong title="${escapeHtml(payload.review.document_name)}">${escapeHtml(payload.review.document_name)}</strong>
-            <div class="meta">当前页面优先按采购人发布前改稿与复核使用习惯组织结果，先看建议，再定位原文。</div>
-          </div>
+        <div class="document-brief">
+          <div class="meta">当前文件</div>
+          <strong title="${escapeHtml(payload.review.document_name)}">${escapeHtml(payload.review.document_name)}</strong>
+          <div class="meta">当前页面优先按采购人发布前改稿与复核习惯组织结果，先看建议，再定位原文。</div>
         </div>
         <div class="summary-metrics">
           ${renderStat('主问题', mainCount, true)}
@@ -5459,7 +5561,7 @@ def _review_buyer_html() -> str:
       const action = suggestedAction(finding);
       const priority = treatmentPriority(finding);
       return `
-        <article class="issue-card ${escapeHtml(finding.risk_level || '')} ${active}" data-finding-id="${escapeHtml(finding.finding_id)}">
+        <article class="issue-card compact ${escapeHtml(finding.risk_level || '')} ${active}" data-finding-id="${escapeHtml(finding.finding_id)}">
           <div class="issue-title">${escapeHtml(finding.problem_title || '')}</div>
           <div class="badge-row">
             <span class="badge ${escapeHtml(finding.risk_level || '')}">${escapeHtml(riskLabel(finding.risk_level))}</span>
@@ -5468,10 +5570,10 @@ def _review_buyer_html() -> str:
           </div>
           <div class="mini-meta">
             <span class="mini-pill priority">处理顺序 ${escapeHtml(priority.order)}</span>
-            <span class="mini-pill">位置 ${escapeHtml(compactLocation(finding))}</span>
+            <span class="mini-pill">${escapeHtml(compactLocation(finding))}</span>
             <span class="mini-pill ${escapeHtml(action.className)}">${escapeHtml(action.label)}</span>
           </div>
-          <div class="issue-excerpt"><strong>代表性证据：</strong>${escapeHtml(finding.source_text || '无原文摘录')}</div>
+          <div class="issue-excerpt">${escapeHtml(finding.source_text || finding.why_it_is_risky || '无原文摘录')}</div>
         </article>
       `;
     }
@@ -5494,6 +5596,7 @@ def _review_buyer_html() -> str:
         <span class="badge">${escapeHtml(sectionLabel(finding))}</span>
       `;
       const authorityText = formatAuthorityText(finding);
+      const authorityKeyPoints = finding.authority_key_points || '暂无';
       const reviewText = finding.needs_human_review
         ? (finding.human_review_reason || '建议采购/法务复核后再决定是否保留当前表述。')
         : '当前问题更适合直接修改或弱化，不建议原样发布。';
@@ -5501,6 +5604,7 @@ def _review_buyer_html() -> str:
         <div class="detail-item action-callout"><strong>处理建议</strong><div>${escapeHtml(suggestedAction(finding).label)}${finding.needs_human_review ? ` ｜ ${escapeHtml(finding.human_review_reason || '需采购/法务复核')}` : ''}</div></div>
         <div class="detail-item"><strong>风险说明</strong><div>${escapeHtml(finding.why_it_is_risky || '暂无')}</div></div>
         <div class="detail-item legal-callout"><strong>法规依据</strong><div>${escapeHtml(authorityText || '暂无')}</div></div>
+        <div class="detail-item"><strong>条文要点</strong><div>${escapeHtml(authorityKeyPoints)}</div></div>
         <div class="detail-item"><strong>适用逻辑</strong><div>${escapeHtml(finding.applicability_logic || '暂无')}</div></div>
         <div class="detail-item"><strong>建议改写</strong><div>${escapeHtml(finding.rewrite_suggestion || '暂无')}</div></div>
         <div class="detail-item"><strong>复核提示</strong><div>${escapeHtml(reviewText)}</div></div>
@@ -5665,7 +5769,8 @@ def _review_buyer_html() -> str:
 
     function compactLocation(finding) {
       const section = finding.section_path || finding.source_section || '未定位章节';
-      return `${section} / L${finding.text_line_start}`;
+      const shortSection = section.split('->').pop().trim().slice(0, 18);
+      return `${shortSection || '未定位'} · L${finding.text_line_start}`;
     }
 
     function formatLineRange(start, end) {

@@ -174,7 +174,8 @@ def render_export_markdown(
                 f"- 问题类型：`{finding.issue_type}`",
                 f"- 代表性证据：`{finding.source_text}`" if mode == "summary" else f"- 原文摘录：`{finding.source_text}`",
                 f"- 风险说明：{finding.why_it_is_risky}",
-                f"- 法规依据：{finding.legal_or_policy_basis or finding.primary_authority or '暂无'}",
+                f"- 主依据/辅依据：{_authority_layers_text(finding)}",
+                f"- 条文要点：{finding.authority_key_points or '暂无'}",
                 f"- 适用逻辑：{finding.applicability_logic or finding.human_review_reason or '暂无'}",
                 f"- 修改建议：{finding.rewrite_suggestion}",
                 "",
@@ -228,7 +229,8 @@ def build_excel_rows(review: ReviewResult, *, mode: str, document_payload: dict[
         "页码提示",
         "原文摘录" if mode == "full" else "代表性证据",
         "风险说明",
-        "法规依据",
+        "主依据/辅依据",
+        "条文要点",
         "主依据",
         "辅依据",
         "适用逻辑",
@@ -254,7 +256,8 @@ def build_excel_rows(review: ReviewResult, *, mode: str, document_payload: dict[
                 finding.page_hint or "",
                 finding.source_text,
                 finding.why_it_is_risky,
-                finding.legal_or_policy_basis or "",
+                _authority_layers_text(finding),
+                finding.authority_key_points or "",
                 finding.primary_authority or "",
                 "；".join(finding.secondary_authorities or []),
                 finding.applicability_logic or "",
@@ -379,6 +382,17 @@ def _full_location(finding: Finding) -> str:
     return " | ".join(part for part in parts if part) or "未定位"
 
 
+def _authority_layers_text(finding: Finding) -> str:
+    parts: list[str] = []
+    if finding.primary_authority:
+        parts.append(f"主依据：{finding.primary_authority}")
+    if finding.secondary_authorities:
+        parts.append(f"辅依据：{'；'.join(finding.secondary_authorities)}")
+    if not parts and finding.legal_or_policy_basis:
+        return finding.legal_or_policy_basis
+    return " ｜ ".join(parts) if parts else "暂无"
+
+
 def _serialize_finding(
     finding: Finding,
     *,
@@ -413,6 +427,7 @@ def _serialize_finding(
             "legal_or_policy_basis": base["legal_or_policy_basis"],
             "primary_authority": base.get("primary_authority"),
             "secondary_authorities": base.get("secondary_authorities"),
+            "authority_key_points": base.get("authority_key_points"),
             "applicability_logic": base.get("applicability_logic"),
             "rewrite_suggestion": base["rewrite_suggestion"],
             "needs_human_review": base["needs_human_review"],

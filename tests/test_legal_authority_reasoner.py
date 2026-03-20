@@ -42,6 +42,7 @@ class LegalAuthorityReasonerTest(unittest.TestCase):
         self.assertTrue(reasoning.secondary_authorities)
         self.assertIn("评分因素", reasoning.applicability_logic or "")
         self.assertIn("主依据：", reasoning.legal_or_policy_basis or "")
+        self.assertIn("第十四条", reasoning.authority_key_points or "")
         self.assertTrue(reasoning.needs_human_review)
         self.assertIn("法规侧复核重点", reasoning.human_review_reason or "")
 

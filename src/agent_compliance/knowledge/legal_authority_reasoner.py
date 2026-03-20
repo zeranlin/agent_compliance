@@ -19,6 +19,7 @@ class LegalAuthorityReasoning:
     primary_authority: str | None
     secondary_authorities: tuple[str, ...]
     legal_or_policy_basis: str | None
+    authority_key_points: str | None
     applicability_logic: str | None
     needs_human_review: bool
     human_review_reason: str | None
@@ -32,6 +33,7 @@ def apply_legal_authority_reasoner(findings: list[Finding]) -> list[Finding]:
         finding.primary_authority = reasoning.primary_authority
         finding.secondary_authorities = list(reasoning.secondary_authorities)
         finding.legal_or_policy_basis = reasoning.legal_or_policy_basis
+        finding.authority_key_points = reasoning.authority_key_points
         finding.applicability_logic = reasoning.applicability_logic
         finding.needs_human_review = reasoning.needs_human_review
         finding.human_review_reason = reasoning.human_review_reason
@@ -45,6 +47,7 @@ def reason_for_finding(finding: Finding) -> LegalAuthorityReasoning | None:
 
     primary_groups = _resolve_authority_groups(record.primary_clause_ids, record.primary_reference_ids)
     secondary_groups = _resolve_authority_groups(record.secondary_clause_ids, record.secondary_reference_ids)
+    authority_key_points = _build_authority_key_points(record.primary_clause_ids, record.secondary_clause_ids)
 
     primary_authority = primary_groups[0] if primary_groups else None
     secondary_authorities = tuple(group for group in secondary_groups if group != primary_authority)
@@ -60,6 +63,7 @@ def reason_for_finding(finding: Finding) -> LegalAuthorityReasoning | None:
         primary_authority=primary_authority,
         secondary_authorities=secondary_authorities,
         legal_or_policy_basis=legal_or_policy_basis,
+        authority_key_points=authority_key_points,
         applicability_logic=applicability_logic,
         needs_human_review=needs_human_review,
         human_review_reason=human_review_reason,
@@ -146,6 +150,45 @@ def _resolve_authority_groups(clause_ids: tuple[str, ...], reference_ids: tuple[
         if formatted not in groups:
             groups.append(formatted)
     return tuple(groups)
+
+
+def _build_authority_key_points(
+    primary_clause_ids: tuple[str, ...],
+    secondary_clause_ids: tuple[str, ...],
+) -> str | None:
+    seen: set[str] = set()
+    parts: list[str] = []
+    for clause_id in (*primary_clause_ids, *secondary_clause_ids):
+        record = _clause_record_map().get(clause_id)
+        if record is None:
+            continue
+        key = record.clause_id
+        if key in seen:
+            continue
+        seen.add(key)
+        label = record.article_label or record.chapter_label or "相关条款"
+        summary = _summarize_clause_text(record.clause_text)
+        parts.append(f"{label}：{summary}")
+        if len(parts) >= 4:
+            break
+    if not parts:
+        return None
+    return "；".join(parts)
+
+
+def _summarize_clause_text(text: str, *, limit: int = 44) -> str:
+    normalized = " ".join((text or "").split()).strip()
+    if not normalized:
+        return "暂无条文要点"
+    for separator in ("。", "；", ";"):
+        if separator in normalized:
+            first = normalized.split(separator, 1)[0].strip()
+            if first:
+                normalized = first
+                break
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[:limit].rstrip() + "..."
 
 
 def _format_clause_group(records: list[LegalClauseRecord]) -> str:

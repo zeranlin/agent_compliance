@@ -42,6 +42,7 @@ class ReviewExportTest(unittest.TestCase):
             human_review_reason=None,
             primary_authority="政府采购需求管理办法",
             secondary_authorities=["政府采购法实施条例"],
+            authority_key_points="第十四条：采购人应当通过设定评审规则落实政府采购政策功能",
             applicability_logic="评分因素应与评审目标一致。",
             finding_origin="analyzer",
         )
@@ -70,6 +71,7 @@ class ReviewExportTest(unittest.TestCase):
             human_review_reason="需结合品目论证。",
             primary_authority="政府采购需求管理办法",
             secondary_authorities=["财政部办公厅关于做好政府采购框架协议采购工作有关问题的通知"],
+            authority_key_points="第三十一条：重点审查包括非歧视性、竞争性和履约风险等内容",
             applicability_logic="技术证明材料应与履约验证需要相匹配。",
             finding_origin="rule",
         )
@@ -111,6 +113,7 @@ class ReviewExportTest(unittest.TestCase):
         self.assertEqual(payload["findings"][0]["processing_recommendation"], "建议弱化表述")
         self.assertEqual(payload["findings"][0]["chapter_group"], "评分")
         self.assertEqual(payload["findings"][0]["primary_authority"], "政府采购需求管理办法")
+        self.assertIn("第十四条", payload["findings"][0]["authority_key_points"])
 
     def test_full_markdown_export_contains_detailed_fields(self) -> None:
         content, content_type, filename = export_review_bytes(
@@ -126,7 +129,8 @@ class ReviewExportTest(unittest.TestCase):
         self.assertIn("审查阶段：`采购需求形成与发布前审查`", markdown)
         self.assertIn("导出意图：`采购人改稿与发布前复核优先`", markdown)
         self.assertIn("F-001 多个方案评分项大量使用主观分档且缺少量化锚点", markdown)
-        self.assertIn("法规依据：主依据：政府采购需求管理办法", markdown)
+        self.assertIn("主依据/辅依据：主依据：政府采购需求管理办法", markdown)
+        self.assertIn("条文要点：第三十一条：重点审查包括非歧视性、竞争性和履约风险等内容", markdown)
         self.assertIn("适用逻辑：技术证明材料应与履约验证需要相匹配。", markdown)
 
     def test_summary_xlsx_export_contains_header_and_main_issue(self) -> None:
@@ -158,6 +162,7 @@ class ReviewExportTest(unittest.TestCase):
         self.assertEqual(detail_sheet["B2"].value, "是")
         self.assertEqual(detail_sheet["C2"].value, "建议弱化表述")
         self.assertIn("主观分档", str(detail_sheet["D2"].value))
+        self.assertIn("第十四条", str(detail_sheet["N2"].value))
 
     def test_write_export_output_persists_file_under_generated_exports(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
