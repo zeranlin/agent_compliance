@@ -14,6 +14,7 @@ from agent_compliance.core.cache.review_cache import (
 )
 from agent_compliance.core.config import LLMConfig, detect_llm_config, detect_paths, detect_tender_parser_mode
 from agent_compliance.incubator import (
+    IncubationStage,
     ValidationComparison,
     bootstrap_agent_factory,
     build_sample_manifest,
@@ -126,6 +127,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     compare_runs_parser.add_argument("run_manifests", nargs="+", type=Path)
     compare_runs_parser.add_argument("--json", action="store_true")
+
+    update_recommendation_parser = subparsers.add_parser(
+        "update-incubation-recommendation",
+        help="Update recommendation execution status in a run manifest",
+    )
+    update_recommendation_parser.add_argument("run_manifest", type=Path)
+    update_recommendation_parser.add_argument("recommendation_key")
+    update_recommendation_parser.add_argument(
+        "--stage",
+        choices=[stage.value for stage in IncubationStage],
+        default=IncubationStage.DISTILLATION_ITERATION.value,
+    )
+    update_recommendation_parser.add_argument(
+        "--status",
+        required=True,
+        choices=("proposed", "accepted", "implemented", "validated", "dropped"),
+    )
+    update_recommendation_parser.add_argument("--notes", default="")
+    update_recommendation_parser.add_argument("--json", action="store_true")
 
     web_parser = subparsers.add_parser(
         "web",
@@ -284,6 +304,31 @@ def main(argv: list[str] | None = None) -> int:
             return _print_result(report, True)
         print(render_run_comparison_markdown(report))
         return 0
+
+    if args.command == "update-incubation-recommendation":
+        run = load_incubation_run(args.run_manifest)
+        stage = IncubationStage(args.stage)
+        run.update_recommendation_status(
+            stage,
+            args.recommendation_key,
+            args.status,
+            args.notes,
+        )
+        write_incubation_run(
+            args.run_manifest.parent.parent,
+            run.agent_key,
+            _run_key_from_manifest(args.run_manifest),
+            run,
+        )
+        payload = {
+            "agent_key": run.agent_key,
+            "run_manifest": str(args.run_manifest),
+            "recommendation_key": args.recommendation_key,
+            "stage": stage.value,
+            "status": args.status,
+            "notes": args.notes,
+        }
+        return _print_result(payload, args.json)
 
     if args.command == "web":
         from agent_compliance.apps.web.app import run_web_server

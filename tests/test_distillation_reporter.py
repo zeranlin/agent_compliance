@@ -42,11 +42,13 @@ class DistillationReporterTests(unittest.TestCase):
         run.add_recommendation(
             IncubationStage.DISTILLATION_ITERATION,
             DistillationRecommendation(
+                recommendation_key="case-001:score-gap",
                 title="增强评分引擎",
                 target_layer="scoring_semantic_consistency_engine",
                 action="补评分结构失衡上浮逻辑",
                 rationale="当前评分主问题漏判。",
                 priority="P0",
+                status="accepted",
             ),
         )
 
@@ -56,6 +58,7 @@ class DistillationReporterTests(unittest.TestCase):
         self.assertEqual(report["summary"]["comparison_count"], 1)
         self.assertEqual(report["summary"]["recommendation_count"], 1)
         self.assertEqual(report["priority_summary"]["P0"], 1)
+        self.assertEqual(report["recommendation_status_summary"]["accepted"], 1)
         self.assertEqual(
             report["target_layer_summary"]["scoring_semantic_consistency_engine"],
             1,

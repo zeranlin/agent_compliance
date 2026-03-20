@@ -89,6 +89,7 @@
 - 标准蓝图：`review_agent`、`budget_agent`、`demand_research_agent`
 - 标准命令：`PYTHONPATH=src python3 -m agent_compliance incubate-agent <agent_key>`
 - 多轮比较命令：`PYTHONPATH=src python3 -m agent_compliance compare-incubation-runs <run1> <run2> ...`
+- 建议状态命令：`PYTHONPATH=src python3 -m agent_compliance update-incubation-recommendation <run.json> <recommendation_key> --status ...`
 - 标准产物：
   - `*-distillation-report.md`
   - `*-distillation-report.json`

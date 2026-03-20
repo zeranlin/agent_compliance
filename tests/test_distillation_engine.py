@@ -32,6 +32,7 @@ class DistillationEngineTests(unittest.TestCase):
             recommendations[1].target_layer,
             "commercial_lifecycle_analyzer",
         )
+        self.assertTrue(recommendations[0].recommendation_key.startswith("case-001:"))
 
     def test_summarize_validation_gaps_returns_gap_summary(self) -> None:
         comparisons = (

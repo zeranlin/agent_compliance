@@ -552,6 +552,24 @@ src/agent_compliance/incubator/
 - 当前接入方式：
   - `compare-incubation-runs <run1> <run2> ...`
 
+当前也已开始补齐“蒸馏建议执行状态跟踪”最小能力：
+
+- 每条 `DistillationRecommendation` 现在具备：
+  - `recommendation_key`
+  - `status`
+  - `resolution_notes`
+- 当前支持的状态：
+  - `proposed`
+  - `accepted`
+  - `implemented`
+  - `validated`
+  - `dropped`
+- 当前接入方式：
+  - `update-incubation-recommendation <run.json> <recommendation_key> --status ...`
+- 当前目标：
+  - 让工厂不只会“提出建议”
+  - 还能记录建议是否真的进入实现、验证或被放弃
+
 ## 14. 下一步建议
 
 按优先级建议继续做：

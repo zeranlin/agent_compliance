@@ -16,6 +16,7 @@ def build_distillation_report(run: IncubationRun) -> dict[str, object]:
     stage_reports = []
     priority_summary: dict[str, int] = {}
     target_layer_summary: dict[str, int] = {}
+    recommendation_status_summary: dict[str, int] = {}
 
     for stage in run.stages:
         for recommendation in stage.recommendations:
@@ -24,6 +25,9 @@ def build_distillation_report(run: IncubationRun) -> dict[str, object]:
             )
             target_layer_summary[recommendation.target_layer] = (
                 target_layer_summary.get(recommendation.target_layer, 0) + 1
+            )
+            recommendation_status_summary[recommendation.status] = (
+                recommendation_status_summary.get(recommendation.status, 0) + 1
             )
 
         stage_reports.append(
@@ -52,6 +56,7 @@ def build_distillation_report(run: IncubationRun) -> dict[str, object]:
         },
         "priority_summary": priority_summary,
         "target_layer_summary": target_layer_summary,
+        "recommendation_status_summary": recommendation_status_summary,
         "stages": stage_reports,
     }
 
@@ -83,6 +88,13 @@ def render_distillation_report_markdown(report: dict[str, object]) -> str:
         lines.extend(["## 建议目标层", ""])
         for target_layer, count in sorted(target_layer_summary.items()):
             lines.append(f"- `{target_layer}`：{count}")
+        lines.append("")
+
+    recommendation_status_summary = report.get("recommendation_status_summary", {})
+    if recommendation_status_summary:
+        lines.extend(["## 建议执行状态", ""])
+        for status, count in sorted(recommendation_status_summary.items()):
+            lines.append(f"- `{status}`：{count}")
         lines.append("")
 
     lines.append("## 阶段明细")

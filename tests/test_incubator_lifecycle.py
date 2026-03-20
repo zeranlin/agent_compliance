@@ -42,6 +42,7 @@ class IncubatorLifecycleTests(unittest.TestCase):
         run.add_recommendation(
             IncubationStage.DISTILLATION_ITERATION,
             DistillationRecommendation(
+                recommendation_key="case-001:score-gap",
                 title="增强评分语义",
                 target_layer="scoring_semantic_consistency_engine",
                 action="补评分结构失衡上浮逻辑",
@@ -60,6 +61,30 @@ class IncubatorLifecycleTests(unittest.TestCase):
 
         distill_stage = run.get_stage(IncubationStage.DISTILLATION_ITERATION)
         self.assertEqual(distill_stage.recommendations[0].priority, "P0")
+
+    def test_run_can_update_recommendation_status(self) -> None:
+        run = create_incubation_run("budget_demand", "预算智能体复盘")
+        run.add_recommendation(
+            IncubationStage.DISTILLATION_ITERATION,
+            DistillationRecommendation(
+                recommendation_key="case-002:budget-gap",
+                title="增强预算边界",
+                target_layer="review_pipeline",
+                action="补预算约束边界",
+                rationale="当前预算边界仍未固化。",
+            ),
+        )
+
+        run.update_recommendation_status(
+            IncubationStage.DISTILLATION_ITERATION,
+            "case-002:budget-gap",
+            "implemented",
+            "已完成第一版实现",
+        )
+
+        recommendation = run.get_stage(IncubationStage.DISTILLATION_ITERATION).recommendations[0]
+        self.assertEqual(recommendation.status, "implemented")
+        self.assertEqual(recommendation.resolution_notes, "已完成第一版实现")
 
 
 if __name__ == "__main__":

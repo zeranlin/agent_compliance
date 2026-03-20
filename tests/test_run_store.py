@@ -39,10 +39,13 @@ class RunStoreTests(unittest.TestCase):
         run.add_recommendation(
             IncubationStage.DISTILLATION_ITERATION,
             DistillationRecommendation(
+                recommendation_key="case-001:score-gap",
                 title="增强评分语义",
                 target_layer="scoring_semantic_consistency_engine",
                 action="补评分结构失衡上浮逻辑",
                 rationale="目标智能体漏判",
+                status="accepted",
+                resolution_notes="纳入下一轮实现",
             ),
         )
 
@@ -61,6 +64,9 @@ class RunStoreTests(unittest.TestCase):
             loaded.get_stage(IncubationStage.PARITY_VALIDATION).comparisons[0].sample_id,
             "case-001",
         )
+        loaded_recommendation = loaded.get_stage(IncubationStage.DISTILLATION_ITERATION).recommendations[0]
+        self.assertEqual(loaded_recommendation.recommendation_key, "case-001:score-gap")
+        self.assertEqual(loaded_recommendation.status, "accepted")
 
 
 if __name__ == "__main__":

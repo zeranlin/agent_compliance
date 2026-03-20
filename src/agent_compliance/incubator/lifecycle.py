@@ -54,11 +54,14 @@ class ValidationComparison:
 class DistillationRecommendation:
     """描述一条蒸馏增强建议。"""
 
+    recommendation_key: str
     title: str
     target_layer: str
     action: str
     rationale: str
     priority: str = "P1"
+    status: str = "proposed"
+    resolution_notes: str = ""
 
 
 @dataclass
@@ -109,6 +112,29 @@ class IncubationRun:
         recommendation: DistillationRecommendation,
     ) -> None:
         self.get_stage(stage).recommendations.append(recommendation)
+
+    def update_recommendation_status(
+        self,
+        stage: IncubationStage,
+        recommendation_key: str,
+        status: str,
+        notes: str = "",
+    ) -> None:
+        recommendations = self.get_stage(stage).recommendations
+        for index, recommendation in enumerate(recommendations):
+            if recommendation.recommendation_key == recommendation_key:
+                recommendations[index] = DistillationRecommendation(
+                    recommendation_key=recommendation.recommendation_key,
+                    title=recommendation.title,
+                    target_layer=recommendation.target_layer,
+                    action=recommendation.action,
+                    rationale=recommendation.rationale,
+                    priority=recommendation.priority,
+                    status=status,
+                    resolution_notes=notes or recommendation.resolution_notes,
+                )
+                return
+        raise KeyError(recommendation_key)
 
 
 DEFAULT_INCUBATION_LIFECYCLE: tuple[IncubationStageDefinition, ...] = (

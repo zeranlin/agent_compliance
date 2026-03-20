@@ -31,6 +31,7 @@ class RunComparisonReporterTests(unittest.TestCase):
         run1.add_recommendation(
             IncubationStage.DISTILLATION_ITERATION,
             DistillationRecommendation(
+                recommendation_key="case-001:structure-gap",
                 title="增强结构生成",
                 target_layer="review_pipeline",
                 action="补需求章节结构",
@@ -55,6 +56,7 @@ class RunComparisonReporterTests(unittest.TestCase):
         run2.add_recommendation(
             IncubationStage.DISTILLATION_ITERATION,
             DistillationRecommendation(
+                recommendation_key="case-002:budget-gap",
                 title="增强边界识别",
                 target_layer="mixed_scope_boundary_engine",
                 action="补预算边界约束",

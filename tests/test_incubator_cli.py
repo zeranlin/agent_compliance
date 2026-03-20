@@ -232,6 +232,71 @@ class IncubatorCliTests(unittest.TestCase):
             self.assertEqual(compare_payload["run_count"], 2)
             self.assertEqual(compare_payload["agent_key"], "budget_demand")
 
+    def test_update_incubation_recommendation_command_updates_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            comparisons_path = temp_path / "comparisons.json"
+            comparisons_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "sample_id": "case-004",
+                            "human_baseline": "人工抓到评分问题",
+                            "strong_agent_result": "强智能体抓到评分问题",
+                            "target_agent_result": "目标智能体漏判",
+                            "gap_points": ["评分结构失衡未上浮"],
+                        }
+                    ],
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            first_stdout = StringIO()
+            with redirect_stdout(first_stdout):
+                main(
+                    [
+                        "incubate-agent",
+                        "budget_demand",
+                        "--agents-dir",
+                        str(temp_path / "agents"),
+                        "--output-dir",
+                        str(temp_path / "outputs"),
+                        "--comparisons-json",
+                        str(comparisons_path),
+                        "--json",
+                    ]
+                )
+            payload = json.loads(first_stdout.getvalue())
+            run_manifest = Path(payload["outputs"]["run_manifest"])
+            report_json = Path(payload["outputs"]["json"])
+            report = json.loads(report_json.read_text(encoding="utf-8"))
+            recommendation_key = report["stages"][5]["recommendations"][0]["recommendation_key"]
+
+            update_stdout = StringIO()
+            with redirect_stdout(update_stdout):
+                exit_code = main(
+                    [
+                        "update-incubation-recommendation",
+                        str(run_manifest),
+                        recommendation_key,
+                        "--status",
+                        "implemented",
+                        "--notes",
+                        "已完成首轮实现",
+                        "--json",
+                    ]
+                )
+
+            update_payload = json.loads(update_stdout.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(update_payload["status"], "implemented")
+
+            updated_run = json.loads(run_manifest.read_text(encoding="utf-8"))
+            recommendation = updated_run["stages"][5]["recommendations"][0]
+            self.assertEqual(recommendation["status"], "implemented")
+            self.assertEqual(recommendation["resolution_notes"], "已完成首轮实现")
+
 
 if __name__ == "__main__":
     unittest.main()
