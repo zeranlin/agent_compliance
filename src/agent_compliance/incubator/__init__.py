@@ -43,6 +43,12 @@ from agent_compliance.incubator.report_writer import (
     DistillationArtifactPaths,
     write_distillation_report,
 )
+from agent_compliance.incubator.run_store import (
+    IncubationRunPaths,
+    load_incubation_run,
+    serialize_incubation_run,
+    write_incubation_run,
+)
 from agent_compliance.incubator.scaffold_generator import (
     ScaffoldPlan,
     build_scaffold_plan,
@@ -59,6 +65,7 @@ __all__ = [
     "IncubationStage",
     "IncubationStageDefinition",
     "IncubationRun",
+    "IncubationRunPaths",
     "IncubationStageRecord",
     "REVIEW_AGENT_BLUEPRINT",
     "SampleSet",
@@ -77,9 +84,12 @@ __all__ = [
     "generate_agent_scaffold",
     "get_blueprint",
     "list_blueprints",
+    "load_incubation_run",
     "render_distillation_report_markdown",
     "review_agent_blueprint",
+    "serialize_incubation_run",
     "summarize_sample_manifest",
     "summarize_validation_gaps",
     "write_distillation_report",
+    "write_incubation_run",
 ]

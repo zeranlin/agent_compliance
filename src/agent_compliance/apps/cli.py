@@ -17,6 +17,7 @@ from agent_compliance.incubator import (
     ValidationComparison,
     bootstrap_agent_factory,
     build_sample_manifest,
+    write_incubation_run,
     write_distillation_report,
 )
 from agent_compliance.incubator.evals.runner import benchmark_summary
@@ -213,6 +214,12 @@ def main(argv: list[str] | None = None) -> int:
             result.report,
             result.report_markdown,
         )
+        run_paths = write_incubation_run(
+            args.output_dir,
+            result.blueprint.agent_key,
+            run_key,
+            result.run,
+        )
         payload = {
             "agent_key": result.blueprint.agent_key,
             "agent_name": result.blueprint.agent_name,
@@ -220,6 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             "completed_stages": result.report["summary"]["completed_stages"],
             "recommendation_count": result.report["summary"]["recommendation_count"],
             "outputs": {
+                "run_manifest": str(run_paths.manifest_path),
                 "json": str(artifact_paths.json_path),
                 "markdown": str(artifact_paths.markdown_path),
             },

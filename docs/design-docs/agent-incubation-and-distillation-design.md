@@ -328,6 +328,29 @@ src/agent_compliance/incubator/
 这样 `incubator` 才真正具备从命令行启动一轮标准孵化的能力。
 
 
+## 15. 运行状态与恢复执行
+
+为了让孵化过程支持中断恢复、多轮比较和标准留痕，`incubator` 层应把 `IncubationRun` 落成标准 run manifest。
+
+第一版建议通过：
+
+- `serialize_incubation_run()`
+- `write_incubation_run()`
+- `load_incubation_run()`
+
+统一输出：
+
+- `*-run.json`
+
+这样每一轮孵化都会同时留下：
+
+- 运行记录
+- 蒸馏报告
+- 标准骨架
+
+后续再继续往“恢复执行”和“多轮对比”推进。
+
+
 ## 11. 样例资产登记
 
 为了把“样例驱动”做成标准能力，`incubator` 层应统一管理：

@@ -53,6 +53,7 @@ class IncubatorCliTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertEqual(payload["agent_key"], "budget_demand")
             self.assertTrue((temp_path / "agents" / "budget_demand").exists())
+            self.assertTrue(Path(payload["outputs"]["run_manifest"]).exists())
             self.assertTrue(Path(payload["outputs"]["json"]).exists())
             self.assertTrue(Path(payload["outputs"]["markdown"]).exists())
 

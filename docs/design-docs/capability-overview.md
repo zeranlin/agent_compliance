@@ -609,6 +609,10 @@
   - `bootstrap_agent_factory()`
 - 已具备内部命令入口：
   - `agent_compliance incubate-agent <agent_key>`
+- 已具备运行记录落盘能力：
+  - `serialize_incubation_run()`
+  - `write_incubation_run()`
+  - `load_incubation_run()`
 - 已具备样例资产登记能力：
   - `SampleAsset`
   - `SampleManifest`
