@@ -4,8 +4,8 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.parsers.section_splitter import split_into_clauses
-from agent_compliance.pipelines.effective_requirement_scope_filter import (
+from agent_compliance.core.parsers.section_splitter import split_into_clauses
+from agent_compliance.core.pipelines.effective_requirement_scope_filter import (
     REQUIREMENT_SCOPE_BODY,
     REQUIREMENT_SCOPE_FORMAT,
     REQUIREMENT_SCOPE_HINT,
@@ -14,7 +14,7 @@ from agent_compliance.pipelines.effective_requirement_scope_filter import (
     classify_clause_scope,
     classify_requirement_scope,
 )
-from agent_compliance.pipelines.requirement_scope_layer import (
+from agent_compliance.core.pipelines.requirement_scope_layer import (
     EFFECT_REFERENCE_ONLY,
     EFFECT_STRONG_BINDING,
     FUNCTION_REFERENCE_NOTE,

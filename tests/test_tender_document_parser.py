@@ -4,8 +4,8 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.parsers.section_splitter import split_into_clauses
-from agent_compliance.pipelines.tender_document_parser import (
+from agent_compliance.core.parsers.section_splitter import split_into_clauses
+from agent_compliance.core.pipelines.tender_document_parser import (
     TENDER_PARSER_MODE_ASSIST,
     TENDER_PARSER_MODE_OFF,
     TENDER_PARSER_MODE_REQUIRED,
@@ -15,8 +15,8 @@ from agent_compliance.pipelines.tender_document_parser import (
     prepare_review_document,
     resolve_tender_parser_mode,
 )
-from agent_compliance.pipelines.tender_document_risk_scope_layer import RISK_SCOPE_CORE, STRUCTURE_SCORING_RULES
-from agent_compliance.schemas import NormalizedDocument
+from agent_compliance.core.pipelines.tender_document_risk_scope_layer import RISK_SCOPE_CORE, STRUCTURE_SCORING_RULES
+from agent_compliance.core.schemas import NormalizedDocument
 
 
 def _build_document(text: str) -> NormalizedDocument:

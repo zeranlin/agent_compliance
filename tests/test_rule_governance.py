@@ -4,12 +4,12 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.knowledge.procurement_catalog import CatalogClassification
-from agent_compliance.knowledge.rule_registry import build_rule_registry, load_rule_priority_profile, rule_registry_map
-from agent_compliance.pipelines.catalog_sensitive_rule_router import route_rules_for_catalog
-from agent_compliance.parsers.section_splitter import split_into_clauses
-from agent_compliance.pipelines.rule_scan import run_rule_scan
-from agent_compliance.schemas import NormalizedDocument
+from agent_compliance.core.knowledge.procurement_catalog import CatalogClassification
+from agent_compliance.core.knowledge.rule_registry import build_rule_registry, load_rule_priority_profile, rule_registry_map
+from agent_compliance.agents.compliance_review.pipelines.catalog_sensitive_rule_router import route_rules_for_catalog
+from agent_compliance.core.parsers.section_splitter import split_into_clauses
+from agent_compliance.agents.compliance_review.pipelines.rule_scan import run_rule_scan
+from agent_compliance.core.schemas import NormalizedDocument
 
 
 class RuleGovernanceTest(unittest.TestCase):

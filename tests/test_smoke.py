@@ -8,17 +8,17 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from agent_compliance.cache.file_cache import sha256_file
-from agent_compliance.cache.review_cache import (
+from agent_compliance.core.cache.file_cache import sha256_file
+from agent_compliance.core.cache.review_cache import (
     REVIEW_CACHE_VERSION,
     build_review_cache_key,
     cache_path_for_key,
     reference_snapshot_id,
 )
-from agent_compliance.config import detect_paths
-from agent_compliance.rules.base import RULE_SET_VERSION
+from agent_compliance.core.config import detect_paths
+from agent_compliance.agents.compliance_review.rules.base import RULE_SET_VERSION
 from tests._bootstrap import REPO_ROOT
-from agent_compliance.evals.runner import benchmark_summary
+from agent_compliance.incubator.evals.runner import benchmark_summary
 
 
 class CliSmokeTest(unittest.TestCase):

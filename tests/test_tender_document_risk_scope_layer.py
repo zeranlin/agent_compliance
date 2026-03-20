@@ -4,8 +4,8 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.parsers.section_splitter import split_into_clauses
-from agent_compliance.pipelines.tender_document_risk_scope_layer import (
+from agent_compliance.core.parsers.section_splitter import split_into_clauses
+from agent_compliance.core.pipelines.tender_document_risk_scope_layer import (
     RISK_SCOPE_CORE,
     RISK_SCOPE_OUT,
     RISK_SCOPE_SUPPORTING,

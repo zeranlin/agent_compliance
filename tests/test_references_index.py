@@ -4,7 +4,7 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.knowledge.references_index import load_reference_records
+from agent_compliance.core.knowledge.references_index import load_reference_records
 
 
 class ReferencesIndexTest(unittest.TestCase):

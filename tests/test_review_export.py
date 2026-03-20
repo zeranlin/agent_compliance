@@ -11,8 +11,8 @@ from openpyxl import load_workbook
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.pipelines.review_export import export_review_bytes, write_export_output
-from agent_compliance.schemas import Finding, ReviewResult
+from agent_compliance.agents.compliance_review.pipelines.review_export import export_review_bytes, write_export_output
+from agent_compliance.core.schemas import Finding, ReviewResult
 
 
 class ReviewExportTest(unittest.TestCase):
@@ -176,7 +176,7 @@ class ReviewExportTest(unittest.TestCase):
                     "generated_root": generated_root,
                 },
             )()
-            with patch("agent_compliance.pipelines.review_export.detect_paths", return_value=app_paths):
+            with patch("agent_compliance.agents.compliance_review.pipelines.review_export.detect_paths", return_value=app_paths):
                 path = write_export_output(
                     self._build_review(),
                     export_format="json",

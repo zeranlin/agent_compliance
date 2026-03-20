@@ -4,7 +4,7 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.knowledge.legal_clause_index import find_legal_clauses, load_legal_clause_records
+from agent_compliance.core.knowledge.legal_clause_index import find_legal_clauses, load_legal_clause_records
 
 
 class LegalClauseIndexTest(unittest.TestCase):

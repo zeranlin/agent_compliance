@@ -1,0 +1,6196 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import threading
+import time
+import uuid
+from email.parser import BytesParser
+from email.policy import default
+from html import escape as html_escape
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
+from urllib.parse import parse_qs, quote, urlparse
+from xml.etree import ElementTree as ET
+from zipfile import ZipFile
+
+from agent_compliance.core.cache.review_cache import (
+    REVIEW_CACHE_VERSION,
+    build_review_cache_key,
+    load_review_cache,
+    reference_snapshot_id,
+    save_review_cache,
+)
+from agent_compliance.core.config import LLMConfig, detect_llm_config, detect_paths, detect_tender_parser_mode
+from agent_compliance.incubator.improvement.rule_management import load_rule_management_payload, save_rule_decision
+from agent_compliance.core.knowledge.procurement_catalog import classify_procurement_catalog
+from agent_compliance.core.parsers.pagination import page_hint_for_line
+from agent_compliance.agents.compliance_review.pipelines.llm_enhance import enhance_review_result
+from agent_compliance.agents.compliance_review.pipelines.llm_review import apply_llm_review_tasks
+from agent_compliance.agents.compliance_review.pipelines.procurement_stage_router import route_procurement_stage
+from agent_compliance.agents.compliance_review.pipelines.review_export import export_review_bytes, write_export_output
+from agent_compliance.core.pipelines.normalize import run_normalize
+from agent_compliance.agents.compliance_review.pipelines.render import write_review_outputs
+from agent_compliance.agents.compliance_review.pipelines.review import build_review_result
+from agent_compliance.agents.compliance_review.pipelines.rule_scan import run_rule_scan
+from agent_compliance.agents.compliance_review.rules.base import RULE_SET_VERSION
+from agent_compliance.core.schemas import NormalizedDocument, ReviewResult
+
+
+REVIEW_JOB_LOCK = threading.Lock()
+REVIEW_JOBS: dict[str, dict[str, Any]] = {}
+BUYER_PROGRESS_STEPS = (
+    {
+        "key": "parse",
+        "label": "文档解析中",
+        "description": "正在提取正文、章节和表格内容。",
+    },
+    {
+        "key": "base_scan",
+        "label": "基础风险扫描中",
+        "description": "正在识别资格、评分、技术、商务/验收风险。",
+    },
+    {
+        "key": "llm_enhance",
+        "label": "智能增强分析中",
+        "description": "正在补充边界问题、章节主问题和法规解释。",
+    },
+    {
+        "key": "finalize",
+        "label": "结果收束中",
+        "description": "正在去重、合并主问题、整理证据和建议。",
+    },
+    {
+        "key": "done",
+        "label": "审查完成",
+        "description": "可查看问题清单和导出结果。",
+    },
+)
+BUYER_TECHNICAL_STEPS = (
+    {"key": "catalog", "label": "品目识别"},
+    {"key": "rule_scan", "label": "规则扫描"},
+    {"key": "scoring", "label": "评分语义分析"},
+    {"key": "mixed_scope", "label": "混合边界分析"},
+    {"key": "commercial", "label": "商务链路分析"},
+    {"key": "llm_document_audit", "label": "全文辅助扫描"},
+    {"key": "llm_chapter_summary", "label": "章节级总结"},
+    {"key": "llm_legal_reasoning", "label": "法规适用逻辑解释"},
+    {"key": "arbiter", "label": "仲裁归并"},
+    {"key": "evidence", "label": "证据选择"},
+)
+
+
+def run_web_server(host: str = "127.0.0.1", port: int = 8765) -> None:
+    server = ThreadingHTTPServer((host, port), ReviewWebHandler)
+    print(f"Web UI running at http://{host}:{port}")
+    server.serve_forever()
+
+
+class ReviewWebHandler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:
+        parsed = urlparse(self.path)
+        path = parsed.path
+        if path == "/":
+            self._send_html(_index_html())
+            return
+        if path == "/review-buyer":
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", "/review-check")
+            self.end_headers()
+            return
+        if path == "/review-next":
+            self._send_html(_review_next_html())
+            return
+        if path == "/review-check":
+            self._send_html(_review_buyer_html())
+            return
+        if path == "/review-fresh":
+            self._send_html(_review_fresh_html())
+            return
+        if path == "/rules":
+            self._send_html(_rules_html())
+            return
+        if path == "/api/rules":
+            self._send_json(load_rule_management_payload())
+            return
+        if path == "/api/review-status":
+            self._handle_review_status(parsed.query)
+            return
+        if path == "/api/review-result":
+            self._handle_review_result(parsed.query)
+            return
+        self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
+
+    def do_POST(self) -> None:
+        path = urlparse(self.path).path
+        if path == "/api/open-source":
+            self._handle_open_source()
+            return
+        if path == "/api/export-review":
+            self._handle_export_review()
+            return
+        if path == "/api/rules/decision":
+            self._handle_rule_decision()
+            return
+        if path == "/api/review-start":
+            self._handle_review_start()
+            return
+        if path != "/api/review":
+            self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
+            return
+
+        try:
+            body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            fields = _parse_multipart(self.headers, body)
+        except Exception as exc:
+            self._send_json({"error": f"请求解析失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        upload = fields.get("file")
+        if not upload or not upload.get("filename"):
+            self._send_json({"error": "缺少上传文件"}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        use_llm = _flag_value(fields.get("use_llm", {}).get("value"))
+        use_cache = _flag_value(fields.get("use_cache", {}).get("value"))
+        paths = detect_paths()
+        source_path = _persist_upload(str(upload["filename"]), bytes(upload["content"]))
+        normalized = run_normalize(source_path)
+        parser_mode = str(fields.get("tender_parser_mode", {}).get("value") or detect_tender_parser_mode()).strip().lower()
+        review, llm_artifacts, cache_key, cache_used = _run_review(
+            normalized,
+            use_cache=use_cache,
+            use_llm=use_llm,
+            parser_mode=parser_mode,
+            paths=paths,
+        )
+        json_path, md_path = write_review_outputs(review, normalized.file_hash[:12])
+
+        self._send_json(
+            {
+                "cache": {"enabled": use_cache, "used": cache_used, "key": cache_key},
+                "llm": {
+                    "enabled": _web_llm_config(use_llm).enabled,
+                    "base_url": detect_llm_config().base_url,
+                    "model": detect_llm_config().model,
+                },
+                "parser": {"mode": parser_mode, "enabled": parser_mode != "off"},
+                "stage": _build_stage_payload(normalized, review),
+                "document": _build_document_payload(normalized),
+                "review": review.to_dict(),
+                "llm_review": llm_artifacts.to_dict(),
+                "outputs": {"json": str(json_path), "markdown": str(md_path)},
+            }
+        )
+
+    def log_message(self, format: str, *args) -> None:
+        return
+
+    def _send_html(self, html: str, *, status: HTTPStatus = HTTPStatus.OK) -> None:
+        data = html.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _send_json(self, payload: dict, *, status: HTTPStatus = HTTPStatus.OK) -> None:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _handle_open_source(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            path = Path(payload.get("path", ""))
+            if not path.exists():
+                self._send_json({"error": "原文件不存在"}, status=HTTPStatus.BAD_REQUEST)
+                return
+            subprocess.run(["open", str(path)], check=True)
+            self._send_json({"ok": True})
+        except Exception as exc:
+            self._send_json({"error": f"打开原文件失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_rule_decision(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            candidate_rule_id = str(payload.get("candidate_rule_id", "")).strip()
+            decision = str(payload.get("decision", "")).strip()
+            note = str(payload.get("note", "")).strip()
+            if not candidate_rule_id:
+                self._send_json({"error": "缺少 candidate_rule_id"}, status=HTTPStatus.BAD_REQUEST)
+                return
+            save_rule_decision(candidate_rule_id, decision, note)
+            self._send_json(load_rule_management_payload())
+        except Exception as exc:
+            self._send_json({"error": f"保存规则决策失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_export_review(self) -> None:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            review_payload = payload.get("review")
+            if not isinstance(review_payload, dict):
+                self._send_json({"error": "缺少 review 结果"}, status=HTTPStatus.BAD_REQUEST)
+                return
+            export_format = str(payload.get("format", "json")).strip().lower()
+            mode = str(payload.get("mode", "summary")).strip().lower()
+            review = ReviewResult.from_dict(review_payload)
+            document_payload = payload.get("document") if isinstance(payload.get("document"), dict) else None
+            stage_payload = payload.get("stage") if isinstance(payload.get("stage"), dict) else None
+            if document_payload is not None and stage_payload:
+                document_payload = {**document_payload, **stage_payload}
+            content, content_type, filename = export_review_bytes(
+                review,
+                export_format=export_format,
+                mode=mode,
+                document_payload=document_payload,
+            )
+            write_export_output(
+                review,
+                export_format=export_format,
+                mode=mode,
+                document_payload=document_payload,
+            )
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Disposition", _build_download_content_disposition(filename))
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+        except Exception as exc:
+            self._send_json({"error": f"导出失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
+
+    def _handle_review_start(self) -> None:
+        try:
+            body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            fields = _parse_multipart(self.headers, body)
+        except Exception as exc:
+            self._send_json({"error": f"请求解析失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        upload = fields.get("file")
+        if not upload or not upload.get("filename"):
+            self._send_json({"error": "缺少上传文件"}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        use_llm = _flag_value(fields.get("use_llm", {}).get("value"))
+        use_cache = _flag_value(fields.get("use_cache", {}).get("value"))
+        parser_mode = str(fields.get("tender_parser_mode", {}).get("value") or detect_tender_parser_mode()).strip().lower()
+        source_path = _persist_upload(str(upload["filename"]), bytes(upload["content"]))
+        job_id = _create_review_job(
+            Path(source_path).name,
+            source_path,
+            use_cache=use_cache,
+            use_llm=use_llm,
+            parser_mode=parser_mode,
+        )
+        worker = threading.Thread(
+            target=_run_review_job,
+            args=(job_id, source_path, use_cache, use_llm, parser_mode, detect_paths()),
+            daemon=True,
+        )
+        worker.start()
+        self._send_json({"job_id": job_id, "status": "queued", "parser": {"mode": parser_mode, "enabled": parser_mode != "off"}})
+
+    def _handle_review_status(self, query: str) -> None:
+        job_id = parse_qs(query).get("job_id", [""])[0].strip()
+        if not job_id:
+            self._send_json({"error": "缺少 job_id"}, status=HTTPStatus.BAD_REQUEST)
+            return
+        payload = _review_job_status_payload(job_id)
+        if payload is None:
+            self._send_json({"error": "任务不存在"}, status=HTTPStatus.NOT_FOUND)
+            return
+        self._send_json(payload)
+
+    def _handle_review_result(self, query: str) -> None:
+        job_id = parse_qs(query).get("job_id", [""])[0].strip()
+        if not job_id:
+            self._send_json({"error": "缺少 job_id"}, status=HTTPStatus.BAD_REQUEST)
+            return
+        payload = _review_job_result_payload(job_id)
+        if payload is None:
+            self._send_json({"error": "任务不存在"}, status=HTTPStatus.NOT_FOUND)
+            return
+        if payload.get("status") == "failed":
+            self._send_json(payload, status=HTTPStatus.BAD_REQUEST)
+            return
+        if payload.get("status") != "completed":
+            self._send_json(payload, status=HTTPStatus.ACCEPTED)
+            return
+        self._send_json(payload["result"])
+
+
+def _now_ts() -> float:
+    return time.time()
+
+
+def _initial_progress_steps() -> list[dict[str, Any]]:
+    return [dict(item, status="pending") for item in BUYER_PROGRESS_STEPS]
+
+
+def _initial_technical_steps() -> list[dict[str, Any]]:
+    return [dict(item, status="pending") for item in BUYER_TECHNICAL_STEPS]
+
+
+def _create_review_job(filename: str, source_path: Path, *, use_cache: bool, use_llm: bool, parser_mode: str) -> str:
+    job_id = f"review-{uuid.uuid4().hex[:12]}"
+    stage_profile = route_procurement_stage()
+    now = _now_ts()
+    with REVIEW_JOB_LOCK:
+        REVIEW_JOBS[job_id] = {
+            "job_id": job_id,
+            "status": "queued",
+            "mode": "hybrid" if use_llm else "code",
+            "stage_profile": {
+                "stage_key": stage_profile.stage_key,
+                "stage_name": stage_profile.stage_name,
+                "stage_goal": stage_profile.stage_goal,
+                "review_posture": stage_profile.review_posture,
+                "output_bias": list(stage_profile.output_bias),
+            },
+            "document_name": filename,
+            "source_path": str(source_path),
+            "progress": {
+                "current_step": "parse",
+                "steps": _initial_progress_steps(),
+                "technical_steps": _initial_technical_steps(),
+            },
+            "partial_result_available": False,
+            "last_message": "任务已创建，等待开始。",
+            "started_at": now,
+            "updated_at": now,
+            "result": None,
+            "error": None,
+            "use_cache": use_cache,
+            "use_llm": use_llm,
+            "parser_mode": parser_mode,
+        }
+    return job_id
+
+
+def _set_step_status(job: dict[str, Any], step_key: str, status: str) -> None:
+    for step in job["progress"]["steps"]:
+        if step["key"] == step_key:
+            step["status"] = status
+            break
+    for step in job["progress"]["technical_steps"]:
+        if step["key"] == step_key:
+            step["status"] = status
+            break
+
+
+def _mark_review_job(
+    job_id: str,
+    *,
+    status: str | None = None,
+    current_step: str | None = None,
+    message: str | None = None,
+    complete_steps: tuple[str, ...] = (),
+    run_steps: tuple[str, ...] = (),
+    skip_steps: tuple[str, ...] = (),
+    fail_steps: tuple[str, ...] = (),
+    result: dict[str, Any] | None = None,
+    error: str | None = None,
+    partial_result_available: bool | None = None,
+) -> None:
+    with REVIEW_JOB_LOCK:
+        job = REVIEW_JOBS.get(job_id)
+        if job is None:
+            return
+        if status:
+            job["status"] = status
+        if current_step:
+            job["progress"]["current_step"] = current_step
+        for step_key in complete_steps:
+            _set_step_status(job, step_key, "completed")
+        for step_key in run_steps:
+            _set_step_status(job, step_key, "running")
+        for step_key in skip_steps:
+            _set_step_status(job, step_key, "skipped")
+        for step_key in fail_steps:
+            _set_step_status(job, step_key, "failed")
+        if message is not None:
+            job["last_message"] = message
+        if partial_result_available is not None:
+            job["partial_result_available"] = partial_result_available
+        if result is not None:
+            job["result"] = result
+        if error is not None:
+            job["error"] = error
+        job["updated_at"] = _now_ts()
+
+
+def _review_job_status_payload(job_id: str) -> dict[str, Any] | None:
+    with REVIEW_JOB_LOCK:
+        job = REVIEW_JOBS.get(job_id)
+        if job is None:
+            return None
+        return {
+            "job_id": job["job_id"],
+            "status": job["status"],
+            "mode": job["mode"],
+            "parser": {"mode": job.get("parser_mode", "off"), "enabled": job.get("parser_mode", "off") != "off"},
+            "stage_profile": job["stage_profile"],
+            "document_name": job["document_name"],
+            "progress": job["progress"],
+            "partial_result_available": job["partial_result_available"],
+            "last_message": job["last_message"],
+            "started_at": job["started_at"],
+            "updated_at": job["updated_at"],
+            "error": job["error"],
+        }
+
+
+def _review_job_result_payload(job_id: str) -> dict[str, Any] | None:
+    with REVIEW_JOB_LOCK:
+        job = REVIEW_JOBS.get(job_id)
+        if job is None:
+            return None
+        return {
+            "job_id": job["job_id"],
+            "status": job["status"],
+            "error": job["error"],
+            "result": job["result"],
+        }
+
+
+def _run_review_job(job_id: str, source_path: Path, use_cache: bool, use_llm: bool, parser_mode: str, paths) -> None:
+    _mark_review_job(
+        job_id,
+        status="running",
+        current_step="parse",
+        run_steps=("parse",),
+        message="正在解析文档、提取正文、章节和表格内容。",
+    )
+    try:
+        normalized = run_normalize(source_path)
+        _mark_review_job(
+            job_id,
+            current_step="base_scan",
+            complete_steps=("parse", "catalog"),
+            run_steps=("base_scan", "rule_scan"),
+            message="正在扫描基础条款，识别资格、评分、技术、商务/验收风险。",
+        )
+
+        reference_snapshot = reference_snapshot_id(paths.repo_root / "docs" / "references")
+        cache_key = build_review_cache_key(
+            file_hash=normalized.file_hash,
+            rule_set_version=RULE_SET_VERSION,
+            reference_snapshot=reference_snapshot,
+            parser_mode=parser_mode,
+            review_pipeline_version=REVIEW_CACHE_VERSION,
+        )
+        review = load_review_cache(cache_key) if use_cache else None
+        cache_used = review is not None
+        if review is None:
+            hits = run_rule_scan(normalized)
+            _mark_review_job(
+                job_id,
+                complete_steps=("rule_scan",),
+                run_steps=("scoring", "mixed_scope", "commercial"),
+                message="正在扫描评分条款，并分析混合边界和商务链条。",
+            )
+            review = build_review_result(normalized, hits, parser_mode=parser_mode)
+            if use_cache:
+                save_review_cache(
+                    cache_key,
+                    review,
+                    metadata={
+                        "file_hash": normalized.file_hash,
+                        "rule_set_version": RULE_SET_VERSION,
+                        "reference_snapshot": reference_snapshot,
+                        "parser_mode": parser_mode,
+                        "review_pipeline_version": REVIEW_CACHE_VERSION,
+                    },
+                )
+            base_message = "基础风险扫描完成，正在准备智能增强分析。"
+        else:
+            base_message = "已复用缓存结果，正在准备智能增强分析。"
+        _mark_review_job(
+            job_id,
+            complete_steps=("base_scan", "rule_scan", "scoring", "mixed_scope", "commercial"),
+            message=base_message,
+        )
+
+        llm_config = _web_llm_config(use_llm)
+        llm_completed_steps: tuple[str, ...] = ()
+        if llm_config.enabled:
+            _mark_review_job(
+                job_id,
+                current_step="llm_enhance",
+                run_steps=("llm_enhance", "llm_document_audit"),
+                message="正在进行全文辅助扫描，补充规则未稳定命中的边界问题。",
+            )
+            llm_completed_steps = ("llm_enhance", "llm_document_audit", "llm_chapter_summary", "llm_legal_reasoning")
+        else:
+            _mark_review_job(
+                job_id,
+                current_step="finalize",
+                skip_steps=("llm_enhance", "llm_document_audit", "llm_chapter_summary", "llm_legal_reasoning"),
+                message="未启用大模型（混合审查），直接进入结果收束。",
+            )
+
+        review = enhance_review_result(review, llm_config)
+        if llm_config.enabled:
+            _mark_review_job(
+                job_id,
+                current_step="llm_enhance",
+                complete_steps=("llm_document_audit",),
+                run_steps=("llm_chapter_summary",),
+                message="正在汇总章节主问题，收束评分、技术和商务章节的关键风险。",
+            )
+        review, llm_artifacts = apply_llm_review_tasks(
+            normalized,
+            review,
+            llm_config,
+            output_stem=normalized.file_hash[:12],
+        )
+        if llm_config.enabled:
+            _mark_review_job(
+                job_id,
+                current_step="llm_enhance",
+                complete_steps=("llm_chapter_summary",),
+                run_steps=("llm_legal_reasoning",),
+                message="正在生成法规适用逻辑，说明哪些问题应直接修改、论证或复核。",
+            )
+        _mark_review_job(
+            job_id,
+            current_step="finalize",
+            complete_steps=llm_completed_steps,
+            run_steps=("finalize", "arbiter", "evidence"),
+            message="正在收束结果，去重、合并主问题并整理证据。",
+        )
+
+        json_path, md_path = write_review_outputs(review, normalized.file_hash[:12])
+        payload = {
+            "cache": {"enabled": use_cache, "used": cache_used, "key": cache_key},
+            "llm": {
+                "enabled": llm_config.enabled,
+                "base_url": detect_llm_config().base_url,
+                "model": detect_llm_config().model,
+            },
+            "parser": {"mode": parser_mode, "enabled": parser_mode != "off"},
+            "stage": _build_stage_payload(normalized, review),
+            "document": _build_document_payload(normalized),
+            "review": review.to_dict(),
+            "llm_review": llm_artifacts.to_dict(),
+            "outputs": {"json": str(json_path), "markdown": str(md_path)},
+        }
+        _mark_review_job(
+            job_id,
+            status="completed",
+            current_step="done",
+            complete_steps=("finalize", "arbiter", "evidence", "done"),
+            message=f"审查完成：{review.document_name}",
+            result=payload,
+            partial_result_available=False,
+        )
+    except Exception as exc:
+        _mark_review_job(
+            job_id,
+            status="failed",
+            fail_steps=("parse", "base_scan", "llm_enhance", "finalize"),
+            message=f"审查失败：{exc}",
+            error=str(exc),
+        )
+
+
+def _run_review(
+    normalized: NormalizedDocument,
+    *,
+    use_cache: bool,
+    use_llm: bool,
+    parser_mode: str,
+    paths,
+) -> tuple[Any, str, bool]:
+    reference_snapshot = reference_snapshot_id(paths.repo_root / "docs" / "references")
+    cache_key = build_review_cache_key(
+        file_hash=normalized.file_hash,
+        rule_set_version=RULE_SET_VERSION,
+        reference_snapshot=reference_snapshot,
+        parser_mode=parser_mode,
+        review_pipeline_version=REVIEW_CACHE_VERSION,
+    )
+    review = load_review_cache(cache_key) if use_cache else None
+    cache_used = review is not None
+    if review is None:
+        hits = run_rule_scan(normalized)
+        review = build_review_result(normalized, hits, parser_mode=parser_mode)
+        if use_cache:
+            save_review_cache(
+                cache_key,
+                review,
+                metadata={
+                    "file_hash": normalized.file_hash,
+                    "rule_set_version": RULE_SET_VERSION,
+                    "reference_snapshot": reference_snapshot,
+                    "parser_mode": parser_mode,
+                    "review_pipeline_version": REVIEW_CACHE_VERSION,
+                },
+            )
+    review = enhance_review_result(review, _web_llm_config(use_llm))
+    review, llm_artifacts = apply_llm_review_tasks(
+        normalized,
+        review,
+        _web_llm_config(use_llm),
+        output_stem=normalized.file_hash[:12],
+    )
+    return review, llm_artifacts, cache_key, cache_used
+
+
+def _parse_multipart(headers, body: bytes) -> dict[str, dict[str, bytes | str]]:
+    content_type = headers.get("Content-Type", "")
+    if not content_type.startswith("multipart/form-data"):
+        raise ValueError("仅支持 multipart/form-data")
+
+    message = BytesParser(policy=default).parsebytes(
+        f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode("utf-8") + body
+    )
+    fields: dict[str, dict[str, bytes | str]] = {}
+    for part in message.iter_parts():
+        name = part.get_param("name", header="content-disposition")
+        if not name:
+            continue
+        payload = part.get_payload(decode=True) or b""
+        fields[name] = {
+            "filename": part.get_filename() or "",
+            "content": payload,
+            "value": payload.decode("utf-8", errors="ignore"),
+        }
+    return fields
+
+
+def _persist_upload(filename: str, content: bytes) -> Path:
+    paths = detect_paths()
+    paths.uploads_root.mkdir(parents=True, exist_ok=True)
+    target = paths.uploads_root / Path(filename).name
+    target.write_bytes(content)
+    return target
+
+
+def _build_download_content_disposition(filename: str) -> str:
+    ascii_name = "".join(ch if ord(ch) < 128 else "_" for ch in filename)
+    if not ascii_name.strip("._"):
+        ascii_name = "review-export"
+    encoded = quote(filename, safe="")
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"
+
+
+def _web_llm_config(use_llm: bool) -> LLMConfig:
+    config = detect_llm_config()
+    return LLMConfig(
+        enabled=bool(use_llm or config.enabled),
+        base_url=config.base_url,
+        model=config.model,
+        api_key=config.api_key,
+        timeout_seconds=config.timeout_seconds,
+    )
+
+
+def _flag_value(value: str | None) -> bool:
+    return str(value or "").lower() in {"1", "true", "on", "yes"}
+
+
+def _build_document_payload(normalized: NormalizedDocument) -> dict[str, Any]:
+    text = Path(normalized.normalized_text_path).read_text(encoding="utf-8")
+    lines = [
+        {
+            "number": number,
+            "text": raw_line,
+            "page_hint": page_hint_for_line(number, normalized.page_map),
+        }
+        for number, raw_line in enumerate(text.splitlines(), start=1)
+    ]
+    payload = {
+        "source_path": normalized.source_path,
+        "normalized_text_path": normalized.normalized_text_path,
+        "line_count": len(lines),
+        "lines": lines,
+        "render_mode": "text",
+        "blocks": [],
+    }
+    suffix = Path(normalized.source_path).suffix.lower()
+    if suffix == ".docx":
+        blocks = _build_docx_blocks(Path(normalized.source_path), lines)
+        if blocks:
+            payload["render_mode"] = "docx_blocks"
+            payload["blocks"] = blocks
+    return payload
+
+
+def _build_stage_payload(normalized: NormalizedDocument, review: ReviewResult) -> dict[str, Any]:
+    stage_profile = route_procurement_stage(document=normalized, findings=review.findings)
+    classification = classify_procurement_catalog(normalized)
+    return {
+        "stage_key": stage_profile.stage_key,
+        "stage_name": stage_profile.stage_name,
+        "stage_goal": stage_profile.stage_goal,
+        "review_posture": stage_profile.review_posture,
+        "primary_users": list(stage_profile.primary_users),
+        "output_bias": list(stage_profile.output_bias),
+        "primary_catalog_name": classification.primary_catalog_name,
+        "secondary_catalog_names": list(classification.secondary_catalog_names),
+        "is_mixed_scope": classification.is_mixed_scope,
+        "catalog_confidence": classification.catalog_confidence,
+    }
+
+
+def _build_docx_blocks(source_path: Path, lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    try:
+        with ZipFile(source_path) as archive:
+            document_xml = archive.read("word/document.xml")
+    except Exception:
+        return []
+
+    root = ET.fromstring(document_xml)
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    body = root.find("w:body", ns)
+    if body is None:
+        return []
+
+    normalized_lines = [str(item["text"]) for item in lines]
+    search_cursor = 0
+    blocks: list[dict[str, Any]] = []
+    block_index = 1
+
+    for child in body:
+        tag = child.tag.rsplit("}", 1)[-1]
+        if tag == "p":
+            text = _docx_paragraph_text(child, ns)
+            if not text.strip():
+                continue
+            start_line, end_line, search_cursor = _locate_block_lines(text, normalized_lines, search_cursor)
+            blocks.append(
+                {
+                    "block_id": f"block-{block_index}",
+                    "kind": "paragraph",
+                    "html": f"<p>{html_escape(text)}</p>",
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "page_hint": page_hint_for_line(start_line, []) if False else None,
+                }
+            )
+            block_index += 1
+        elif tag == "tbl":
+            rows = _docx_table_rows(child, ns)
+            if not rows:
+                continue
+            table_text = "\n".join(" | ".join(cell for cell in row if cell) for row in rows if any(cell for cell in row))
+            start_line, end_line, search_cursor = _locate_block_lines(table_text, normalized_lines, search_cursor)
+            rows_html = []
+            for row in rows:
+                cells_html = "".join(f"<td>{html_escape(cell)}</td>" for cell in row)
+                rows_html.append(f"<tr>{cells_html}</tr>")
+            blocks.append(
+                {
+                    "block_id": f"block-{block_index}",
+                    "kind": "table",
+                    "html": f"<table><tbody>{''.join(rows_html)}</tbody></table>",
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "page_hint": None,
+                }
+            )
+            block_index += 1
+    return blocks
+
+
+def _docx_paragraph_text(paragraph: ET.Element, ns: dict[str, str]) -> str:
+    parts: list[str] = []
+    for node in paragraph.iter():
+        tag = node.tag.rsplit("}", 1)[-1]
+        if tag == "t" and node.text:
+            parts.append(node.text)
+        elif tag == "tab":
+            parts.append("    ")
+        elif tag in {"br", "cr"}:
+            parts.append("\n")
+    return "".join(parts).strip()
+
+
+def _docx_table_rows(table: ET.Element, ns: dict[str, str]) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for row in table.findall("w:tr", ns):
+        cells: list[str] = []
+        for cell in row.findall("w:tc", ns):
+            paragraphs = [_docx_paragraph_text(paragraph, ns) for paragraph in cell.findall("w:p", ns)]
+            cell_text = "\n".join(part for part in paragraphs if part).strip()
+            cells.append(cell_text)
+        if cells:
+            rows.append(cells)
+    return rows
+
+
+def _locate_block_lines(block_text: str, normalized_lines: list[str], cursor: int) -> tuple[int, int, int]:
+    target_parts = [part.strip() for part in block_text.splitlines() if part.strip()]
+    if not target_parts:
+        fallback = min(cursor + 1, max(len(normalized_lines), 1))
+        return fallback, fallback, fallback
+
+    start_index = None
+    search_text = target_parts[0]
+    for idx in range(cursor, len(normalized_lines)):
+        candidate = normalized_lines[idx].strip()
+        if not candidate:
+            continue
+        if search_text in candidate or candidate in search_text:
+            start_index = idx
+            break
+    if start_index is None:
+        for idx, candidate_line in enumerate(normalized_lines):
+            candidate = candidate_line.strip()
+            if candidate and (search_text in candidate or candidate in search_text):
+                start_index = idx
+                break
+
+    if start_index is None:
+        fallback = min(cursor + 1, max(len(normalized_lines), 1))
+        return fallback, fallback, fallback
+
+    end_index = start_index
+    part_cursor = start_index
+    for part in target_parts[1:]:
+        for idx in range(part_cursor + 1, len(normalized_lines)):
+            candidate = normalized_lines[idx].strip()
+            if candidate and (part in candidate or candidate in part):
+                end_index = idx
+                part_cursor = idx
+                break
+
+    return start_index + 1, end_index + 1, max(end_index + 1, cursor)
+
+
+def _index_html() -> str:
+    return """<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>采购审查工作台</title>
+  <style>
+    :root {
+      --bg: #f4efe5;
+      --panel: #fffdf8;
+      --line: #ddd2c2;
+      --ink: #20252b;
+      --muted: #6c675e;
+      --accent: #9d4a24;
+      --high: #a33d22;
+      --medium: #8f6714;
+      --active: #fff2dd;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
+    }
+    .app {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .hero {
+      margin-bottom: 16px;
+    }
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+    }
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(52, 41, 29, 0.06);
+    }
+    .toolbar {
+      padding: 16px;
+      margin-bottom: 16px;
+      display: grid;
+      gap: 12px;
+    }
+    .toolbar-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 16px;
+      align-items: center;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    button:disabled {
+      opacity: .5;
+      cursor: wait;
+    }
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .status {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .summary {
+      display: none;
+      margin-bottom: 16px;
+      padding: 16px;
+    }
+    .summary h2 {
+      margin: 0 0 10px;
+      font-size: 20px;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+    .stat .label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .stat .value {
+      margin-top: 8px;
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .workspace {
+      display: none;
+      grid-template-columns: 420px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .rules-panel {
+      display: none;
+      margin-top: 16px;
+      padding: 16px;
+    }
+    .rules-grid {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 16px;
+      margin-top: 12px;
+    }
+    .rules-col {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      min-height: 420px;
+      overflow: hidden;
+    }
+    .rules-col-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 6px;
+    }
+    .rules-col-head h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+    .rules-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .rules-list {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      max-height: 560px;
+      overflow: auto;
+    }
+    .rule-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fffdfa;
+      display: grid;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .rule-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(157, 74, 36, 0.12);
+      background: #fff8f1;
+    }
+    .rule-card-title {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+    .rule-card-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+    .rule-detail {
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+    }
+    .rule-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .rule-note {
+      width: 100%;
+      min-height: 70px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      font: inherit;
+      resize: vertical;
+    }
+    .issues,
+    .document {
+      min-height: 580px;
+    }
+    .issues-head,
+    .document-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 8px;
+    }
+    .issues-head h2,
+    .document-head h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+    .issues-list {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      max-height: calc(100vh - 250px);
+      overflow: auto;
+    }
+    .issues-summary-bar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .issues-stat {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px 12px;
+      display: grid;
+      gap: 4px;
+    }
+    .issues-stat-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .issues-stat-value {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+    .issues-stat-value.high {
+      color: var(--high);
+    }
+    .issues-stat-value.medium {
+      color: var(--medium);
+    }
+    .issue-item {
+      width: 100%;
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      display: grid;
+      overflow: hidden;
+    }
+    .issue-item.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(157, 74, 36, 0.12);
+      background: #fff8f1;
+    }
+    .issue-item.high {
+      border-left: 5px solid var(--high);
+      background: linear-gradient(90deg, rgba(163, 61, 34, 0.05), #fff 14%);
+    }
+    .issue-item.medium {
+      border-left: 5px solid var(--medium);
+      background: linear-gradient(90deg, rgba(143, 103, 20, 0.05), #fff 14%);
+    }
+    .issue-summary {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      padding: 14px;
+      display: grid;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .issue-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .issue-action-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .issue-mini-btn {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--ink);
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .issue-detail {
+      display: none;
+      padding: 0 14px 14px;
+      border-top: 1px solid #f1eadf;
+      background: rgba(255, 252, 247, 0.92);
+    }
+    .issue-item.expanded .issue-detail {
+      display: grid;
+      gap: 10px;
+    }
+    .detail-pair {
+      display: grid;
+      gap: 4px;
+    }
+    .detail-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .detail-value {
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .issue-top {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      background: #f5ede2;
+      color: var(--accent);
+    }
+    .badge.high {
+      background: rgba(163, 61, 34, 0.1);
+      color: var(--high);
+    }
+    .badge.medium {
+      background: rgba(143, 103, 20, 0.12);
+      color: var(--medium);
+    }
+    .badge.origin-llm {
+      background: rgba(40, 88, 162, 0.12);
+      color: #2858a2;
+    }
+    .badge.origin-rule {
+      background: rgba(61, 120, 74, 0.12);
+      color: #2f6f42;
+    }
+    .issues-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .filter-chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .filter-chip.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: #fff5ea;
+    }
+    .issue-title {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+    .issue-title-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+    .issue-rank {
+      min-width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: #f5ede2;
+      color: var(--accent);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      flex: 0 0 auto;
+    }
+    .issue-rank.high {
+      background: rgba(163, 61, 34, 0.12);
+      color: var(--high);
+    }
+    .issue-rank.medium {
+      background: rgba(143, 103, 20, 0.12);
+      color: var(--medium);
+    }
+    .issue-main {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .issue-meta,
+    .issue-snippet {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .issue-snippet {
+      color: var(--ink);
+      background: #fffaf3;
+      border-radius: 10px;
+      padding: 9px 10px;
+    }
+    .issue-toggle-text {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 12px;
+    }
+    .document-body {
+      max-height: calc(100vh - 250px);
+      overflow: auto;
+      padding: 8px 0;
+      background: #fff;
+    }
+    .doc-block {
+      margin: 12px 16px;
+      padding: 10px 12px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .doc-block.active {
+      background: var(--active);
+      border-color: #f0c98a;
+    }
+    .doc-block p {
+      margin: 0;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .doc-block table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+    }
+    .doc-block td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      vertical-align: top;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .doc-block-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .doc-line {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr);
+      gap: 12px;
+      padding: 8px 16px;
+      border-top: 1px solid #f1eadf;
+      align-items: start;
+    }
+    .doc-line:first-child {
+      border-top: 0;
+    }
+    .doc-line.active {
+      background: var(--active);
+      border-top-color: #f0c98a;
+      border-bottom: 1px solid #f0c98a;
+    }
+    .doc-line-number {
+      text-align: right;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .doc-line-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .empty {
+      padding: 20px 16px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    @media (max-width: 1080px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+      .rules-grid {
+        grid-template-columns: 1fr;
+      }
+      .issues-list,
+      .document-body {
+        max-height: none;
+      }
+      .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .issues-summary-bar,
+      .detail-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="hero">
+      <h1>采购审查工作台</h1>
+      <p>上传采购文件后，页面会渲染文件正文并生成审查问题清单。点击任意问题，右侧正文会自动定位到对应位置并高亮，方便快速复核。</p>
+      <p><a href="/review-check">打开采购人审查页</a> · <a href="/review-next">打开增强审查页</a> · <a href="/rules">打开规则管理页面</a></p>
+    </section>
+
+    <form id="review-form" class="panel toolbar">
+      <div class="toolbar-row">
+        <input type="file" name="file" accept=".docx,.doc,.pdf,.txt,.md,.rtf" required />
+        <button type="submit" id="submit-btn">上传并审查</button>
+        <button type="button" id="open-source-btn" class="secondary" disabled>打开原文件</button>
+      </div>
+      <div class="toolbar-row">
+        <label><input type="checkbox" name="use_cache" /> 启用缓存</label>
+        <label><input type="checkbox" name="use_llm" /> 启用大模型（混合审查）</label>
+      </div>
+      <div id="status" class="status">等待上传文件</div>
+    </form>
+
+    <section id="summary" class="panel summary"></section>
+
+    <section id="workspace" class="workspace">
+      <section class="panel issues">
+        <div id="issues-head" class="issues-head"></div>
+        <div id="issues-list" class="issues-list"></div>
+      </section>
+      <section class="panel document">
+        <div id="document-head" class="document-head"></div>
+        <div id="document-body" class="document-body"></div>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    const form = document.getElementById('review-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const openSourceBtn = document.getElementById('open-source-btn');
+    const statusNode = document.getElementById('status');
+    const summaryNode = document.getElementById('summary');
+    const workspaceNode = document.getElementById('workspace');
+    const issuesHeadNode = document.getElementById('issues-head');
+    const issuesListNode = document.getElementById('issues-list');
+    const documentHeadNode = document.getElementById('document-head');
+    const documentBodyNode = document.getElementById('document-body');
+    let latestDocument = null;
+    let latestFindings = [];
+    let currentFindingFilter = 'all';
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      submitBtn.disabled = true;
+      openSourceBtn.disabled = true;
+      statusNode.textContent = '正在审查，请稍候...';
+      summaryNode.style.display = 'none';
+      workspaceNode.style.display = 'none';
+      try {
+        const formData = new FormData(form);
+        const response = await fetch('/api/review', { method: 'POST', body: formData });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '审查失败');
+        latestDocument = payload.document;
+        latestFindings = payload.review.findings;
+        currentFindingFilter = 'all';
+        renderSummary(payload);
+        renderIssues(payload.review.findings);
+        renderDocument(payload.document);
+        if (payload.review.findings.length) {
+          selectFinding(payload.review.findings[0].finding_id);
+        }
+        openSourceBtn.disabled = !payload.document || !payload.document.source_path;
+        statusNode.textContent = '审查完成';
+      } catch (error) {
+        statusNode.textContent = `失败：${error.message}`;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    openSourceBtn.addEventListener('click', openSourceFile);
+
+    function renderSummary(payload) {
+      const review = payload.review;
+      const highCount = review.findings.filter((item) => item.risk_level === 'high').length;
+      const mediumCount = review.findings.filter((item) => item.risk_level === 'medium').length;
+      const llmAddedCount = review.findings.filter((item) => item.finding_origin === 'llm_added').length;
+      const ruleCount = review.findings.filter((item) => item.finding_origin !== 'llm_added').length;
+      summaryNode.innerHTML = `
+        <h2>审查摘要</h2>
+        <div>${escapeHtml(review.overall_risk_summary)}</div>
+        <div class="summary-grid">
+          <div class="stat"><div class="label">文件</div><div class="value">${escapeHtml(review.document_name)}</div></div>
+          <div class="stat"><div class="label">发现项</div><div class="value">${review.findings.length}</div></div>
+          <div class="stat"><div class="label">规则命中</div><div class="value">${ruleCount}</div></div>
+          <div class="stat"><div class="label">模型新增</div><div class="value">${llmAddedCount}</div></div>
+          <div class="stat"><div class="label">高风险</div><div class="value">${highCount}</div></div>
+          <div class="stat"><div class="label">中风险</div><div class="value">${mediumCount}</div></div>
+          <div class="stat"><div class="label">缓存 / 模型</div><div class="value">${payload.cache.enabled ? '缓存开' : '缓存关'} / ${payload.llm.enabled ? '模型开' : '模型关'}</div></div>
+        </div>`;
+      summaryNode.style.display = 'block';
+    }
+
+
+    function renderIssues(findings) {
+      const sortedFindings = sortFindings(findings);
+      const filtered = applyFindingFilter(sortedFindings, currentFindingFilter);
+      const llmCount = findings.filter((item) => item.finding_origin === 'llm_added').length;
+      const ruleCount = findings.filter((item) => item.finding_origin !== 'llm_added').length;
+      const highCount = findings.filter((item) => item.risk_level === 'high').length;
+      const mediumCount = findings.filter((item) => item.risk_level === 'medium').length;
+      issuesHeadNode.innerHTML = `
+        <h2>审查问题清单</h2>
+        <div class="meta">共 ${findings.length} 条问题，其中规则命中 ${ruleCount} 条、模型新增 ${llmCount} 条。清单已按风险等级排序，高风险优先显示。点击“定位正文”会跳到对应位置，点击“展开详情”可查看依据、判断和建议。</div>
+        <div class="issues-summary-bar">
+          <div class="issues-stat"><div class="issues-stat-label">高风险</div><div class="issues-stat-value high">${highCount}</div></div>
+          <div class="issues-stat"><div class="issues-stat-label">中风险</div><div class="issues-stat-value medium">${mediumCount}</div></div>
+          <div class="issues-stat"><div class="issues-stat-label">规则命中</div><div class="issues-stat-value">${ruleCount}</div></div>
+          <div class="issues-stat"><div class="issues-stat-label">模型新增</div><div class="issues-stat-value">${llmCount}</div></div>
+        </div>
+        <div class="issues-filters">
+          <button type="button" class="filter-chip ${currentFindingFilter === 'all' ? 'active' : ''}" data-filter="all">全部</button>
+          <button type="button" class="filter-chip ${currentFindingFilter === 'rule' ? 'active' : ''}" data-filter="rule">规则</button>
+          <button type="button" class="filter-chip ${currentFindingFilter === 'llm' ? 'active' : ''}" data-filter="llm">模型新增</button>
+        </div>`;
+      issuesListNode.innerHTML = filtered.length
+        ? filtered.map((finding, index) => renderIssueItem(finding, index + 1)).join('')
+        : '<div class="empty">当前没有识别出需要提示的问题。</div>';
+      issuesHeadNode.querySelectorAll('.filter-chip').forEach((node) => {
+        node.addEventListener('click', () => {
+          currentFindingFilter = node.dataset.filter;
+          renderIssues(latestFindings);
+        });
+      });
+      issuesListNode.querySelectorAll('.issue-summary').forEach((node) => {
+        node.addEventListener('click', () => {
+          const card = node.closest('.issue-item');
+          selectFinding(card.dataset.findingId);
+        });
+      });
+      issuesListNode.querySelectorAll('.issue-locate-btn').forEach((node) => {
+        node.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const card = node.closest('.issue-item');
+          selectFinding(card.dataset.findingId);
+        });
+      });
+      issuesListNode.querySelectorAll('.issue-toggle-btn').forEach((node) => {
+        node.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const card = node.closest('.issue-item');
+          card.classList.toggle('expanded');
+          node.querySelector('.issue-toggle-text').textContent = card.classList.contains('expanded') ? '收起详情' : '展开详情';
+        });
+      });
+      workspaceNode.style.display = 'grid';
+    }
+
+    function renderIssueItem(finding, index) {
+      const originLabel = finding.finding_origin === 'llm_added' ? '模型新增' : '规则命中';
+      const originClass = finding.finding_origin === 'llm_added' ? 'origin-llm' : 'origin-rule';
+      return `<article class="issue-item ${escapeHtml(finding.risk_level || '')}" data-finding-id="${escapeHtml(finding.finding_id)}">
+        <button type="button" class="issue-summary">
+          <div class="issue-top">
+            <span>问题 ${index}</span>
+            <span class="badge ${escapeHtml(finding.risk_level)}">${escapeHtml(riskLabel(finding.risk_level))}</span>
+            <span class="badge">${escapeHtml(finding.issue_type)}</span>
+            <span class="badge ${originClass}">${originLabel}</span>
+          </div>
+          <div class="issue-title-row">
+            <div class="issue-rank ${escapeHtml(finding.risk_level || '')}">${String(index).padStart(2, '0')}</div>
+            <div class="issue-main">
+              <div class="issue-title">${escapeHtml(finding.problem_title)}</div>
+              <div class="issue-meta">位置：${escapeHtml(finding.section_path || finding.source_section || '待补充')}</div>
+              <div class="issue-meta">页码：${escapeHtml(finding.page_hint || '待人工翻页复核')} ｜ 行号：${escapeHtml(formatLineRange(finding.text_line_start, finding.text_line_end))}</div>
+            </div>
+          </div>
+          <div class="issue-snippet">${escapeHtml(finding.source_text)}</div>
+          <div class="issue-actions">
+            <div class="issue-action-buttons">
+              <button type="button" class="issue-mini-btn issue-locate-btn">定位正文</button>
+              <button type="button" class="issue-mini-btn issue-toggle-btn"><span class="issue-toggle-text">展开详情</span></button>
+            </div>
+          </div>
+        </button>
+        <div class="issue-detail">
+          <div class="detail-grid">
+            <div class="detail-pair">
+              <div class="detail-label">合规判断</div>
+              <div class="detail-value">${escapeHtml(finding.compliance_judgment)}</div>
+            </div>
+            <div class="detail-pair">
+              <div class="detail-label">来源</div>
+              <div class="detail-value">${escapeHtml(originLabel)}</div>
+            </div>
+            <div class="detail-pair">
+              <div class="detail-label">条款编号</div>
+              <div class="detail-value">${escapeHtml(finding.clause_id || '待补充')}</div>
+            </div>
+            <div class="detail-pair">
+              <div class="detail-label">表格/评分项</div>
+              <div class="detail-value">${escapeHtml(finding.table_or_item_label || '—')}</div>
+            </div>
+          </div>
+          <div class="detail-pair">
+            <div class="detail-label">风险说明</div>
+            <div class="detail-value">${escapeHtml(finding.why_it_is_risky)}</div>
+          </div>
+          <div class="detail-pair">
+            <div class="detail-label">依据</div>
+            <div class="detail-value">${escapeHtml(finding.legal_or_policy_basis || '当前离线链路未单独拆出更细依据，请结合正式审查结果复核。')}</div>
+          </div>
+          <div class="detail-pair">
+            <div class="detail-label">修改建议</div>
+            <div class="detail-value">${escapeHtml(finding.rewrite_suggestion)}</div>
+          </div>
+        </div>
+      </article>`;
+    }
+
+    function renderDocument(documentPayload) {
+      documentHeadNode.innerHTML = `
+        <h2>文件正文</h2>
+        <div class="meta">原文件：${escapeHtml(documentPayload.source_path)}</div>
+        <div class="meta">稳定文本：${escapeHtml(documentPayload.normalized_text_path)}</div>
+        <div class="meta">总行数：${documentPayload.line_count} ｜ 渲染模式：${documentPayload.render_mode === 'docx_blocks' ? 'DOCX 原文结构' : '稳定文本'}</div>`;
+      documentBodyNode.innerHTML = documentPayload.render_mode === 'docx_blocks'
+        ? documentPayload.blocks.map((block) => renderDocumentBlock(block)).join('')
+        : documentPayload.lines.map((line) => renderDocumentLine(line)).join('');
+      workspaceNode.style.display = 'grid';
+    }
+
+    function renderDocumentBlock(block) {
+      const meta = `行号：${formatLineRange(block.start_line, block.end_line)}`;
+      return `<div class="doc-block" id="${escapeHtml(block.block_id)}" data-start-line="${block.start_line}" data-end-line="${block.end_line}">
+        ${block.html}
+        <div class="doc-block-meta">${escapeHtml(meta)}</div>
+      </div>`;
+    }
+
+    function renderDocumentLine(line) {
+      return `<div class="doc-line" id="doc-line-${line.number}">
+        <div class="doc-line-number">${String(line.number).padStart(4, '0')}${line.page_hint ? `<br>${escapeHtml(line.page_hint)}` : ''}</div>
+        <div class="doc-line-text">${escapeHtml(line.text || ' ')}</div>
+      </div>`;
+    }
+
+    function selectFinding(findingId) {
+      const finding = latestFindings.find((item) => item.finding_id === findingId);
+      if (!finding) return;
+      issuesListNode.querySelectorAll('.issue-item').forEach((node) => {
+        node.classList.toggle('active', node.dataset.findingId === findingId);
+      });
+      highlightDocumentRange(finding.text_line_start, finding.text_line_end);
+    }
+
+    function highlightDocumentRange(start, end) {
+      documentBodyNode.querySelectorAll('.active').forEach((node) => node.classList.remove('active'));
+      let target = null;
+      if (latestDocument && latestDocument.render_mode === 'docx_blocks') {
+        documentBodyNode.querySelectorAll('.doc-block').forEach((node) => {
+          const blockStart = Number(node.dataset.startLine);
+          const blockEnd = Number(node.dataset.endLine);
+          const overlaps = blockStart <= end && blockEnd >= start;
+          if (overlaps) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
+        });
+      } else {
+        for (let line = start; line <= end; line += 1) {
+          const node = document.getElementById(`doc-line-${line}`);
+          if (node) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
+        }
+      }
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    async function openSourceFile() {
+      if (!latestDocument || !latestDocument.source_path) return;
+      try {
+        const response = await fetch('/api/open-source', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: latestDocument.source_path }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '打开失败');
+      } catch (error) {
+        statusNode.textContent = `打开原文件失败：${error.message}`;
+      }
+    }
+
+    function formatLineRange(start, end) {
+      if (!start && !end) return '—';
+      if (!end || start === end) return String(start).padStart(4, '0');
+      return `${String(start).padStart(4, '0')}-${String(end).padStart(4, '0')}`;
+    }
+
+    function riskLabel(level) {
+      return ({ high: '高风险', medium: '中风险', low: '低风险' }[level] || level || '未标注');
+    }
+
+    function applyFindingFilter(findings, filter) {
+      if (filter === 'llm') {
+        return findings.filter((item) => item.finding_origin === 'llm_added');
+      }
+      if (filter === 'rule') {
+        return findings.filter((item) => item.finding_origin !== 'llm_added');
+      }
+      return findings;
+    }
+
+    function sortFindings(findings) {
+      const priority = { high: 0, medium: 1, low: 2, none: 3 };
+      return [...findings].sort((left, right) => {
+        const treatmentDiff = treatmentPriority(left).rank - treatmentPriority(right).rank;
+        if (treatmentDiff !== 0) return treatmentDiff;
+        const levelDiff = (priority[left.risk_level] ?? 9) - (priority[right.risk_level] ?? 9);
+        if (levelDiff !== 0) return levelDiff;
+        const lineDiff = (left.text_line_start || 0) - (right.text_line_start || 0);
+        if (lineDiff !== 0) return lineDiff;
+        return String(left.finding_id).localeCompare(String(right.finding_id));
+      });
+    }
+
+    function escapeHtml(text) {
+      return String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    }
+  </script>
+</body>
+</html>"""
+
+
+def _review_next_html() -> str:
+    return """<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>审查工作台 V2</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --paper: #fffdf8;
+      --ink: #1f1a17;
+      --muted: #6c625b;
+      --line: #d8cdc1;
+      --accent: #9c5b2e;
+      --accent-soft: #efe1d3;
+      --high: #aa2e25;
+      --high-soft: #f7ddd7;
+      --medium: #9a6a14;
+      --medium-soft: #f7ebcd;
+      --rule: #275d8a;
+      --rule-soft: #dbe8f5;
+      --llm: #6e3ea4;
+      --llm-soft: #ece0fa;
+      --analyzer: #20644a;
+      --analyzer-soft: #d9efe5;
+      --doc-bg-top: #eef6ff;
+      --doc-bg-bottom: #e3efff;
+      --doc-border: #c9dbf4;
+      --problem-ink: #a53026;
+      --problem-bg: #fde8e4;
+      --shadow: 0 18px 40px rgba(67, 45, 22, 0.08);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Noto Sans SC", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,0.85), transparent 34%),
+        linear-gradient(180deg, #f7f2ea 0%, var(--bg) 100%);
+      color: var(--ink);
+    }
+    .shell {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .hero-card, .panel {
+      background: rgba(255,253,248,0.94);
+      border: 1px solid rgba(216,205,193,0.92);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .hero-card {
+      padding: 22px 24px;
+      overflow: hidden;
+      position: relative;
+    }
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      inset: auto -60px -80px auto;
+      width: 220px;
+      height: 220px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(156,91,46,0.18), rgba(156,91,46,0));
+      pointer-events: none;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    h1, h2, h3, p { margin: 0; }
+    .hero-card h1 {
+      font-size: 30px;
+      line-height: 1.2;
+      margin-bottom: 10px;
+    }
+    .hero-card p {
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 760px;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .hero-actions a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .upload-card {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    form {
+      display: grid;
+      gap: 12px;
+    }
+    input[type="file"] {
+      width: 100%;
+      border: 1px dashed var(--line);
+      background: #fff;
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .switches {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .export-panel {
+      display: grid;
+      gap: 8px;
+      width: 100%;
+      margin-top: 4px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(255, 248, 240, 0.9);
+      border: 1px solid rgba(201, 175, 150, 0.45);
+    }
+    .export-panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .export-panel strong {
+      font-size: 13px;
+    }
+    .export-panel .meta {
+      font-size: 12px;
+    }
+    .switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 14px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, #b86a34, #8c4b22);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #fff;
+      color: var(--accent);
+      border: 1px solid var(--line);
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .metric {
+      padding: 16px;
+      border-radius: 16px;
+      background: rgba(255,253,248,0.94);
+      border: 1px solid rgba(216,205,193,0.92);
+      box-shadow: var(--shadow);
+    }
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    .metric strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1;
+    }
+    .workspace {
+      display: grid;
+      grid-template-columns: 380px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .panel { min-height: 720px; }
+    .left-pane {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      position: sticky;
+      top: 14px;
+      align-self: start;
+      max-height: calc(100vh - 28px);
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .toolbar button {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .toolbar button.is-active {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: rgba(156,91,46,0.28);
+    }
+    .issue-list {
+      display: grid;
+      gap: 10px;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .issue-group {
+      display: grid;
+      gap: 10px;
+    }
+    .issue-group-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.76);
+      border: 1px solid rgba(199, 214, 236, 0.92);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      backdrop-filter: blur(8px);
+      cursor: pointer;
+    }
+    .issue-group-title {
+      display: grid;
+      gap: 2px;
+    }
+    .issue-group-title strong {
+      font-size: 13px;
+    }
+    .issue-group-title span {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .issue-group-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: #e9f2ff;
+      color: #2f5f96;
+      font-size: 12px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .issue-group-metrics {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .issue-group-high {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: rgba(163, 61, 34, 0.12);
+      color: var(--high);
+      font-size: 12px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .issue-group-chevron {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      min-width: 16px;
+      text-align: center;
+    }
+    .issue-group-body {
+      display: grid;
+      gap: 10px;
+    }
+    .issue-group.is-collapsed .issue-group-body {
+      display: none;
+    }
+    .issue-card {
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 14px;
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    }
+    .issue-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 24px rgba(59, 38, 19, 0.08);
+    }
+    .issue-card.is-active {
+      border-color: rgba(156,91,46,0.44);
+      box-shadow: 0 12px 28px rgba(59, 38, 19, 0.12);
+      background: #fffaf2;
+    }
+    .issue-card.high { border-left: 6px solid var(--high); }
+    .issue-card.medium { border-left: 6px solid var(--medium); }
+    .issue-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: start;
+    }
+    .issue-title {
+      font-size: 15px;
+      line-height: 1.5;
+      font-weight: 700;
+    }
+    .issue-excerpt {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      margin-top: 8px;
+    }
+    .badge-row, .mini-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .badge, .mini-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .badge.high { background: var(--high-soft); color: var(--high); }
+    .badge.medium { background: var(--medium-soft); color: var(--medium); }
+    .badge.main { background: var(--analyzer-soft); color: var(--analyzer); }
+    .badge.origin-rule { background: var(--rule-soft); color: var(--rule); }
+    .badge.origin-llm { background: var(--llm-soft); color: var(--llm); }
+    .mini-pill {
+      background: #f5efe8;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .mini-pill.action-direct { background: rgba(163, 61, 34, 0.12); color: var(--high); }
+    .mini-pill.action-soften { background: rgba(143, 103, 20, 0.12); color: var(--medium); }
+    .mini-pill.action-justify { background: rgba(39, 93, 138, 0.12); color: #275d8a; }
+    .mini-pill.action-review { background: rgba(110, 62, 164, 0.12); color: #6e3ea4; }
+    .detail-pane {
+      display: grid;
+      grid-template-rows: minmax(0, 4fr) auto auto;
+      min-height: 780px;
+      max-height: calc(100vh - 28px);
+    }
+    .detail-head, .detail-body, .document-pane {
+      padding: 14px 16px;
+    }
+    .document-pane {
+      border-bottom: 1px solid var(--line);
+      min-height: 560px;
+      background:
+        linear-gradient(180deg, var(--doc-bg-top) 0%, var(--doc-bg-bottom) 100%);
+    }
+    .document-tools {
+      display: grid;
+      gap: 10px;
+      padding: 12px 16px 0;
+      background: linear-gradient(180deg, rgba(231, 242, 255, 0.92), rgba(231, 242, 255, 0.72));
+      border-bottom: 1px solid rgba(167, 191, 222, 0.5);
+    }
+    .document-toolbar-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .document-toolbar-row .toolbar {
+      gap: 8px;
+    }
+    .document-toolbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .document-mode-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .chapter-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding-bottom: 4px;
+    }
+    .chapter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(126, 153, 186, 0.34);
+      background: rgba(255, 255, 255, 0.78);
+      color: #315476;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .chapter-chip.is-active {
+      background: #e2eefc;
+      border-color: rgba(73, 120, 175, 0.44);
+      color: #274c72;
+      box-shadow: inset 0 0 0 1px rgba(73, 120, 175, 0.14);
+    }
+    .chapter-chip .count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: rgba(73, 120, 175, 0.12);
+      color: inherit;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .detail-head {
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      background: rgba(255,250,243,0.88);
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+    .detail-body {
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 6px;
+      background: #fffaf3;
+      padding-top: 8px;
+      padding-bottom: 10px;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+    .learning-card {
+      border: 1px solid rgba(125, 156, 196, 0.25);
+      background: rgba(242, 248, 255, 0.92);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .learning-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .learning-head strong {
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .learning-meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+    .learning-section {
+      display: grid;
+      gap: 4px;
+    }
+    .learning-section h3 {
+      margin: 0;
+      font-size: 11px;
+      color: var(--accent);
+    }
+    .learning-list {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 12px;
+      line-height: 1.65;
+    }
+    .learning-list li + li {
+      margin-top: 3px;
+    }
+    .detail-item {
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #fff;
+      border: 1px solid var(--line);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .detail-item strong {
+      display: block;
+      margin-bottom: 3px;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+    .detail-item.action-callout {
+      background: #fff8f1;
+      border-color: rgba(201, 175, 150, 0.6);
+    }
+    .document-pane {
+      min-height: 0;
+      overflow: auto;
+      background: linear-gradient(180deg, var(--doc-bg-top) 0%, var(--doc-bg-bottom) 100%);
+      scroll-behavior: smooth;
+      padding: 18px 22px 24px;
+    }
+    .doc-layout {
+      display: grid;
+      grid-template-columns: 180px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .doc-outline {
+      position: sticky;
+      top: 10px;
+      align-self: start;
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border-radius: 14px;
+      background: rgba(236, 245, 255, 0.92);
+      border: 1px solid rgba(168, 193, 224, 0.52);
+      box-shadow: 0 8px 18px rgba(53, 91, 136, 0.08);
+    }
+    .doc-outline-title {
+      color: #35587d;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .doc-outline button {
+      width: 100%;
+      text-align: left;
+      border-radius: 12px;
+      border: 1px solid rgba(140, 169, 203, 0.3);
+      background: rgba(255, 255, 255, 0.88);
+      color: #35587d;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.45;
+      cursor: pointer;
+    }
+    .doc-outline button.is-active {
+      background: #dfeeff;
+      border-color: rgba(73, 120, 175, 0.42);
+      color: #254a72;
+    }
+    .doc-outline button .count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      margin-left: 6px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: rgba(73, 120, 175, 0.12);
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .doc-block {
+      margin: 12px 16px;
+      padding: 10px 12px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .doc-block.chapter-anchor {
+      margin: 14px 16px 6px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    .chapter-anchor-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #36587c;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .doc-block p {
+      margin: 0;
+      line-height: 2.02;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 15px;
+    }
+    .doc-block table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+      margin: 0;
+    }
+    .doc-block td {
+      border: 1px solid rgba(178, 199, 225, 0.42);
+      padding: 8px 10px;
+      vertical-align: top;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .doc-block.active {
+      background: rgba(255, 242, 217, 0.92);
+      border-color: #f0c98a;
+    }
+    .doc-block-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .doc-line {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr);
+      gap: 12px;
+      padding: 8px 16px;
+      border-top: 1px solid #f1eadf;
+      align-items: start;
+    }
+    .doc-line:first-child { border-top: 0; }
+    .doc-line.active {
+      background: rgba(255, 242, 217, 0.92);
+      border-top-color: #f0c98a;
+      border-bottom: 1px solid #f0c98a;
+    }
+    .doc-line-number {
+      text-align: right;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .doc-line-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .doc-reading-surface {
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid rgba(176, 198, 224, 0.38);
+      border-radius: 18px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.55);
+      padding: 8px 0 14px;
+    }
+    .context-toggle.is-hidden {
+      display: none;
+    }
+    #detail-title {
+      font-size: 14px;
+      line-height: 1.4;
+      margin-right: auto;
+    }
+    #detail-excerpt {
+      font-size: 10px;
+      line-height: 1.5;
+      display: none;
+    }
+    #detail-badges {
+      justify-content: flex-end;
+    }
+    .badge.compact {
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+    .empty {
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+      background: rgba(255,255,255,0.62);
+    }
+    @media (max-width: 1180px) {
+      .hero, .workspace, .summary-grid, .detail-grid { grid-template-columns: 1fr; }
+      .left-pane {
+        position: static;
+        max-height: none;
+      }
+      .detail-pane {
+        max-height: none;
+        min-height: 0;
+      }
+      .issue-list { max-height: none; }
+      .document-pane { min-height: 360px; }
+      .doc-layout {
+        grid-template-columns: 1fr;
+      }
+      .doc-outline {
+        position: static;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="hero-card">
+        <div class="eyebrow">Gov Compliance Review</div>
+        <h1>审查工作台 V2</h1>
+        <p>这是一页专门用来看“主问题化、章节化、仲裁化”升级效果的新页面。它会优先展示章节级主问题、来源链路和仲裁收束效果，而不是只展示扁平 findings 列表。</p>
+        <div class="hero-actions">
+          <a href="/">旧版审查页</a>
+          <a href="/review-check">采购人审查页</a>
+          <a href="/rules">规则管理页</a>
+        </div>
+      </div>
+      <div class="hero-card upload-card">
+        <div>
+          <div class="eyebrow">Run Review</div>
+          <h2>上传文件并验证新链路</h2>
+        </div>
+        <form id="review-form">
+          <input id="file-input" type="file" name="file" accept=".docx,.pdf,.txt" required />
+          <div class="switches">
+            <label class="switch"><input type="checkbox" name="use_llm" checked /> 启用大模型（混合审查）</label>
+            <label class="switch"><input type="checkbox" name="use_cache" /> 启用缓存</label>
+          </div>
+          <div class="switches">
+            <button type="submit">开始审查</button>
+            <button type="button" class="secondary" id="open-source-btn" disabled>打开原文件</button>
+          </div>
+        </form>
+        <div id="run-meta" class="meta">上传后会同时返回文档原文、主问题视图、明细视图和来源链路信息。</div>
+        <div id="export-toolbar" class="export-panel" style="display:none;">
+          <div class="export-panel-head">
+            <strong>结果导出</strong>
+            <span id="export-status" class="meta">默认按采购人改稿和发布前复核场景导出。</span>
+          </div>
+          <div class="hero-actions">
+            <button type="button" class="secondary" data-export-format="markdown" data-export-mode="summary">导出 Markdown（主问题版）</button>
+            <button type="button" class="secondary" data-export-format="markdown" data-export-mode="full">导出 Markdown（完整明细版）</button>
+            <button type="button" class="secondary" data-export-format="xlsx" data-export-mode="summary">导出 Excel（主问题版）</button>
+            <button type="button" class="secondary" data-export-format="xlsx" data-export-mode="full">导出 Excel（完整明细版）</button>
+            <button type="button" class="secondary" data-export-format="json" data-export-mode="summary">导出 JSON（主问题版）</button>
+            <button type="button" class="secondary" data-export-format="json" data-export-mode="full">导出 JSON（完整明细版）</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="summary-grid" class="summary-grid">
+      <div class="metric"><div class="metric-label">当前状态</div><strong>待运行</strong></div>
+      <div class="metric"><div class="metric-label">主问题</div><strong>0</strong></div>
+      <div class="metric"><div class="metric-label">保留明细</div><strong>0</strong></div>
+      <div class="metric"><div class="metric-label">模型新增</div><strong>0</strong></div>
+      <div class="metric"><div class="metric-label">高风险</div><strong>0</strong></div>
+      <div class="metric"><div class="metric-label">中风险</div><strong>0</strong></div>
+    </section>
+
+    <section class="workspace">
+      <aside class="panel left-pane">
+        <div>
+          <div class="eyebrow">Issue Navigator</div>
+          <h2>问题清单</h2>
+          <p class="meta">默认优先看章节级主问题。切换视图后，可以对照明细问题和模型新增问题。</p>
+        </div>
+        <div class="toolbar" id="view-toolbar">
+          <button type="button" data-view="main" class="is-active">主问题视图</button>
+          <button type="button" data-view="all">全部问题</button>
+          <button type="button" data-view="llm">模型新增</button>
+        </div>
+        <div class="toolbar" id="risk-toolbar">
+          <button type="button" data-risk="all" class="is-active">全部风险</button>
+          <button type="button" data-risk="high">高风险</button>
+          <button type="button" data-risk="medium">中风险</button>
+        </div>
+        <div id="issue-list" class="issue-list">
+          <div class="empty">上传文件后，这里会优先显示章节级主问题。</div>
+        </div>
+      </aside>
+
+      <section class="panel detail-pane">
+        <div id="document-pane" class="document-pane">
+          <div id="document-head" class="document-head"></div>
+          <div id="document-body" class="document-body">
+            <div class="empty">上传文件后，这里会渲染文档原文，并跟随问题卡片定位到对应位置。</div>
+          </div>
+        </div>
+        <div class="detail-head">
+          <div class="eyebrow">Focused Review</div>
+          <h2 id="detail-title">尚未选择问题</h2>
+          <div id="detail-badges" class="badge-row"></div>
+          <p id="detail-excerpt" class="meta">这里只保留当前问题的风险描述和建议改写，避免和左侧清单重复。</p>
+        </div>
+        <div class="detail-body">
+          <div id="detail-grid" class="detail-grid">
+            <div class="detail-item"><strong>风险说明</strong><div>待运行</div></div>
+            <div class="detail-item"><strong>建议改写</strong><div>待运行</div></div>
+          </div>
+          <div id="learning-card" class="learning-card">
+            <div class="learning-head">
+              <strong>Difference Learning</strong>
+              <span class="badge compact">待运行</span>
+            </div>
+            <div class="learning-meta">启用大模型（混合审查）后，这里会显示本轮自动沉淀的规则、主题分析器、LLM prompt 和 benchmark 优化建议。</div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      payload: null,
+      findings: [],
+      filtered: [],
+      selectedFindingId: null,
+      viewMode: 'main',
+      riskMode: 'all',
+      sectionMode: 'all',
+      collapsedIssueSections: {},
+      documentMode: 'context',
+      activeChapterKey: 'all',
+      contextExpanded: false,
+      lastExportLabel: '',
+    };
+
+    const form = document.getElementById('review-form');
+    const openSourceBtn = document.getElementById('open-source-btn');
+    const runMetaNode = document.getElementById('run-meta');
+    const exportToolbarNode = document.getElementById('export-toolbar');
+    const exportStatusNode = document.getElementById('export-status');
+    const summaryGridNode = document.getElementById('summary-grid');
+    const issueListNode = document.getElementById('issue-list');
+    const detailTitleNode = document.getElementById('detail-title');
+    const detailBadgesNode = document.getElementById('detail-badges');
+    const detailExcerptNode = document.getElementById('detail-excerpt');
+    const detailGridNode = document.getElementById('detail-grid');
+    const documentPaneNode = document.getElementById('document-pane');
+    const documentHeadNode = document.getElementById('document-head');
+    const documentBodyNode = document.getElementById('document-body');
+    const learningCardNode = document.getElementById('learning-card');
+
+    form.addEventListener('submit', submitReview);
+    openSourceBtn.addEventListener('click', openSourceFile);
+    exportToolbarNode.querySelectorAll('[data-export-format]').forEach((node) => {
+      node.addEventListener('click', () => {
+        exportReview(node.dataset.exportFormat, node.dataset.exportMode);
+      });
+    });
+    document.getElementById('view-toolbar').querySelectorAll('[data-view]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.viewMode = node.dataset.view;
+        render();
+      });
+    });
+    document.getElementById('risk-toolbar').querySelectorAll('[data-risk]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.riskMode = node.dataset.risk;
+        render();
+      });
+    });
+    const sectionToolbarNode = document.createElement('div');
+    sectionToolbarNode.className = 'toolbar';
+    sectionToolbarNode.id = 'section-toolbar';
+    sectionToolbarNode.innerHTML = `
+      <button type="button" data-section="all" class="is-active">全部章节</button>
+      <button type="button" data-section="qualification">资格</button>
+      <button type="button" data-section="scoring">评分</button>
+      <button type="button" data-section="technical">技术</button>
+      <button type="button" data-section="commercial">商务/验收</button>
+    `;
+    document.querySelector('.left-pane').insertBefore(sectionToolbarNode, issueListNode);
+    sectionToolbarNode.querySelectorAll('[data-section]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.sectionMode = node.dataset.section;
+        render();
+      });
+    });
+
+    async function submitReview(event) {
+      event.preventDefault();
+      const formData = new FormData(form);
+      runMetaNode.textContent = '正在执行审查，请稍候...';
+      issueListNode.innerHTML = '<div class="empty">正在生成主问题视图...</div>';
+      try {
+        const response = await fetch('/api/review', { method: 'POST', body: formData });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || '审查失败');
+        }
+        state.payload = payload;
+        state.findings = payload.review.findings || [];
+        state.selectedFindingId = null;
+        state.activeChapterKey = 'all';
+        state.collapsedIssueSections = {};
+        openSourceBtn.disabled = !payload.document || !payload.document.source_path;
+        exportToolbarNode.style.display = 'flex';
+        if (exportStatusNode) {
+          exportStatusNode.textContent = '默认按采购人改稿和发布前复核场景导出。';
+        }
+        const stageName = payload.stage && payload.stage.stage_name ? payload.stage.stage_name : '采购需求形成与发布前审查';
+        runMetaNode.textContent = `已完成审查：${payload.review.document_name}；当前按“${stageName}”口径生成结果；缓存 ${payload.cache.used ? '命中' : '未命中'}；本地模型 ${payload.llm.enabled ? '已启用' : '未启用'}。`;
+        render();
+      } catch (error) {
+        exportToolbarNode.style.display = 'none';
+        runMetaNode.textContent = `审查失败：${error.message}`;
+        issueListNode.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+      }
+    }
+
+    async function exportReview(format, mode) {
+      if (!state.payload || !state.payload.review) {
+        runMetaNode.textContent = '请先运行审查，再导出结果。';
+        return;
+      }
+      runMetaNode.textContent = `正在导出 ${format.toUpperCase()}（${mode === 'summary' ? '主问题版' : '完整明细版'}）...`;
+      try {
+        const response = await fetch('/api/export-review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            review: state.payload.review,
+            document: state.payload.document,
+            stage: state.payload.stage,
+            format,
+            mode,
+          }),
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || '导出失败');
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+        const match = disposition.match(/filename=\"?([^\";]+)\"?/);
+        const extension = format === 'markdown' ? 'md' : (format === 'xlsx' ? 'xlsx' : 'json');
+        const filename = utfMatch
+          ? decodeURIComponent(utfMatch[1])
+          : (match ? match[1] : `review-export.${extension}`);
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        state.lastExportLabel = filename;
+        if (exportStatusNode) {
+          exportStatusNode.textContent = `最近导出：${filename}；默认仍按采购人改稿和发布前复核场景组织字段。`;
+        }
+        runMetaNode.textContent = `已导出 ${filename}`;
+      } catch (error) {
+        if (exportStatusNode) {
+          exportStatusNode.textContent = `导出失败：${error.message}`;
+        }
+        runMetaNode.textContent = `导出失败：${error.message}`;
+      }
+    }
+
+    async function openSourceFile() {
+      const sourcePath = state.payload && state.payload.document ? state.payload.document.source_path : '';
+      if (!sourcePath) return;
+      await fetch('/api/open-source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: sourcePath }),
+      });
+    }
+
+    function render() {
+      renderToolbarState();
+      renderSummary();
+      renderIssues();
+      renderDetail();
+      renderDocument();
+    }
+
+    function renderToolbarState() {
+      document.querySelectorAll('#view-toolbar [data-view]').forEach((node) => {
+        node.classList.toggle('is-active', node.dataset.view === state.viewMode);
+      });
+      document.querySelectorAll('#risk-toolbar [data-risk]').forEach((node) => {
+        node.classList.toggle('is-active', node.dataset.risk === state.riskMode);
+      });
+      document.querySelectorAll('#section-toolbar [data-section]').forEach((node) => {
+        node.classList.toggle('is-active', node.dataset.section === state.sectionMode);
+      });
+    }
+
+    function renderSummary() {
+      const findings = state.findings;
+      const metrics = summarizeFindings(findings);
+      const sectionMetrics = summarizeBySection(findings);
+      const stage = state.payload ? state.payload.stage : null;
+      const stageCard = stage ? `
+        <div class="stage-card">
+          <strong>${escapeHtml(stage.stage_name || '采购需求形成与发布前审查')}</strong>
+          <div class="meta">${escapeHtml(stage.stage_goal || '')}</div>
+          <div class="meta">审查姿态：${escapeHtml(stage.review_posture || '')}</div>
+          <div class="meta">输出倾向：${escapeHtml((stage.output_bias || []).join(' / ') || '')}</div>
+        </div>
+      ` : '';
+      summaryGridNode.innerHTML = `
+        ${stageCard}
+        ${renderMetric('当前状态', state.payload ? '已完成' : '待运行')}
+        ${renderMetric('主问题', metrics.main)}
+        ${renderMetric('保留明细', metrics.detail)}
+        ${renderMetric('模型新增', metrics.llm)}
+        ${renderMetric('高风险', metrics.high)}
+        ${renderMetric('中风险', metrics.medium)}
+        ${renderMetric('资格主问题', sectionMetrics.qualification)}
+        ${renderMetric('评分主问题', sectionMetrics.scoring)}
+        ${renderMetric('技术主问题', sectionMetrics.technical)}
+        ${renderMetric('商务/验收主问题', sectionMetrics.commercial)}
+      `;
+    }
+
+    function renderMetric(label, value) {
+      return `<div class="metric"><div class="metric-label">${escapeHtml(label)}</div><strong>${escapeHtml(String(value))}</strong></div>`;
+    }
+
+    function summarizeFindings(findings) {
+      return {
+        main: findings.filter(isMainIssue).length,
+        detail: findings.filter((item) => !isMainIssue(item)).length,
+        llm: findings.filter((item) => item.finding_origin === 'llm_added').length,
+        high: findings.filter((item) => item.risk_level === 'high').length,
+        medium: findings.filter((item) => item.risk_level === 'medium').length,
+      };
+    }
+
+    function summarizeBySection(findings) {
+      const mainFindings = findings.filter(isMainIssue);
+      return {
+        qualification: mainFindings.filter((item) => classifySection(item) === 'qualification').length,
+        scoring: mainFindings.filter((item) => classifySection(item) === 'scoring').length,
+        technical: mainFindings.filter((item) => classifySection(item) === 'technical').length,
+        commercial: mainFindings.filter((item) => classifySection(item) === 'commercial').length,
+      };
+    }
+
+    function applyFilters(findings) {
+      let items = findings.slice();
+      if (state.viewMode === 'main') {
+        items = items.filter(isMainIssue);
+      } else if (state.viewMode === 'llm') {
+        items = items.filter((item) => item.finding_origin === 'llm_added');
+      }
+      if (state.riskMode !== 'all') {
+        items = items.filter((item) => item.risk_level === state.riskMode);
+      }
+      if (state.sectionMode !== 'all') {
+        items = items.filter((item) => classifySection(item) === state.sectionMode);
+      }
+      return items;
+    }
+
+    function renderIssues() {
+      const filtered = applyFilters(state.findings);
+      state.filtered = filtered;
+      if (!state.selectedFindingId && filtered.length) {
+        state.selectedFindingId = filtered[0].finding_id;
+      }
+      if (!filtered.some((item) => item.finding_id === state.selectedFindingId) && filtered.length) {
+        state.selectedFindingId = filtered[0].finding_id;
+      }
+      if (!filtered.length) {
+        issueListNode.innerHTML = '<div class="empty">当前筛选条件下没有问题。</div>';
+        return;
+      }
+      issueListNode.innerHTML = renderIssueGroups(filtered);
+      issueListNode.querySelectorAll('.issue-card').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.selectedFindingId = node.dataset.findingId;
+          const finding = state.findings.find((item) => item.finding_id === state.selectedFindingId);
+          state.activeChapterKey = finding ? chapterKeyForFinding(finding) : state.activeChapterKey;
+          if (finding) {
+            state.collapsedIssueSections[chapterKeyForFinding(finding)] = false;
+          }
+          state.contextExpanded = false;
+          renderIssues();
+          renderDetail();
+          renderDocument();
+        });
+      });
+      issueListNode.querySelectorAll('[data-group-key]').forEach((node) => {
+        node.addEventListener('click', () => {
+          const key = node.dataset.groupKey;
+          state.collapsedIssueSections[key] = !isIssueGroupCollapsed(key);
+          renderIssues();
+        });
+      });
+    }
+
+    function renderIssueGroups(findings) {
+      const sectionOrder = ['qualification', 'scoring', 'technical', 'commercial'];
+      const grouped = new Map(sectionOrder.map((section) => [section, []]));
+      findings.forEach((finding) => {
+        const section = classifySection(finding);
+        if (!grouped.has(section)) grouped.set(section, []);
+        grouped.get(section).push(finding);
+      });
+      return Array.from(grouped.entries())
+        .filter(([, items]) => items.length)
+        .map(([section, items]) => {
+          const highCount = items.filter((item) => item.risk_level === 'high').length;
+          const collapsed = isIssueGroupCollapsed(section);
+          return `
+          <section class="issue-group ${collapsed ? 'is-collapsed' : ''}">
+            <div class="issue-group-head" data-group-key="${escapeHtml(section)}">
+              <div class="issue-group-title">
+                <strong>${escapeHtml(sectionLabelFromKey(section))}</strong>
+                <span>${escapeHtml(sectionDescription(section))}</span>
+              </div>
+              <div class="issue-group-metrics">
+                <span class="issue-group-high">高 ${escapeHtml(String(highCount))}</span>
+                <span class="issue-group-count">${escapeHtml(String(items.length))}</span>
+                <span class="issue-group-chevron">${collapsed ? '展开' : '收起'}</span>
+              </div>
+            </div>
+            <div class="issue-group-body">
+              ${items.map(renderIssueCard).join('')}
+            </div>
+          </section>
+        `;})
+        .join('');
+    }
+
+    function isIssueGroupCollapsed(sectionKey) {
+      if (Object.prototype.hasOwnProperty.call(state.collapsedIssueSections, sectionKey)) {
+        return Boolean(state.collapsedIssueSections[sectionKey]);
+      }
+      const selected = state.findings.find((item) => item.finding_id === state.selectedFindingId);
+      if (!selected) return sectionKey !== 'qualification';
+      return chapterKeyForFinding(selected) !== sectionKey;
+    }
+
+    function renderIssueCard(finding) {
+      const active = finding.finding_id === state.selectedFindingId;
+      const action = suggestedAction(finding);
+      const badges = [
+        `<span class="badge ${escapeHtml(finding.risk_level)}">${riskLabel(finding.risk_level)}</span>`,
+        isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : '',
+        `<span class="badge">${escapeHtml(sectionLabel(finding))}</span>`,
+        `<span class="badge">${escapeHtml(subthemeLabel(finding))}</span>`,
+        `<span class="badge ${originBadgeClass(finding)}">${escapeHtml(originLabel(finding))}</span>`,
+      ].join('');
+      return `
+        <article class="issue-card ${escapeHtml(finding.risk_level)} ${active ? 'is-active' : ''}" data-finding-id="${escapeHtml(finding.finding_id)}">
+          <div class="issue-head">
+            <div class="issue-title">${escapeHtml(finding.problem_title)}</div>
+          </div>
+          <div class="badge-row">${badges}</div>
+          <div class="mini-meta" style="margin-top:10px;">
+            <span class="mini-pill">位置 ${escapeHtml(compactLocation(finding))}</span>
+            <span class="mini-pill">来源 ${escapeHtml(sourceChain(finding))}</span>
+            <span class="mini-pill ${escapeHtml(action.className)}">${escapeHtml(action.label)}</span>
+          </div>
+          <div class="issue-excerpt"><strong>代表性证据：</strong>${escapeHtml(finding.source_text || '无原文摘录')}</div>
+        </article>
+      `;
+    }
+
+    function renderDetail() {
+      const finding = state.filtered.find((item) => item.finding_id === state.selectedFindingId) || state.findings.find((item) => item.finding_id === state.selectedFindingId);
+      if (!finding) {
+        detailTitleNode.textContent = '尚未选择问题';
+        detailBadgesNode.innerHTML = '';
+        detailExcerptNode.textContent = '这里只保留当前问题的风险描述和建议改写，避免和左侧清单重复。';
+        detailGridNode.innerHTML = '<div class="detail-item"><strong>状态</strong><div>暂无内容</div></div>';
+        renderDifferenceLearning();
+        return;
+      }
+      detailTitleNode.textContent = finding.problem_title;
+      detailBadgesNode.innerHTML = `
+        <span class="badge compact ${escapeHtml(finding.risk_level)}">${riskLabel(finding.risk_level)}</span>
+        ${isMainIssue(finding) ? '<span class="badge compact main">章节主问题</span>' : ''}
+        <span class="badge compact">${escapeHtml(sectionLabel(finding))}</span>
+        <span class="badge compact">${escapeHtml(subthemeLabel(finding))}</span>
+        <span class="badge compact ${originBadgeClass(finding)}">${escapeHtml(originLabel(finding))}</span>
+      `;
+      detailExcerptNode.textContent = '';
+      detailGridNode.innerHTML = `
+        <div class="detail-item action-callout"><strong>处理建议</strong><div>${escapeHtml(suggestedAction(finding).label)}${finding.needs_human_review ? ` ｜ ${escapeHtml(finding.human_review_reason || '需采购/法务复核')}` : ''}</div></div>
+        <div class="detail-item"><strong>风险说明</strong><div>${escapeHtml(finding.why_it_is_risky || '暂无')}</div></div>
+        <div class="detail-item"><strong>法规依据</strong><div>${escapeHtml(finding.legal_or_policy_basis || finding.primary_authority || '暂无')}</div></div>
+        <div class="detail-item"><strong>适用逻辑</strong><div>${escapeHtml(finding.applicability_logic || '暂无')}</div></div>
+        <div class="detail-item"><strong>建议改写</strong><div>${escapeHtml(finding.rewrite_suggestion || '暂无')}</div></div>
+        <div class="detail-item"><strong>代表性证据</strong><div>${escapeHtml(finding.source_text || '暂无')}</div></div>
+      `;
+      renderDifferenceLearning(finding);
+    }
+
+    function renderDocument() {
+      try {
+        const documentPayload = state.payload ? state.payload.document : null;
+        if (!documentPayload) {
+          documentHeadNode.innerHTML = '<h2 style="margin:0;">文件正文</h2>';
+          documentBodyNode.innerHTML = '<div class="empty">上传文件后，这里会渲染文档原文，并联动定位。</div>';
+          return;
+        }
+        const finding = state.filtered.find((item) => item.finding_id === state.selectedFindingId) || state.findings.find((item) => item.finding_id === state.selectedFindingId);
+        const start = finding ? finding.text_line_start : 0;
+        const end = finding ? finding.text_line_end : 0;
+        documentHeadNode.innerHTML = `
+          <h2 style="margin:0;">文件正文</h2>
+          <div class="meta">原文件：${escapeHtml(documentPayload.source_path)}</div>
+          <div class="meta">稳定文本：${escapeHtml(documentPayload.normalized_text_path)}</div>
+          <div class="meta">总行数：${documentPayload.line_count} ｜ 渲染模式：${documentPayload.render_mode === 'docx_blocks' ? 'DOCX 原文结构' : '稳定文本'}</div>
+        `;
+        documentBodyNode.innerHTML = documentPayload.render_mode === 'docx_blocks'
+          ? (documentPayload.blocks || []).map((block) => renderWorkbenchDocumentBlock(block)).join('')
+          : (documentPayload.lines || []).map((line) => renderWorkbenchDocumentLine(line)).join('');
+        highlightWorkbenchRange(start, end);
+      } catch (error) {
+        documentHeadNode.innerHTML = '<h2 style="margin:0;">文件正文</h2>';
+        documentBodyNode.innerHTML = `<div class="empty">文档渲染失败：${escapeHtml(error && error.message ? error.message : String(error))}</div>`;
+      }
+    }
+
+    function renderWorkbenchDocumentBlock(block) {
+      const meta = `行号：${formatLineRange(block.start_line, block.end_line)}`;
+      return `<div class="doc-block" id="${escapeHtml(block.block_id)}" data-start-line="${block.start_line}" data-end-line="${block.end_line}">
+        ${block.html}
+        <div class="doc-block-meta">${escapeHtml(meta)}</div>
+      </div>`;
+    }
+
+    function renderWorkbenchDocumentLine(line) {
+      return `<div class="doc-line" id="review-next-line-${line.number}">
+        <div class="doc-line-number">${String(line.number).padStart(4, '0')}${line.page_hint ? `<br>${escapeHtml(line.page_hint)}` : ''}</div>
+        <div class="doc-line-text">${escapeHtml(line.text || ' ')}</div>
+      </div>`;
+    }
+
+    function highlightWorkbenchRange(start, end) {
+      documentBodyNode.querySelectorAll('.active').forEach((node) => node.classList.remove('active'));
+      let target = null;
+      const documentPayload = state.payload ? state.payload.document : null;
+      if (!documentPayload) return;
+      if (documentPayload.render_mode === 'docx_blocks') {
+        documentBodyNode.querySelectorAll('.doc-block').forEach((node) => {
+          const blockStart = Number(node.dataset.startLine);
+          const blockEnd = Number(node.dataset.endLine);
+          const overlaps = blockStart <= end && blockEnd >= start;
+          if (overlaps) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
+        });
+      } else {
+        for (let line = start; line <= end; line += 1) {
+          const node = document.getElementById(`review-next-line-${line}`);
+          if (node) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
+        }
+      }
+      if (target) scrollDocumentPaneToNode(target);
+    }
+
+    function buildChapterNav(documentPayload, findings) {
+      const counts = { qualification: 0, scoring: 0, technical: 0, commercial: 0 };
+      findings.forEach((finding) => {
+        counts[chapterKeyForFinding(finding)] = (counts[chapterKeyForFinding(finding)] || 0) + 1;
+      });
+      const detected = new Set(['qualification', 'scoring', 'technical', 'commercial']);
+      return Array.from(detected).map((key) => ({
+        key,
+        label: sectionLabelFromKey(key),
+        count: counts[key] || 0,
+      }));
+    }
+
+    function chapterKeyForFinding(finding) {
+      return classifySection(finding);
+    }
+
+
+    function scrollDocumentPaneToNode(node) {
+      const paneRect = documentPaneNode.getBoundingClientRect();
+      const nodeRect = node.getBoundingClientRect();
+      const offset = nodeRect.top - paneRect.top + documentPaneNode.scrollTop - 80;
+      documentPaneNode.scrollTo({ top: Math.max(offset, 0), behavior: 'smooth' });
+    }
+
+    function isMainIssue(finding) {
+      return finding.finding_origin === 'analyzer' || (finding.finding_origin === 'llm_added' && /章节|主问题/.test(finding.problem_title || ''));
+    }
+
+    function originLabel(finding) {
+      if (finding.finding_origin === 'llm_added') return '全文辅助扫描';
+      if (finding.finding_origin === 'analyzer') return '结构分析 / 仲裁保留';
+      return '规则命中';
+    }
+
+    function originBadgeClass(finding) {
+      if (finding.finding_origin === 'llm_added') return 'origin-llm';
+      if (finding.finding_origin === 'analyzer') return 'main';
+      return 'origin-rule';
+    }
+
+    function sourceChain(finding) {
+      if (finding.finding_origin === 'analyzer') return '规则命中 → 结构分析 → 仲裁保留';
+      if (finding.finding_origin === 'llm_added') return '全文辅助扫描 → 仲裁判断';
+      return '规则命中';
+    }
+
+    function classifySection(finding) {
+      const text = [finding.problem_title, finding.section_path, finding.source_section].filter(Boolean).join(' ');
+      if (/资格|申请人的资格要求|准入门槛/.test(text)) return 'qualification';
+      if (/评分|评标信息|演示|品牌档次|认证评分|商务评分/.test(text)) return 'scoring';
+      if (/技术|标准|检测报告|证明材料/.test(text)) return 'technical';
+      return 'commercial';
+    }
+
+    function sectionLabel(finding) {
+      return sectionLabelFromKey(classifySection(finding));
+    }
+
+    function sectionLabelFromKey(sectionKey) {
+      const mapping = {
+        qualification: '资格',
+        scoring: '评分',
+        technical: '技术',
+        commercial: '商务/验收',
+      };
+      return mapping[sectionKey] || '其它';
+    }
+
+    function sectionDescription(sectionKey) {
+      const mapping = {
+        qualification: '一般门槛、属地场所、经营年限和错位资质会优先归并在这里。',
+        scoring: '品牌、认证、演示和主观评分等结构性问题会集中展示。',
+        technical: '标准错位、证明形式和技术必要性边界问题会集中展示。',
+        commercial: '资金占用、验收费转嫁、责任失衡和验收边界问题会集中展示。',
+      };
+      return mapping[sectionKey] || '当前筛选条件下的问题会按章节归在这里。';
+    }
+
+    function subthemeLabel(finding) {
+      const title = finding.problem_title || '';
+      if (/一般财务和规模/.test(title)) return '财务/规模';
+      if (/经营年限|属地场所|单项业绩/.test(title)) return '年限/场所/业绩';
+      if (/行业资质|专门许可/.test(title)) return '错位资质';
+      if (/品牌档次/.test(title)) return '品牌评分';
+      if (/认证评分/.test(title)) return '错位认证';
+      if (/证书认证或模板内容/.test(title)) return '评分错位';
+      if (/标准或规范/.test(title)) return '标准错位';
+      if (/证明材料形式/.test(title)) return '证明形式';
+      if (/资金占用/.test(title)) return '资金占用';
+      if (/交货期限/.test(title)) return '交期异常';
+      if (/费用整体转嫁/.test(title)) return '验收费转嫁';
+      if (/责任和违约后果/.test(title)) return '责任失衡';
+      if (/验收程序|最终确认边界/.test(title)) return '验收边界';
+      if (/属地倾斜/.test(title)) return '属地倾斜';
+      if (/模板残留|义务外扩/.test(title)) return '模板残留';
+      if (/行业适配性不足/.test(title)) return '行业适配';
+      return finding.issue_type || '综合';
+    }
+
+    function riskLabel(level) {
+      if (level === 'high') return '高风险';
+      if (level === 'medium') return '中风险';
+      return level || '未知';
+    }
+
+    function suggestedAction(finding) {
+      if (finding.needs_human_review) {
+        return { label: '建议采购/法务复核', className: 'action-review' };
+      }
+      if (/论证/.test(finding.problem_title || '') || finding.issue_type === 'technical_justification_needed') {
+        return { label: '建议补必要性论证', className: 'action-justify' };
+      }
+      if (/弱化|主观|高分|过严|边界/.test([finding.problem_title, finding.why_it_is_risky].filter(Boolean).join(' '))) {
+        return { label: '建议弱化表述', className: 'action-soften' };
+      }
+      return { label: '建议直接修改', className: 'action-direct' };
+    }
+
+    function compactLocation(finding) {
+      const section = finding.section_path || finding.source_section || '未定位章节';
+      return `${section} / L${finding.text_line_start}`;
+    }
+
+    function formatLineRange(start, end) {
+      if (!start && !end) return '—';
+      if (!end || start === end) return String(start).padStart(4, '0');
+      return `${String(start).padStart(4, '0')}-${String(end).padStart(4, '0')}`;
+    }
+
+    function renderDifferenceLearning(finding = null) {
+      const learning = state.payload && state.payload.llm_review ? state.payload.llm_review.difference_learning : null;
+      if (!learning || learning.status === 'llm_disabled') {
+        learningCardNode.innerHTML = `
+          <div class="learning-head">
+            <strong>Difference Learning</strong>
+            <span class="badge compact">未启用</span>
+          </div>
+          <div class="learning-meta">启用大模型（混合审查）后，这里会显示本轮自动沉淀的规则、主题分析器、LLM prompt 和 benchmark 优化建议。</div>
+        `;
+        return;
+      }
+      const suggestions = learning.suggestions || {};
+      const relatedIssueType = finding ? finding.issue_type : '';
+      const badgeText = learning.added_finding_count ? `新增问题 ${learning.added_finding_count}` : '无新增问题';
+      const sceneBits = [
+        learning.primary_catalog_name || '',
+        learning.primary_domain_key || '',
+        learning.is_mixed_scope ? '混合采购' : '',
+      ].filter(Boolean).join(' ｜ ');
+      learningCardNode.innerHTML = `
+        <div class="learning-head">
+          <strong>Difference Learning</strong>
+          <span class="badge compact">${escapeHtml(badgeText)}</span>
+        </div>
+        <div class="learning-meta">本轮自动把模型新增问题沉淀为后续增强建议。${sceneBits ? ` 当前品目场景：${escapeHtml(sceneBits)}。` : ''}${relatedIssueType ? ` 当前选中问题类型：${escapeHtml(relatedIssueType)}` : ''}</div>
+        ${renderLearningSection('规则建议', suggestions.rules || [], relatedIssueType)}
+        ${renderLearningSection('分析器建议', suggestions.theme_analyzers || [], relatedIssueType)}
+        ${renderLearningSection('LLM Prompt 建议', suggestions.llm_prompts || [], relatedIssueType)}
+        ${renderLearningSection('Benchmark 建议', suggestions.benchmark || [], relatedIssueType)}
+      `;
+    }
+
+    function renderLearningSection(label, items, relatedIssueType) {
+      const filtered = relatedIssueType
+        ? items.filter((item) => String(item.target || '').includes(relatedIssueType) || String(item.suggestion || '').includes(relatedIssueType))
+        : items;
+      const chosen = filtered.length ? filtered : items;
+      if (!chosen.length) return '';
+      return `
+        <section class="learning-section">
+          <h3>${escapeHtml(label)}</h3>
+          <ul class="learning-list">
+            ${chosen.slice(0, 3).map((item) => `<li><strong>${escapeHtml(String(item.target || 'system'))}</strong>：${escapeHtml(String(item.suggestion || ''))}</li>`).join('')}
+          </ul>
+        </section>
+      `;
+    }
+
+    function fullLocation(finding) {
+      const parts = [];
+      if (finding.section_path) parts.push(finding.section_path);
+      if (finding.page_hint) parts.push(finding.page_hint);
+      parts.push(`行 ${finding.text_line_start}-${finding.text_line_end}`);
+      return parts.join(' | ');
+    }
+
+    function escapeHtml(text) {
+      return String(text || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    }
+  </script>
+</body>
+</html>"""
+
+
+def _review_fresh_html() -> str:
+    return """<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>审查工作台 V3</title>
+  <style>
+    :root {
+      --bg: #f4efe5;
+      --panel: #fffdf8;
+      --line: #ddd2c2;
+      --ink: #20252b;
+      --muted: #6c675e;
+      --accent: #9d4a24;
+      --high: #a33d22;
+      --medium: #8f6714;
+      --active: #fff2dd;
+      --chapter: #e9f2ff;
+      --chapter-ink: #315476;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
+    }
+    .app {
+      max-width: 1520px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(52, 41, 29, 0.06);
+    }
+    .hero-card {
+      padding: 18px 20px;
+      display: grid;
+      gap: 10px;
+    }
+    .hero-card h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+    .hero-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 14px;
+    }
+    .hero-actions a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    form {
+      display: grid;
+      gap: 12px;
+    }
+    input[type="file"] {
+      width: 100%;
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: #fff;
+    }
+    .toolbar-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    button.filter,
+    button.chapter-filter {
+      background: #fff;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-weight: 600;
+    }
+    button.filter.active,
+    button.chapter-filter.active {
+      background: #fff5ea;
+      color: var(--accent);
+      border-color: #d3b89f;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+    .summary {
+      margin-bottom: 16px;
+      padding: 16px;
+      display: none;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .summary-topline {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .document-brief {
+      display: grid;
+      gap: 8px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+    }
+    .document-brief strong {
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .summary-metrics {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .stage-card {
+      grid-column: 1 / -1;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff8f1;
+      display: grid;
+      gap: 6px;
+    }
+    .stage-card strong {
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .stage-card .meta {
+      font-size: 13px;
+    }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+    .stat .label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .stat .value {
+      margin-top: 8px;
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .workspace {
+      display: none;
+      grid-template-columns: 420px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .left-pane {
+      min-height: 760px;
+      padding: 16px;
+      position: sticky;
+      top: 12px;
+      align-self: start;
+      max-height: calc(100vh - 24px);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto auto auto 1fr;
+      gap: 12px;
+    }
+    .issue-list {
+      min-height: 0;
+      overflow: auto;
+      display: grid;
+      gap: 10px;
+      padding-right: 4px;
+    }
+    .issue-group {
+      display: grid;
+      gap: 8px;
+    }
+    .issue-group-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      cursor: pointer;
+    }
+    .issue-group-title {
+      display: grid;
+      gap: 2px;
+    }
+    .issue-group-title strong {
+      font-size: 14px;
+    }
+    .issue-group-title span {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .issue-group-metrics {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .issue-group-high,
+    .issue-group-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .issue-group-high {
+      background: rgba(163, 61, 34, 0.12);
+      color: var(--high);
+    }
+    .issue-group-count {
+      background: var(--chapter);
+      color: var(--chapter-ink);
+    }
+    .issue-group.is-collapsed .issue-group-body {
+      display: none;
+    }
+    .issue-group-body {
+      display: grid;
+      gap: 8px;
+    }
+    .issue-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+      background: #fff;
+      cursor: pointer;
+      display: grid;
+      gap: 8px;
+    }
+    .issue-card.high {
+      border-left: 5px solid var(--high);
+      background: linear-gradient(90deg, rgba(163, 61, 34, 0.05), #fff 14%);
+    }
+    .issue-card.medium {
+      border-left: 5px solid var(--medium);
+      background: linear-gradient(90deg, rgba(143, 103, 20, 0.05), #fff 14%);
+    }
+    .issue-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(157, 74, 36, 0.12);
+      background: #fff8f1;
+    }
+    .issue-title {
+      font-size: 16px;
+      line-height: 1.5;
+      font-weight: 700;
+    }
+    .badge-row, .mini-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .badge, .mini-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .badge.high { background: rgba(163, 61, 34, 0.1); color: var(--high); }
+    .badge.medium { background: rgba(143, 103, 20, 0.12); color: var(--medium); }
+    .badge.main { background: rgba(32, 100, 74, 0.12); color: #20644a; }
+    .badge.origin-rule { background: rgba(39, 93, 138, 0.12); color: #275d8a; }
+    .badge.origin-llm { background: rgba(110, 62, 164, 0.12); color: #6e3ea4; }
+    .mini-pill {
+      background: #f5efe8;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .issue-excerpt {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .right-pane {
+      min-height: 760px;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      overflow: hidden;
+    }
+    .document-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 8px;
+    }
+    .document-body {
+      max-height: calc(100vh - 360px);
+      overflow: auto;
+      padding: 8px 0;
+      background: #fff;
+    }
+    .doc-block {
+      margin: 12px 16px;
+      padding: 10px 12px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .doc-block.active {
+      background: var(--active);
+      border-color: #f0c98a;
+    }
+    .doc-block p {
+      margin: 0;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .doc-block table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+    }
+    .doc-block td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      vertical-align: top;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .doc-block-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .doc-line {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr);
+      gap: 12px;
+      padding: 8px 16px;
+      border-top: 1px solid #f1eadf;
+      align-items: start;
+    }
+    .doc-line:first-child { border-top: 0; }
+    .doc-line.active {
+      background: var(--active);
+      border-top-color: #f0c98a;
+      border-bottom: 1px solid #f0c98a;
+    }
+    .doc-line-number {
+      text-align: right;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .doc-line-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .detail-pane {
+      border-top: 1px solid var(--line);
+      padding: 12px 16px;
+      background: #fffaf3;
+      display: grid;
+      gap: 10px;
+    }
+    .detail-title {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .detail-title strong {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .detail-item {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .detail-item strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .empty {
+      padding: 20px 16px;
+      color: var(--muted);
+      line-height: 1.7;
+      text-align: center;
+    }
+    @media (max-width: 1180px) {
+      .hero, .workspace, .summary-grid, .detail-grid { grid-template-columns: 1fr; }
+      .left-pane {
+        position: static;
+        max-height: none;
+      }
+      .document-body {
+        max-height: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="hero">
+      <div class="panel hero-card">
+        <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#9d4a24; font-weight:700;">Review Fresh</div>
+        <h1>审查工作台 V3</h1>
+        <p>这个新页面只做两件事：左侧按章节展示主问题，右侧完全复用老采购审查工作台的文档渲染和定位方式。这样我们把“主问题视图”和“稳定正文渲染”拆开，不再继续让 `review-next` 承担两套实验逻辑。</p>
+        <div class="hero-actions">
+          <a href="/">旧版审查页</a>
+          <a href="/review-next">review-next</a>
+          <a href="/rules">规则管理页</a>
+        </div>
+      </div>
+      <div class="panel hero-card">
+        <form id="review-form">
+          <input type="file" name="file" accept=".docx,.doc,.pdf,.txt,.md,.rtf" required />
+          <div class="toolbar-row">
+            <label><input type="checkbox" name="use_cache" /> 启用缓存</label>
+            <label><input type="checkbox" name="use_llm" /> 启用大模型（混合审查）</label>
+          </div>
+          <div class="toolbar-row">
+            <button type="submit" id="submit-btn">上传并审查</button>
+            <button type="button" id="open-source-btn" class="secondary" disabled>打开原文件</button>
+          </div>
+        </form>
+        <div id="status" class="meta">等待上传文件</div>
+      </div>
+    </section>
+
+    <section id="summary" class="panel summary"></section>
+
+    <section id="workspace" class="workspace">
+      <aside class="panel left-pane">
+        <div>
+          <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#9d4a24; font-weight:700;">Issue Navigator</div>
+          <h2 style="margin:8px 0 6px;">问题清单</h2>
+          <div class="meta">左侧只负责主问题导航和章节分组，右侧正文渲染直接复用老工作台。</div>
+        </div>
+        <div class="toolbar-row" id="view-toolbar">
+          <button type="button" class="filter active" data-view="main">主问题视图</button>
+          <button type="button" class="filter" data-view="all">全部问题</button>
+          <button type="button" class="filter" data-view="llm">模型新增</button>
+        </div>
+        <div class="toolbar-row" id="risk-toolbar">
+          <button type="button" class="filter active" data-risk="all">全部风险</button>
+          <button type="button" class="filter" data-risk="high">高风险</button>
+          <button type="button" class="filter" data-risk="medium">中风险</button>
+        </div>
+        <div class="toolbar-row" id="section-toolbar">
+          <button type="button" class="chapter-filter active" data-section="all">全部章节</button>
+          <button type="button" class="chapter-filter" data-section="qualification">资格</button>
+          <button type="button" class="chapter-filter" data-section="scoring">评分</button>
+          <button type="button" class="chapter-filter" data-section="technical">技术</button>
+          <button type="button" class="chapter-filter" data-section="commercial">商务/验收</button>
+        </div>
+        <div id="issue-list" class="issue-list">
+          <div class="empty">上传文件后，这里会按章节分组展示问题。</div>
+        </div>
+      </aside>
+
+      <section class="panel right-pane">
+        <div>
+          <div id="document-head" class="document-head"></div>
+          <div id="document-body" class="document-body"></div>
+        </div>
+        <div class="detail-pane">
+          <div class="detail-title">
+            <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#9d4a24; font-weight:700;">Focused Review</div>
+            <strong id="detail-title">尚未选择问题</strong>
+            <div id="detail-badges" class="badge-row"></div>
+          </div>
+          <div id="detail-grid" class="detail-grid">
+            <div class="detail-item"><strong>风险说明</strong><div>待运行</div></div>
+            <div class="detail-item"><strong>建议改写</strong><div>待运行</div></div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      payload: null,
+      findings: [],
+      filtered: [],
+      selectedFindingId: null,
+      viewMode: 'main',
+      riskMode: 'all',
+      sectionMode: 'all',
+      collapsedIssueSections: {},
+      reviewJobId: '',
+      reviewJobStatus: null,
+      pollingTimer: null,
+    };
+
+    const form = document.getElementById('review-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const openSourceBtn = document.getElementById('open-source-btn');
+    const statusNode = document.getElementById('status');
+    const summaryNode = document.getElementById('summary');
+    const workspaceNode = document.getElementById('workspace');
+    const issueListNode = document.getElementById('issue-list');
+    const documentHeadNode = document.getElementById('document-head');
+    const documentBodyNode = document.getElementById('document-body');
+    const detailTitleNode = document.getElementById('detail-title');
+    const detailBadgesNode = document.getElementById('detail-badges');
+    const detailGridNode = document.getElementById('detail-grid');
+
+    form.addEventListener('submit', submitReview);
+    openSourceBtn.addEventListener('click', openSourceFile);
+    document.querySelectorAll('#view-toolbar [data-view]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.viewMode = node.dataset.view;
+        renderToolbarState();
+        renderIssues();
+        renderDetail();
+        renderDocument();
+      });
+    });
+    document.querySelectorAll('#risk-toolbar [data-risk]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.riskMode = node.dataset.risk;
+        renderToolbarState();
+        renderIssues();
+        renderDetail();
+        renderDocument();
+      });
+    });
+    document.querySelectorAll('#section-toolbar [data-section]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.sectionMode = node.dataset.section;
+        renderToolbarState();
+        renderIssues();
+        renderDetail();
+        renderDocument();
+      });
+    });
+
+    async function submitReview(event) {
+      event.preventDefault();
+      submitBtn.disabled = true;
+      openSourceBtn.disabled = true;
+      statusNode.textContent = '正在审查，请稍候...';
+      summaryNode.style.display = 'none';
+      workspaceNode.style.display = 'none';
+      try {
+        const formData = new FormData(form);
+        const response = await fetch('/api/review', { method: 'POST', body: formData });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '审查失败');
+        state.payload = payload;
+        state.findings = payload.review.findings || [];
+        state.selectedFindingId = null;
+        state.collapsedIssueSections = {};
+        openSourceBtn.disabled = !payload.document || !payload.document.source_path;
+        statusNode.textContent = '审查完成';
+        renderSummary();
+        renderToolbarState();
+        renderIssues();
+        renderDetail();
+        renderDocument();
+        workspaceNode.style.display = 'grid';
+      } catch (error) {
+        statusNode.textContent = `失败：${error.message}`;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    async function openSourceFile() {
+      const sourcePath = state.payload && state.payload.document ? state.payload.document.source_path : '';
+      if (!sourcePath) return;
+      try {
+        await fetch('/api/open-source', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: sourcePath }),
+        });
+      } catch (error) {
+        statusNode.textContent = `打开原文件失败：${error.message}`;
+      }
+    }
+
+    function renderProgress(job) {
+      const progress = job && job.progress ? job.progress : null;
+      const steps = progress && Array.isArray(progress.steps) ? progress.steps : defaultProgressSteps();
+      const technicalSteps = progress && Array.isArray(progress.technical_steps) ? progress.technical_steps : defaultTechnicalSteps();
+      progressModeNode.textContent = job
+        ? `${job.mode === 'hybrid' ? '已启用大模型（混合审查）' : '纯代码审查'} ｜ 当前阶段：${(job.stage_profile && job.stage_profile.stage_name) || '采购需求形成与发布前审查'}`
+        : '';
+      progressMessageNode.textContent = job
+        ? (job.last_message || '正在推进审查任务...')
+        : '上传文件并启动审查后，这里会动态展示当前进度。';
+      progressStepsNode.innerHTML = steps.map((step) => `
+        <div class="progress-step ${escapeHtml(step.status || 'pending')}">
+          <div class="step-state">${escapeHtml(stepStatusLabel(step.status))}</div>
+          <div>
+            <strong>${escapeHtml(step.label || '')}</strong>
+            <div class="meta">${escapeHtml(step.description || '')}</div>
+          </div>
+        </div>
+      `).join('');
+      progressTechGridNode.innerHTML = technicalSteps.map((step) => `
+        <div class="progress-tech-item">
+          <span>${escapeHtml(step.label || '')}</span>
+          <span class="state">${escapeHtml(stepStatusLabel(step.status))}</span>
+        </div>
+      `).join('');
+    }
+
+    function defaultProgressSteps() {
+      return [
+        { key: 'parse', label: '文档解析中', description: '正在提取正文、章节和表格内容。', status: 'pending' },
+        { key: 'base_scan', label: '基础风险扫描中', description: '正在识别资格、评分、技术、商务/验收风险。', status: 'pending' },
+        { key: 'llm_enhance', label: '智能增强分析中', description: '正在补充边界问题、章节主问题和法规解释。', status: 'pending' },
+        { key: 'finalize', label: '结果收束中', description: '正在去重、合并主问题、整理证据和建议。', status: 'pending' },
+        { key: 'done', label: '审查完成', description: '可查看问题清单和导出结果。', status: 'pending' },
+      ];
+    }
+
+    function defaultTechnicalSteps() {
+      return [
+        { key: 'catalog', label: '品目识别', status: 'pending' },
+        { key: 'rule_scan', label: '规则扫描', status: 'pending' },
+        { key: 'scoring', label: '评分语义分析', status: 'pending' },
+        { key: 'mixed_scope', label: '混合边界分析', status: 'pending' },
+        { key: 'commercial', label: '商务链路分析', status: 'pending' },
+        { key: 'llm_document_audit', label: '全文辅助扫描', status: 'pending' },
+        { key: 'llm_chapter_summary', label: '章节级总结', status: 'pending' },
+        { key: 'llm_legal_reasoning', label: '法规适用逻辑解释', status: 'pending' },
+        { key: 'arbiter', label: '仲裁归并', status: 'pending' },
+        { key: 'evidence', label: '证据选择', status: 'pending' },
+      ];
+    }
+
+    function stepStatusLabel(status) {
+      return ({
+        pending: '等待中',
+        queued: '等待中',
+        running: '进行中',
+        completed: '已完成',
+        skipped: '已跳过',
+        failed: '失败',
+      }[status]) || '等待中';
+    }
+
+    function renderSummary() {
+      const payload = state.payload;
+      if (!payload) return;
+      const findings = state.findings;
+      const mainCount = findings.filter(isMainIssue).length;
+      const llmCount = findings.filter((item) => item.finding_origin === 'llm_added').length;
+      const highCount = findings.filter((item) => item.risk_level === 'high').length;
+      const mediumCount = findings.filter((item) => item.risk_level === 'medium').length;
+      const bySection = summarizeBySection(findings);
+      summaryNode.innerHTML = `
+        <h2 style="margin:0 0 10px;">审查摘要</h2>
+        <div>${escapeHtml(payload.review.overall_risk_summary || '')}</div>
+        <div class="summary-grid">
+          ${renderStat('文件', payload.review.document_name)}
+          ${renderStat('主问题', mainCount)}
+          ${renderStat('模型新增', llmCount)}
+          ${renderStat('高风险', highCount)}
+          ${renderStat('中风险', mediumCount)}
+          ${renderStat('缓存/模型', `${payload.cache.enabled ? '缓存开' : '缓存关'} / ${payload.llm.enabled ? '模型开' : '模型关'}`)}
+          ${renderStat('资格主问题', bySection.qualification)}
+          ${renderStat('评分主问题', bySection.scoring)}
+          ${renderStat('技术主问题', bySection.technical)}
+          ${renderStat('商务/验收主问题', bySection.commercial)}
+        </div>
+      `;
+      summaryNode.style.display = 'block';
+    }
+
+    function renderStat(label, value) {
+      return `<div class="stat"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(String(value))}</div></div>`;
+    }
+
+    function renderToolbarState() {
+      document.querySelectorAll('#view-toolbar [data-view]').forEach((node) => node.classList.toggle('active', node.dataset.view === state.viewMode));
+      document.querySelectorAll('#risk-toolbar [data-risk]').forEach((node) => node.classList.toggle('active', node.dataset.risk === state.riskMode));
+      document.querySelectorAll('#section-toolbar [data-section]').forEach((node) => node.classList.toggle('active', node.dataset.section === state.sectionMode));
+    }
+
+    function renderIssues() {
+      const filtered = applyFilters(sortFindings(state.findings));
+      state.filtered = filtered;
+      if (!filtered.length) {
+        issueListNode.innerHTML = '<div class="empty">当前筛选条件下没有问题。</div>';
+        state.selectedFindingId = null;
+        return;
+      }
+      if (!filtered.some((item) => item.finding_id === state.selectedFindingId)) {
+        state.selectedFindingId = filtered[0].finding_id;
+      }
+      issueListNode.innerHTML = renderIssueGroups(filtered);
+      issueListNode.querySelectorAll('.issue-group-head').forEach((node) => {
+        node.addEventListener('click', () => {
+          const key = node.dataset.groupKey;
+          state.collapsedIssueSections[key] = !isIssueGroupCollapsed(key);
+          renderIssues();
+        });
+      });
+      issueListNode.querySelectorAll('.issue-card').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.selectedFindingId = node.dataset.findingId;
+          const finding = state.findings.find((item) => item.finding_id === state.selectedFindingId);
+          if (finding) state.collapsedIssueSections[classifySection(finding)] = false;
+          renderIssues();
+          renderDetail();
+          renderDocument();
+        });
+      });
+    }
+
+    function renderIssueGroups(findings) {
+      const order = ['qualification', 'scoring', 'technical', 'commercial'];
+      const groups = new Map(order.map((key) => [key, []]));
+      findings.forEach((finding) => {
+        const key = classifySection(finding);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(finding);
+      });
+      return Array.from(groups.entries())
+        .filter(([, items]) => items.length)
+        .map(([key, items]) => {
+          const collapsed = isIssueGroupCollapsed(key);
+          const highCount = items.filter((item) => item.risk_level === 'high').length;
+          return `
+            <section class="issue-group ${collapsed ? 'is-collapsed' : ''}">
+              <div class="issue-group-head" data-group-key="${escapeHtml(key)}">
+                <div class="issue-group-title">
+                  <strong>${escapeHtml(sectionLabelFromKey(key))}</strong>
+                  <span>${escapeHtml(sectionDescription(key))}</span>
+                </div>
+                <div class="issue-group-metrics">
+                  <span class="issue-group-high">高 ${escapeHtml(String(highCount))}</span>
+                  <span class="issue-group-count">${escapeHtml(String(items.length))}</span>
+                </div>
+              </div>
+              <div class="issue-group-body">
+                ${items.map(renderIssueCard).join('')}
+              </div>
+            </section>
+          `;
+        })
+        .join('');
+    }
+
+    function renderIssueCard(finding) {
+      const active = finding.finding_id === state.selectedFindingId ? 'active' : '';
+      return `
+        <article class="issue-card ${escapeHtml(finding.risk_level || '')} ${active}" data-finding-id="${escapeHtml(finding.finding_id)}">
+          <div class="issue-title">${escapeHtml(finding.problem_title || '')}</div>
+          <div class="badge-row">
+            <span class="badge ${escapeHtml(finding.risk_level || '')}">${escapeHtml(riskLabel(finding.risk_level))}</span>
+            ${isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : ''}
+            <span class="badge">${escapeHtml(sectionLabel(finding))}</span>
+            <span class="badge">${escapeHtml(subthemeLabel(finding))}</span>
+            <span class="badge ${originBadgeClass(finding)}">${escapeHtml(originLabel(finding))}</span>
+          </div>
+          <div class="mini-meta">
+            <span class="mini-pill">位置 ${escapeHtml(compactLocation(finding))}</span>
+            <span class="mini-pill">来源 ${escapeHtml(sourceChain(finding))}</span>
+          </div>
+          <div class="issue-excerpt"><strong>代表性证据：</strong>${escapeHtml(finding.source_text || '无原文摘录')}</div>
+        </article>
+      `;
+    }
+
+    function renderDetail() {
+      const finding = getSelectedFinding();
+      if (!finding) {
+        detailTitleNode.textContent = '尚未选择问题';
+        detailBadgesNode.innerHTML = '';
+        detailGridNode.innerHTML = `
+          <div class="detail-item"><strong>风险说明</strong><div>待运行</div></div>
+          <div class="detail-item"><strong>建议改写</strong><div>待运行</div></div>
+        `;
+        return;
+      }
+      detailTitleNode.textContent = finding.problem_title || '未命名问题';
+      detailBadgesNode.innerHTML = `
+        <span class="badge ${escapeHtml(finding.risk_level || '')}">${escapeHtml(riskLabel(finding.risk_level))}</span>
+        ${isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : ''}
+        <span class="badge">${escapeHtml(sectionLabel(finding))}</span>
+        <span class="badge">${escapeHtml(subthemeLabel(finding))}</span>
+      `;
+      detailGridNode.innerHTML = `
+        <div class="detail-item"><strong>风险说明</strong><div>${escapeHtml(finding.why_it_is_risky || '暂无')}</div></div>
+        <div class="detail-item"><strong>建议改写</strong><div>${escapeHtml(finding.rewrite_suggestion || '暂无')}</div></div>
+      `;
+    }
+
+    function renderDocument() {
+      const documentPayload = state.payload ? state.payload.document : null;
+      if (!documentPayload) {
+        documentHeadNode.innerHTML = '<h2 style="margin:0;">文件正文</h2>';
+        documentBodyNode.innerHTML = '<div class="empty">上传文件后，这里会渲染文档原文，并联动定位。</div>';
+        return;
+      }
+      documentHeadNode.innerHTML = `
+        <h2 style="margin:0;">文件正文</h2>
+        <div class="meta">原文件：${escapeHtml(documentPayload.source_path)}</div>
+        <div class="meta">稳定文本：${escapeHtml(documentPayload.normalized_text_path)}</div>
+        <div class="meta">总行数：${documentPayload.line_count} ｜ 渲染模式：${documentPayload.render_mode === 'docx_blocks' ? 'DOCX 原文结构' : '稳定文本'}</div>
+      `;
+      documentBodyNode.innerHTML = documentPayload.render_mode === 'docx_blocks'
+        ? (documentPayload.blocks || []).map((block) => renderDocumentBlock(block)).join('')
+        : (documentPayload.lines || []).map((line) => renderDocumentLine(line)).join('');
+      const finding = getSelectedFinding();
+      if (finding) highlightDocumentRange(finding.text_line_start, finding.text_line_end);
+    }
+
+    function renderDocumentBlock(block) {
+      const meta = `行号：${formatLineRange(block.start_line, block.end_line)}`;
+      return `<div class="doc-block" id="${escapeHtml(block.block_id)}" data-start-line="${block.start_line}" data-end-line="${block.end_line}">
+        ${block.html}
+        <div class="doc-block-meta">${escapeHtml(meta)}</div>
+      </div>`;
+    }
+
+    function renderDocumentLine(line) {
+      return `<div class="doc-line" id="fresh-line-${line.number}">
+        <div class="doc-line-number">${String(line.number).padStart(4, '0')}${line.page_hint ? `<br>${escapeHtml(line.page_hint)}` : ''}</div>
+        <div class="doc-line-text">${escapeHtml(line.text || ' ')}</div>
+      </div>`;
+    }
+
+    function highlightDocumentRange(start, end) {
+      documentBodyNode.querySelectorAll('.active').forEach((node) => node.classList.remove('active'));
+      let target = null;
+      const documentPayload = state.payload ? state.payload.document : null;
+      if (!documentPayload) return;
+      if (documentPayload.render_mode === 'docx_blocks') {
+        documentBodyNode.querySelectorAll('.doc-block').forEach((node) => {
+          const blockStart = Number(node.dataset.startLine);
+          const blockEnd = Number(node.dataset.endLine);
+          const overlaps = blockStart <= end && blockEnd >= start;
+          if (overlaps) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
+        });
+      } else {
+        for (let line = start; line <= end; line += 1) {
+          const node = document.getElementById(`fresh-line-${line}`);
+          if (node) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
+        }
+      }
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function getSelectedFinding() {
+      return state.filtered.find((item) => item.finding_id === state.selectedFindingId) || state.findings.find((item) => item.finding_id === state.selectedFindingId) || null;
+    }
+
+    function applyFilters(findings) {
+      let items = findings.slice();
+      if (state.viewMode === 'main') {
+        items = items.filter(isMainIssue);
+      } else if (state.viewMode === 'llm') {
+        items = items.filter((item) => item.finding_origin === 'llm_added');
+      }
+      if (state.riskMode !== 'all') items = items.filter((item) => item.risk_level === state.riskMode);
+      if (state.sectionMode !== 'all') items = items.filter((item) => classifySection(item) === state.sectionMode);
+      return items;
+    }
+
+    function sortFindings(findings) {
+      const priority = { high: 0, medium: 1, low: 2, none: 3 };
+      return [...findings].sort((left, right) => {
+        const levelDiff = (priority[left.risk_level] ?? 9) - (priority[right.risk_level] ?? 9);
+        if (levelDiff !== 0) return levelDiff;
+        const lineDiff = (left.text_line_start || 0) - (right.text_line_start || 0);
+        if (lineDiff !== 0) return lineDiff;
+        return String(left.finding_id).localeCompare(String(right.finding_id));
+      });
+    }
+
+    function summarizeBySection(findings) {
+      const mainFindings = findings.filter(isMainIssue);
+      return {
+        qualification: mainFindings.filter((item) => classifySection(item) === 'qualification').length,
+        scoring: mainFindings.filter((item) => classifySection(item) === 'scoring').length,
+        technical: mainFindings.filter((item) => classifySection(item) === 'technical').length,
+        commercial: mainFindings.filter((item) => classifySection(item) === 'commercial').length,
+      };
+    }
+
+    function isIssueGroupCollapsed(sectionKey) {
+      if (Object.prototype.hasOwnProperty.call(state.collapsedIssueSections, sectionKey)) {
+        return Boolean(state.collapsedIssueSections[sectionKey]);
+      }
+      const selected = getSelectedFinding();
+      if (!selected) return sectionKey !== 'qualification';
+      return classifySection(selected) !== sectionKey;
+    }
+
+    function isMainIssue(finding) {
+      return finding.finding_origin === 'analyzer' || (finding.finding_origin === 'llm_added' && /章节|主问题/.test(finding.problem_title || ''));
+    }
+
+    function originLabel(finding) {
+      if (finding.finding_origin === 'llm_added') return '全文辅助扫描';
+      if (finding.finding_origin === 'analyzer') return '结构分析 / 仲裁保留';
+      return '规则命中';
+    }
+
+    function originBadgeClass(finding) {
+      if (finding.finding_origin === 'llm_added') return 'origin-llm';
+      if (finding.finding_origin === 'analyzer') return 'main';
+      return 'origin-rule';
+    }
+
+    function sourceChain(finding) {
+      if (finding.finding_origin === 'analyzer') return '规则命中 → 结构分析 → 仲裁保留';
+      if (finding.finding_origin === 'llm_added') return '全文辅助扫描 → 仲裁判断';
+      return '规则命中';
+    }
+
+    function classifySection(finding) {
+      const text = [finding.problem_title, finding.section_path, finding.source_section].filter(Boolean).join(' ');
+      if (/资格|申请人的资格要求|准入门槛/.test(text)) return 'qualification';
+      if (/评分|评标信息|演示|品牌档次|认证评分|商务评分/.test(text)) return 'scoring';
+      if (/技术|标准|检测报告|证明材料/.test(text)) return 'technical';
+      return 'commercial';
+    }
+
+    function sectionLabel(finding) {
+      return sectionLabelFromKey(classifySection(finding));
+    }
+
+    function sectionLabelFromKey(sectionKey) {
+      const mapping = {
+        qualification: '资格',
+        scoring: '评分',
+        technical: '技术',
+        commercial: '商务/验收',
+      };
+      return mapping[sectionKey] || '其它';
+    }
+
+    function sectionDescription(sectionKey) {
+      const mapping = {
+        qualification: '一般门槛、属地场所、经营年限和错位资质会优先归并在这里。',
+        scoring: '品牌、认证、演示和主观评分等结构性问题会集中展示。',
+        technical: '标准错位、证明形式和技术必要性边界问题会集中展示。',
+        commercial: '资金占用、验收费转嫁、责任失衡和验收边界问题会集中展示。',
+      };
+      return mapping[sectionKey] || '当前筛选条件下的问题会按章节归在这里。';
+    }
+
+    function subthemeLabel(finding) {
+      const title = finding.problem_title || '';
+      if (/一般财务和规模/.test(title)) return '财务/规模';
+      if (/经营年限|属地场所|单项业绩/.test(title)) return '年限/场所/业绩';
+      if (/行业资质|专门许可/.test(title)) return '错位资质';
+      if (/品牌档次/.test(title)) return '品牌评分';
+      if (/认证评分/.test(title)) return '错位认证';
+      if (/证书认证或模板内容/.test(title)) return '评分错位';
+      if (/标准或规范/.test(title)) return '标准错位';
+      if (/证明材料形式/.test(title)) return '证明形式';
+      if (/资金占用/.test(title)) return '资金占用';
+      if (/交货期限/.test(title)) return '交期异常';
+      if (/费用整体转嫁/.test(title)) return '验收费转嫁';
+      if (/责任和违约后果/.test(title)) return '责任失衡';
+      if (/验收程序|最终确认边界/.test(title)) return '验收边界';
+      if (/属地倾斜/.test(title)) return '属地倾斜';
+      if (/模板残留|义务外扩/.test(title)) return '模板残留';
+      if (/行业适配性不足/.test(title)) return '行业适配';
+      return finding.issue_type || '综合';
+    }
+
+    function compactLocation(finding) {
+      const section = finding.section_path || finding.source_section || '未定位章节';
+      return `${section} / L${finding.text_line_start}`;
+    }
+
+    function formatLineRange(start, end) {
+      if (!start && !end) return '—';
+      if (!end || start === end) return String(start).padStart(4, '0');
+      return `${String(start).padStart(4, '0')}-${String(end).padStart(4, '0')}`;
+    }
+
+    function riskLabel(level) {
+      return ({ high: '高风险', medium: '中风险', low: '低风险' }[level] || level || '未标注');
+    }
+
+    function escapeHtml(text) {
+      return String(text || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    }
+  </script>
+</body>
+</html>"""
+
+
+def _review_buyer_html() -> str:
+    return """<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>采购需求合规性检查智能体</title>
+  <style>
+    :root {
+      --bg: #edf3f8;
+      --panel: #ffffff;
+      --sidebar: #fbf7ef;
+      --line: #d7e0ea;
+      --ink: #16212b;
+      --muted: #566575;
+      --accent: #1f5f8b;
+      --accent-soft: #eaf3fb;
+      --high: #b42318;
+      --medium: #b26a00;
+      --active: #fff3de;
+      --success: #1f6f5f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #f8fbfe 0%, var(--bg) 100%);
+    }
+    .app { max-width: 1520px; margin: 0 auto; padding: 20px; }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 10px 28px rgba(20, 42, 64, 0.06);
+    }
+    .hero-card {
+      padding: 18px 20px;
+      display: grid;
+      gap: 10px;
+    }
+    .hero-card h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+    .hero-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .hero-card:first-child {
+      background: linear-gradient(135deg, #ffffff 0%, #f1f7fc 100%);
+    }
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 14px;
+    }
+    .hero-actions a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    form {
+      display: grid;
+      gap: 12px;
+    }
+    input[type="file"] {
+      width: 100%;
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: #fff;
+    }
+    .toolbar-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    button.filter,
+    button.chapter-filter {
+      background: #fff;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-weight: 600;
+    }
+    button.filter.active,
+    button.chapter-filter.active {
+      background: #fff5ea;
+      color: var(--accent);
+      border-color: #d3b89f;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+    .export-panel {
+      display: none;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: var(--accent-soft);
+      border: 1px solid #c8dced;
+    }
+    .export-panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .export-panel strong { font-size: 13px; }
+    .summary {
+      margin-bottom: 16px;
+      padding: 16px;
+      display: none;
+    }
+    .summary > h2 {
+      margin: 0 0 10px;
+    }
+    .progress-panel {
+      display: none;
+      padding: 12px 0 0;
+      margin-top: 6px;
+      gap: 12px;
+      border-top: 1px dashed var(--line);
+    }
+    .progress-panel.is-complete .progress-steps {
+      display: none;
+    }
+    .progress-summary {
+      display: none;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid #c8dced;
+      background: #f5f9fd;
+    }
+    .progress-panel.is-complete .progress-summary {
+      display: grid;
+    }
+    .progress-summary strong {
+      font-size: 14px;
+    }
+    .progress-summary .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .progress-summary .chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #e7f0fa;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .progress-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    .progress-steps {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .progress-step {
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+    }
+    .progress-step .step-state {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+      padding-top: 2px;
+    }
+    .progress-step.running {
+      border-color: #8bb6d8;
+      background: #f4f9fd;
+      box-shadow: 0 0 0 2px rgba(31, 95, 139, 0.08);
+      animation: progressPulse 1.4s ease-in-out infinite;
+    }
+    .progress-step.completed {
+      border-color: #b9dcca;
+      background: #f3fbf7;
+    }
+    .progress-step.failed {
+      border-color: #e5b3aa;
+      background: #fff4f1;
+    }
+    .progress-step.skipped {
+      background: #f7f8fa;
+    }
+    .progress-step strong {
+      font-size: 14px;
+    }
+    .progress-tech {
+      border-top: 1px dashed var(--line);
+      padding-top: 12px;
+      display: grid;
+      gap: 10px;
+    }
+    .progress-tech summary {
+      cursor: pointer;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .progress-tech-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .progress-tech-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      font-size: 13px;
+    }
+    .progress-tech-item .state {
+      color: var(--muted);
+      font-weight: 700;
+    }
+    @keyframes progressPulse {
+      0% { box-shadow: 0 0 0 0 rgba(31, 95, 139, 0.18); }
+      50% { box-shadow: 0 0 0 4px rgba(31, 95, 139, 0.06); }
+      100% { box-shadow: 0 0 0 0 rgba(31, 95, 139, 0.18); }
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .summary-topline {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+      gap: 12px;
+      margin-top: 12px;
+      align-items: start;
+    }
+    .summary-brief {
+      display: grid;
+      gap: 8px;
+      padding: 12px 14px;
+      border: 1px solid #d6e2ee;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+    }
+    .summary-brief strong {
+      font-size: 20px;
+      line-height: 1.4;
+    }
+    .summary-brief .meta {
+      line-height: 1.65;
+    }
+    .summary-brief .subline {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    .document-brief {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      display: grid;
+      gap: 6px;
+    }
+    .document-brief strong {
+      font-size: 16px;
+      line-height: 1.4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .summary-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(280px, 1.35fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .decision-banner {
+      display: grid;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid #e1d4c3;
+      background: linear-gradient(135deg, #fff7ef 0%, #fffdf8 100%);
+    }
+    .decision-banner.high {
+      border-color: #e5b3aa;
+      background: linear-gradient(135deg, #fff1ee 0%, #fff9f7 100%);
+    }
+    .decision-banner.medium {
+      border-color: #e7d2a5;
+      background: linear-gradient(135deg, #fff8ea 0%, #fffdf8 100%);
+    }
+    .decision-banner strong {
+      font-size: 18px;
+      color: var(--ink);
+    }
+    .decision-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .summary-note {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .stage-card {
+      grid-column: 1 / -1;
+      padding: 12px 14px;
+      border: 1px solid #c8dced;
+      border-left: 4px solid var(--accent);
+      border-radius: 14px;
+      background: #f4f9fd;
+      display: grid;
+      gap: 6px;
+    }
+    .stage-card .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: #fff;
+      min-height: 72px;
+    }
+    .stat .label { color: var(--muted); font-size: 12px; }
+    .stat .value { margin-top: 6px; font-size: 18px; font-weight: 800; }
+    .stat.primary {
+      background: linear-gradient(180deg, #f6fbff 0%, #ffffff 100%);
+      border-color: #c8dced;
+    }
+    .stat.section-breakdown {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+    .stat.section-breakdown .value {
+      margin-top: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .section-breakdown-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px 10px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .section-breakdown-grid strong {
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .workspace {
+      display: none;
+      grid-template-columns: 390px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .left-pane {
+      min-height: 760px;
+      padding: 16px;
+      position: sticky;
+      top: 12px;
+      align-self: start;
+      max-height: calc(100vh - 24px);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto auto auto auto 1fr;
+      gap: 12px;
+      background: var(--sidebar);
+    }
+    .issue-list {
+      min-height: 0;
+      overflow: auto;
+      display: grid;
+      gap: 10px;
+      padding-right: 4px;
+    }
+    .issue-group {
+      display: grid;
+      gap: 8px;
+    }
+    .issue-group-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: #f3f7fb;
+      border: 1px solid var(--line);
+      cursor: pointer;
+    }
+    .issue-group-title { display: grid; gap: 2px; }
+    .issue-group-title strong { font-size: 14px; }
+    .issue-group-title span { font-size: 11px; color: var(--muted); line-height: 1.45; }
+    .issue-group-metrics {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .issue-group-high,
+    .issue-group-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 28px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .issue-group-high { background: rgba(163, 61, 34, 0.12); color: var(--high); }
+    .issue-group-count { background: #e7f0fa; color: var(--accent); }
+    .issue-group.is-collapsed .issue-group-body { display: none; }
+    .issue-group-body { display: grid; gap: 8px; }
+    .issue-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 10px 8px;
+      background: #fff;
+      cursor: pointer;
+      display: grid;
+      gap: 5px;
+    }
+    .issue-card.high { border-left: 5px solid var(--high); background: linear-gradient(90deg, rgba(180, 35, 24, 0.06), #fff 16%); }
+    .issue-card.medium { border-left: 5px solid var(--medium); background: linear-gradient(90deg, rgba(178, 106, 0, 0.06), #fff 16%); }
+    .issue-card.active {
+      border-color: #8bb6d8;
+      box-shadow: 0 0 0 2px rgba(31, 95, 139, 0.12);
+      background: #f7fbff;
+    }
+    .issue-title { font-size: 14px; line-height: 1.4; font-weight: 700; }
+    .badge-row, .mini-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .badge, .mini-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge.high { background: rgba(163, 61, 34, 0.1); color: var(--high); }
+    .badge.medium { background: rgba(143, 103, 20, 0.12); color: var(--medium); }
+    .badge.main { background: rgba(31, 111, 95, 0.12); color: var(--success); }
+    .badge:not(.high):not(.medium):not(.main) { background: #edf4fb; color: var(--accent); }
+    .mini-pill { background: #eef3f8; color: var(--muted); font-weight: 600; }
+    .mini-pill.priority {
+      background: #e7f0fa;
+      color: var(--accent);
+      font-weight: 800;
+    }
+    .mini-pill.action-direct { background: rgba(163, 61, 34, 0.12); color: var(--high); }
+    .mini-pill.action-soften { background: rgba(143, 103, 20, 0.12); color: var(--medium); }
+    .mini-pill.action-justify { background: rgba(31, 95, 139, 0.12); color: var(--accent); }
+    .mini-pill.action-review { background: rgba(110, 62, 164, 0.12); color: #6e3ea4; }
+    .issue-excerpt { color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .issue-card.compact .issue-excerpt {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .right-pane {
+      min-height: 760px;
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) auto;
+      overflow: hidden;
+      background: #fff;
+    }
+    .document-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 8px;
+      background: #f7fbff;
+    }
+    .document-body {
+      max-height: calc(100vh - 360px);
+      overflow: auto;
+      padding: 8px 0;
+      background: #fff;
+    }
+    .doc-block {
+      margin: 12px 16px;
+      padding: 10px 12px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .doc-block.active {
+      background: var(--active);
+      border-color: #ef9c67;
+      box-shadow: 0 0 0 2px rgba(214, 105, 38, 0.14);
+    }
+    .doc-block.active p,
+    .doc-block.active td {
+      color: #8e2f12;
+      font-weight: 600;
+    }
+    .doc-block p {
+      margin: 0;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .doc-block table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+    }
+    .doc-block td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      vertical-align: top;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .doc-block-meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .doc-line {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr);
+      gap: 12px;
+      padding: 8px 16px;
+      border-top: 1px solid #f1eadf;
+      align-items: start;
+    }
+    .doc-line:first-child { border-top: 0; }
+    .doc-line.active {
+      background: var(--active);
+      border-top-color: #ef9c67;
+      border-bottom: 1px solid #ef9c67;
+      box-shadow: inset 4px 0 0 #d66926;
+    }
+    .doc-line-number {
+      text-align: right;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .doc-line-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+    .doc-line.active .doc-line-text {
+      color: #8e2f12;
+      font-weight: 600;
+    }
+    .detail-pane {
+      border-top: 1px solid var(--line);
+      padding: 12px 16px;
+      background: #f8fbfe;
+      display: grid;
+      gap: 10px;
+    }
+    .detail-title {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .detail-item {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .detail-item strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .detail-item.action-callout {
+      background: #eef6fd;
+      border-color: #c8dced;
+    }
+    .detail-item.legal-callout {
+      background: #fff8f1;
+      border-color: #ecd7b7;
+    }
+    .empty {
+      padding: 20px 16px;
+      color: var(--muted);
+      line-height: 1.7;
+      text-align: center;
+    }
+    @media (max-width: 1180px) {
+      .hero, .workspace, .summary-grid, .summary-metrics, .summary-topline { grid-template-columns: 1fr; }
+      .document-brief strong { white-space: normal; }
+      .left-pane {
+        position: static;
+        max-height: none;
+      }
+      .document-body {
+        max-height: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="hero">
+      <div class="panel hero-card">
+        <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#1f5f8b; font-weight:700;">Review Check</div>
+        <h1>采购需求合规性检查智能体</h1>
+        <p>这个页面面向采购人使用，优先服务采购需求形成、修改、复核和发布前审查。页面只保留采购人最关心的结论、问题定位、法规依据和改稿建议。</p>
+        <div class="hero-actions">
+          <a href="/">旧版审查页</a>
+          <a href="/review-next">review-next</a>
+          <a href="/rules">规则管理页</a>
+        </div>
+      </div>
+      <div class="panel hero-card">
+        <form id="review-form">
+          <input type="file" name="file" accept=".docx,.doc,.pdf,.txt,.md,.rtf" required />
+          <div class="toolbar-row">
+            <label><input type="checkbox" name="use_cache" /> 启用缓存</label>
+            <label><input type="checkbox" name="use_llm" /> 启用大模型（混合审查）</label>
+          </div>
+          <div class="toolbar-row">
+            <button type="submit" id="submit-btn">上传并审查</button>
+            <button type="button" id="open-source-btn" class="secondary" disabled>打开原文件</button>
+          </div>
+        </form>
+        <div id="status" class="meta">等待上传文件</div>
+        <div id="progress-panel" class="progress-panel">
+          <div class="progress-head">
+            <div>
+              <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#1f5f8b; font-weight:700;">Review Progress</div>
+              <div id="progress-message" class="meta">上传文件并启动审查后，这里会动态展示当前进度。</div>
+            </div>
+            <div id="progress-mode" class="meta"></div>
+          </div>
+          <div id="progress-summary" class="progress-summary"></div>
+          <div id="progress-steps" class="progress-steps"></div>
+          <details class="progress-tech">
+            <summary>查看详细审查过程</summary>
+            <div id="progress-tech-grid" class="progress-tech-grid"></div>
+          </details>
+        </div>
+        <div id="export-toolbar" class="export-panel">
+          <div class="export-panel-head">
+            <strong>结果导出</strong>
+            <span id="export-status" class="meta">默认按采购人改稿和发布前复核场景导出。</span>
+          </div>
+          <div class="toolbar-row">
+            <button type="button" class="secondary" data-export-format="markdown" data-export-mode="summary">导出 Markdown（主问题版）</button>
+            <button type="button" class="secondary" data-export-format="xlsx" data-export-mode="summary">导出 Excel（主问题版）</button>
+            <button type="button" class="secondary" data-export-format="json" data-export-mode="summary">导出 JSON（主问题版）</button>
+            <button type="button" class="secondary" data-export-format="markdown" data-export-mode="full">完整明细版</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="summary" class="panel summary"></section>
+
+    <section id="workspace" class="workspace">
+      <aside class="panel left-pane">
+        <div>
+          <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#1f5f8b; font-weight:700;">Review Navigation</div>
+          <h2 style="margin:8px 0 6px;">审查问题</h2>
+          <div class="meta">左侧按章节归并高风险问题，默认优先显示章节主问题，方便采购人逐条定位和改稿。</div>
+        </div>
+        <div class="toolbar-row" id="view-toolbar">
+          <button type="button" class="filter active" data-view="main">主问题</button>
+          <button type="button" class="filter" data-view="all">全部问题</button>
+        </div>
+        <div class="toolbar-row" id="risk-toolbar">
+          <button type="button" class="filter active" data-risk="all">全部风险</button>
+          <button type="button" class="filter" data-risk="high">高风险</button>
+          <button type="button" class="filter" data-risk="medium">中风险</button>
+        </div>
+        <div class="toolbar-row" id="section-toolbar">
+          <button type="button" class="chapter-filter active" data-section="all">全部章节</button>
+          <button type="button" class="chapter-filter" data-section="qualification">资格</button>
+          <button type="button" class="chapter-filter" data-section="scoring">评分</button>
+          <button type="button" class="chapter-filter" data-section="technical">技术</button>
+          <button type="button" class="chapter-filter" data-section="commercial">商务/验收</button>
+        </div>
+        <div id="issue-list" class="issue-list">
+          <div class="empty">上传文件后，这里会按章节展示需要处理的问题。</div>
+        </div>
+      </aside>
+
+      <section class="panel right-pane">
+        <div>
+          <div id="document-head" class="document-head"></div>
+          <div id="document-body" class="document-body"></div>
+        </div>
+        <div class="detail-pane">
+            <div class="detail-title">
+            <div class="meta" style="font-size:12px; text-transform:uppercase; letter-spacing:0.12em; color:#1f5f8b; font-weight:700;">Review Opinion</div>
+            <strong id="detail-title">尚未选择问题</strong>
+            <div id="detail-badges" class="badge-row"></div>
+          </div>
+          <div id="detail-grid" class="detail-grid">
+            <div class="detail-item"><strong>处理建议</strong><div>待运行</div></div>
+            <div class="detail-item"><strong>风险说明</strong><div>待运行</div></div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      payload: null,
+      findings: [],
+      filtered: [],
+      selectedFindingId: null,
+      viewMode: 'main',
+      riskMode: 'all',
+      sectionMode: 'all',
+      collapsedIssueSections: {},
+    };
+
+    const form = document.getElementById('review-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const openSourceBtn = document.getElementById('open-source-btn');
+    const exportToolbarNode = document.getElementById('export-toolbar');
+    const exportStatusNode = document.getElementById('export-status');
+    const statusNode = document.getElementById('status');
+    const progressPanelNode = document.getElementById('progress-panel');
+    const progressMessageNode = document.getElementById('progress-message');
+    const progressModeNode = document.getElementById('progress-mode');
+    const progressSummaryNode = document.getElementById('progress-summary');
+    const progressStepsNode = document.getElementById('progress-steps');
+    const progressTechGridNode = document.getElementById('progress-tech-grid');
+    const summaryNode = document.getElementById('summary');
+    const workspaceNode = document.getElementById('workspace');
+    const issueListNode = document.getElementById('issue-list');
+    const documentHeadNode = document.getElementById('document-head');
+    const documentBodyNode = document.getElementById('document-body');
+    const detailTitleNode = document.getElementById('detail-title');
+    const detailBadgesNode = document.getElementById('detail-badges');
+    const detailGridNode = document.getElementById('detail-grid');
+
+    form.addEventListener('submit', submitReview);
+    openSourceBtn.addEventListener('click', openSourceFile);
+    exportToolbarNode.querySelectorAll('[data-export-format]').forEach((node) => {
+      node.addEventListener('click', () => exportReview(node.dataset.exportFormat, node.dataset.exportMode));
+    });
+    document.querySelectorAll('#view-toolbar [data-view]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.viewMode = node.dataset.view;
+        renderToolbarState();
+        renderIssues();
+        renderDetail();
+        renderDocument();
+      });
+    });
+    document.querySelectorAll('#risk-toolbar [data-risk]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.riskMode = node.dataset.risk;
+        renderToolbarState();
+        renderIssues();
+        renderDetail();
+        renderDocument();
+      });
+    });
+    document.querySelectorAll('#section-toolbar [data-section]').forEach((node) => {
+      node.addEventListener('click', () => {
+        state.sectionMode = node.dataset.section;
+        renderToolbarState();
+        renderIssues();
+        renderDetail();
+        renderDocument();
+      });
+    });
+
+    async function submitReview(event) {
+      event.preventDefault();
+      submitBtn.disabled = true;
+      openSourceBtn.disabled = true;
+      stopPolling();
+      state.payload = null;
+      state.findings = [];
+      state.filtered = [];
+      state.selectedFindingId = null;
+      state.reviewJobId = '';
+      state.reviewJobStatus = null;
+      statusNode.textContent = '正在创建审查任务，请稍候...';
+      summaryNode.style.display = 'none';
+      workspaceNode.style.display = 'none';
+      exportToolbarNode.style.display = 'none';
+      progressPanelNode.style.display = 'grid';
+      renderProgress(null);
+      try {
+        const formData = new FormData(form);
+        const response = await fetch('/api/review-start', { method: 'POST', body: formData });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '审查失败');
+        state.reviewJobId = payload.job_id || '';
+        statusNode.textContent = '审查任务已启动，正在动态更新进度...';
+        startPolling();
+      } catch (error) {
+        statusNode.textContent = `失败：${error.message}`;
+        progressMessageNode.textContent = `任务启动失败：${error.message}`;
+        submitBtn.disabled = false;
+        progressModeNode.textContent = '';
+        renderProgress(null);
+        return;
+      } finally {
+      }
+    }
+
+    function startPolling() {
+      stopPolling();
+      state.pollingTimer = window.setInterval(pollReviewStatus, 1000);
+      pollReviewStatus();
+    }
+
+    function stopPolling() {
+      if (state.pollingTimer) {
+        window.clearInterval(state.pollingTimer);
+        state.pollingTimer = null;
+      }
+    }
+
+    async function pollReviewStatus() {
+      if (!state.reviewJobId) return;
+      try {
+        const response = await fetch(`/api/review-status?job_id=${encodeURIComponent(state.reviewJobId)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '获取任务状态失败');
+        state.reviewJobStatus = payload;
+        renderProgress(payload);
+        statusNode.textContent = payload.last_message || '正在审查中...';
+        if (payload.status === 'completed') {
+          stopPolling();
+          await loadReviewResult();
+        } else if (payload.status === 'failed') {
+          stopPolling();
+          submitBtn.disabled = false;
+          statusNode.textContent = payload.error ? `失败：${payload.error}` : '审查失败';
+        }
+      } catch (error) {
+        stopPolling();
+        submitBtn.disabled = false;
+        statusNode.textContent = `审查状态获取失败：${error.message}`;
+      }
+    }
+
+    async function loadReviewResult() {
+      try {
+        const response = await fetch(`/api/review-result?job_id=${encodeURIComponent(state.reviewJobId)}`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '获取审查结果失败');
+        state.payload = payload;
+        state.findings = payload.review.findings || [];
+        state.collapsedIssueSections = {};
+        openSourceBtn.disabled = !payload.document || !payload.document.source_path;
+        exportToolbarNode.style.display = 'grid';
+        exportStatusNode.textContent = '默认按采购人改稿和发布前复核场景导出。';
+        statusNode.textContent = `审查完成：${payload.review.document_name}`;
+        renderSummary();
+        renderToolbarState();
+        renderIssues();
+        renderDetail();
+        renderDocument();
+        workspaceNode.style.display = 'grid';
+      } catch (error) {
+        statusNode.textContent = `获取审查结果失败：${error.message}`;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    }
+
+    async function exportReview(format, mode) {
+      if (!state.payload || !state.payload.review) {
+        statusNode.textContent = '请先运行审查，再导出结果。';
+        return;
+      }
+      try {
+        const response = await fetch('/api/export-review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            review: state.payload.review,
+            document: state.payload.document,
+            stage: state.payload.stage,
+            format,
+            mode,
+          }),
+        });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || '导出失败');
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const utfMatch = disposition.match(/filename\\*=UTF-8''([^;]+)/i);
+        const match = disposition.match(/filename=\\\"?([^\\\";]+)\\\"?/);
+        const extension = format === 'markdown' ? 'md' : (format === 'xlsx' ? 'xlsx' : 'json');
+        const filename = utfMatch
+          ? decodeURIComponent(utfMatch[1])
+          : (match ? match[1] : `review-export.${extension}`);
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        exportStatusNode.textContent = `最近导出：${filename}`;
+        statusNode.textContent = `已导出 ${filename}`;
+      } catch (error) {
+        exportStatusNode.textContent = `导出失败：${error.message}`;
+        statusNode.textContent = `导出失败：${error.message}`;
+      }
+    }
+
+    async function openSourceFile() {
+      const sourcePath = state.payload && state.payload.document ? state.payload.document.source_path : '';
+      if (!sourcePath) return;
+      try {
+        await fetch('/api/open-source', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: sourcePath }),
+        });
+      } catch (error) {
+        statusNode.textContent = `打开原文件失败：${error.message}`;
+      }
+    }
+
+    function renderProgress(job) {
+      const progress = job && job.progress ? job.progress : null;
+      const steps = progress && Array.isArray(progress.steps) ? progress.steps : defaultProgressSteps();
+      const technicalSteps = progress && Array.isArray(progress.technical_steps) ? progress.technical_steps : defaultTechnicalSteps();
+      const completedCount = steps.filter((step) => step.status === 'completed').length;
+      const runningStep = steps.find((step) => step.status === 'running');
+      const isCompleted = job && job.status === 'completed';
+      progressPanelNode.classList.toggle('is-complete', Boolean(isCompleted));
+      progressModeNode.textContent = job
+        ? `${job.mode === 'hybrid' ? '已启用大模型（混合审查）' : '纯代码审查'} ｜ 当前阶段：${(job.stage_profile && job.stage_profile.stage_name) || '采购需求形成与发布前审查'}`
+        : '';
+      progressMessageNode.textContent = job
+        ? (job.last_message || '正在推进审查任务...')
+        : '上传文件并启动审查后，这里会动态展示当前进度。';
+      progressSummaryNode.innerHTML = job ? `
+        <strong>${escapeHtml(isCompleted ? '本次审查已完成' : `当前步骤：${(runningStep && runningStep.label) || '正在推进审查'}`)}</strong>
+        <div class="meta">${escapeHtml(isCompleted ? '详细过程已折叠，可按需展开查看。' : '当前只展开关键阶段，避免进度区过长影响阅读。')}</div>
+        <div class="chips">
+          <span class="chip">${escapeHtml(`${completedCount}/${steps.length} 阶段完成`)}</span>
+          <span class="chip">${escapeHtml(job.mode === 'hybrid' ? '混合审查' : '纯代码审查')}</span>
+        </div>
+      ` : '';
+      progressStepsNode.innerHTML = steps.map((step) => `
+        <div class="progress-step ${escapeHtml(step.status || 'pending')}">
+          <div class="step-state">${escapeHtml(stepStatusLabel(step.status))}</div>
+          <div>
+            <strong>${escapeHtml(step.label || '')}</strong>
+            <div class="meta">${escapeHtml(step.description || '')}</div>
+          </div>
+        </div>
+      `).join('');
+      progressTechGridNode.innerHTML = technicalSteps.map((step) => `
+        <div class="progress-tech-item">
+          <span>${escapeHtml(step.label || '')}</span>
+          <span class="state">${escapeHtml(stepStatusLabel(step.status))}</span>
+        </div>
+      `).join('');
+    }
+
+    function defaultProgressSteps() {
+      return [
+        { key: 'parse', label: '文档解析中', description: '正在提取正文、章节和表格内容。', status: 'pending' },
+        { key: 'base_scan', label: '基础风险扫描中', description: '正在识别资格、评分、技术、商务/验收风险。', status: 'pending' },
+        { key: 'llm_enhance', label: '智能增强分析中', description: '正在补充边界问题、章节主问题和法规解释。', status: 'pending' },
+        { key: 'finalize', label: '结果收束中', description: '正在去重、合并主问题、整理证据和建议。', status: 'pending' },
+        { key: 'done', label: '审查完成', description: '可查看问题清单和导出结果。', status: 'pending' },
+      ];
+    }
+
+    function defaultTechnicalSteps() {
+      return [
+        { key: 'catalog', label: '品目识别', status: 'pending' },
+        { key: 'rule_scan', label: '规则扫描', status: 'pending' },
+        { key: 'scoring', label: '评分语义分析', status: 'pending' },
+        { key: 'mixed_scope', label: '混合边界分析', status: 'pending' },
+        { key: 'commercial', label: '商务链路分析', status: 'pending' },
+        { key: 'llm_document_audit', label: '全文辅助扫描', status: 'pending' },
+        { key: 'llm_chapter_summary', label: '章节级总结', status: 'pending' },
+        { key: 'llm_legal_reasoning', label: '法规适用逻辑解释', status: 'pending' },
+        { key: 'arbiter', label: '仲裁归并', status: 'pending' },
+        { key: 'evidence', label: '证据选择', status: 'pending' },
+      ];
+    }
+
+    function stepStatusLabel(status) {
+      return ({
+        pending: '等待中',
+        queued: '等待中',
+        running: '进行中',
+        completed: '已完成',
+        skipped: '已跳过',
+        failed: '失败',
+      }[status]) || '等待中';
+    }
+
+    function renderSummary() {
+      const payload = state.payload;
+      if (!payload) return;
+      const findings = state.findings;
+      const mainCount = findings.filter(isMainIssue).length;
+      const highCount = findings.filter((item) => item.risk_level === 'high').length;
+      const mediumCount = findings.filter((item) => item.risk_level === 'medium').length;
+      const stage = payload.stage || null;
+      const bySection = summarizeBySection(findings);
+      const releaseDecision = buildReleaseDecision(findings);
+      const topSections = [
+        ['评分', bySection.scoring],
+        ['技术', bySection.technical],
+        ['商务/验收', bySection.commercial],
+        ['资格', bySection.qualification],
+      ].filter(([, count]) => count > 0)
+        .sort((left, right) => right[1] - left[1])
+        .slice(0, 2)
+        .map(([label, count]) => `${label} ${count} 条`);
+      const sublineParts = [];
+      if (topSections.length) sublineParts.push(`优先处理：${topSections.join('、')}`);
+      if (stage && stage.primary_catalog_name) sublineParts.push(`主品目：${stage.primary_catalog_name}`);
+      if (stage && stage.is_mixed_scope) sublineParts.push('混合采购，建议重点复核边界条款');
+      else if (stage && stage.catalog_confidence) sublineParts.push(`识别置信 ${Math.round(Number(stage.catalog_confidence || 0) * 100)}%`);
+      if (stage && stage.stage_name) sublineParts.push(stage.stage_name);
+      summaryNode.innerHTML = `
+        <h2 style="margin:0 0 10px;">审查摘要</h2>
+        <div class="summary-brief">
+          <strong>${escapeHtml(`${releaseDecision.title}；主问题 ${mainCount} 条，高风险 ${highCount} 条，中风险 ${mediumCount} 条。`)}</strong>
+          <div class="subline">${escapeHtml(sublineParts.join(' ｜ ') || '请优先处理高风险主问题，再回看定位原文和建议改写。')}</div>
+        </div>
+        <div class="decision-banner ${escapeHtml(releaseDecision.className)}">
+          <div class="meta">发布前审查建议</div>
+          <strong>${escapeHtml(releaseDecision.title)}</strong>
+          <div class="summary-note">${escapeHtml(releaseDecision.summary)}</div>
+          <div class="decision-meta">
+            <span class="badge ${escapeHtml(releaseDecision.badgeRisk)}">${escapeHtml(releaseDecision.badgeText)}</span>
+            ${stage && stage.primary_catalog_name ? `<span class="badge">${escapeHtml(stage.primary_catalog_name)}</span>` : ''}
+            ${stage && stage.is_mixed_scope ? '<span class="badge medium">混合采购</span>' : ''}
+          </div>
+        </div>
+        <div class="document-brief">
+          <div class="meta">当前文件</div>
+          <strong title="${escapeHtml(payload.review.document_name)}">${escapeHtml(payload.review.document_name)}</strong>
+          <div class="meta">当前页面优先按采购人发布前改稿与复核习惯组织结果，先看建议，再定位原文。</div>
+        </div>
+        <div class="summary-metrics">
+          ${renderStat('主问题', mainCount, true)}
+          ${renderStat('高风险', highCount, true)}
+          ${renderStat('中风险', mediumCount)}
+          ${renderSectionBreakdown(bySection)}
+        </div>
+      `;
+      summaryNode.style.display = 'block';
+    }
+
+    function renderStat(label, value, primary = false) {
+      return `<div class="stat ${primary ? 'primary' : ''}"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(String(value))}</div></div>`;
+    }
+
+    function renderSectionBreakdown(bySection) {
+      return `
+        <div class="stat section-breakdown">
+          <div class="label">章节分布</div>
+          <div class="value">按主问题归并后的处理重点</div>
+          <div class="section-breakdown-grid">
+            <div>资格 <strong>${escapeHtml(String(bySection.qualification))}</strong></div>
+            <div>评分 <strong>${escapeHtml(String(bySection.scoring))}</strong></div>
+            <div>技术 <strong>${escapeHtml(String(bySection.technical))}</strong></div>
+            <div>商务/验收 <strong>${escapeHtml(String(bySection.commercial))}</strong></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderToolbarState() {
+      document.querySelectorAll('#view-toolbar [data-view]').forEach((node) => node.classList.toggle('active', node.dataset.view === state.viewMode));
+      document.querySelectorAll('#risk-toolbar [data-risk]').forEach((node) => node.classList.toggle('active', node.dataset.risk === state.riskMode));
+      document.querySelectorAll('#section-toolbar [data-section]').forEach((node) => node.classList.toggle('active', node.dataset.section === state.sectionMode));
+    }
+
+    function renderIssues() {
+      const filtered = applyFilters(sortFindings(state.findings));
+      state.filtered = filtered;
+      if (!filtered.length) {
+        issueListNode.innerHTML = '<div class="empty">当前筛选条件下没有问题。</div>';
+        state.selectedFindingId = null;
+        return;
+      }
+      if (!filtered.some((item) => item.finding_id === state.selectedFindingId)) {
+        state.selectedFindingId = filtered[0].finding_id;
+      }
+      issueListNode.innerHTML = renderIssueGroups(filtered);
+      issueListNode.querySelectorAll('.issue-group-head').forEach((node) => {
+        node.addEventListener('click', () => {
+          const key = node.dataset.groupKey;
+          state.collapsedIssueSections[key] = !isIssueGroupCollapsed(key);
+          renderIssues();
+        });
+      });
+      issueListNode.querySelectorAll('.issue-card').forEach((node) => {
+        node.addEventListener('click', () => {
+          state.selectedFindingId = node.dataset.findingId;
+          const finding = state.findings.find((item) => item.finding_id === state.selectedFindingId);
+          if (finding) state.collapsedIssueSections[classifySection(finding)] = false;
+          renderIssues();
+          renderDetail();
+          renderDocument();
+        });
+      });
+    }
+
+    function renderIssueGroups(findings) {
+      const order = ['qualification', 'scoring', 'technical', 'commercial'];
+      const groups = new Map(order.map((key) => [key, []]));
+      findings.forEach((finding) => {
+        const key = classifySection(finding);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(finding);
+      });
+      return Array.from(groups.entries())
+        .filter(([, items]) => items.length)
+        .map(([key, items]) => {
+          const collapsed = isIssueGroupCollapsed(key);
+          const highCount = items.filter((item) => item.risk_level === 'high').length;
+          return `
+            <section class="issue-group ${collapsed ? 'is-collapsed' : ''}">
+              <div class="issue-group-head" data-group-key="${escapeHtml(key)}">
+                <div class="issue-group-title">
+                  <strong>${escapeHtml(sectionLabelFromKey(key))}</strong>
+                  <span>${escapeHtml(sectionDescription(key))}</span>
+                </div>
+                <div class="issue-group-metrics">
+                  <span class="issue-group-high">高 ${escapeHtml(String(highCount))}</span>
+                  <span class="issue-group-count">${escapeHtml(String(items.length))}</span>
+                </div>
+              </div>
+              <div class="issue-group-body">
+                ${items.map(renderIssueCard).join('')}
+              </div>
+            </section>
+          `;
+        })
+        .join('');
+    }
+
+    function renderIssueCard(finding) {
+      const active = finding.finding_id === state.selectedFindingId ? 'active' : '';
+      const action = suggestedAction(finding);
+      const priority = treatmentPriority(finding);
+      return `
+        <article class="issue-card compact ${escapeHtml(finding.risk_level || '')} ${active}" data-finding-id="${escapeHtml(finding.finding_id)}">
+          <div class="issue-title">${escapeHtml(finding.problem_title || '')}</div>
+          <div class="badge-row">
+            <span class="badge ${escapeHtml(finding.risk_level || '')}">${escapeHtml(riskLabel(finding.risk_level))}</span>
+            ${isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : ''}
+            <span class="badge">${escapeHtml(sectionLabel(finding))}</span>
+          </div>
+          <div class="mini-meta">
+            <span class="mini-pill priority">处理顺序 ${escapeHtml(priority.order)}</span>
+            <span class="mini-pill">${escapeHtml(compactLocation(finding))}</span>
+            <span class="mini-pill ${escapeHtml(action.className)}">${escapeHtml(action.label)}</span>
+          </div>
+          <div class="issue-excerpt">${escapeHtml(finding.source_text || finding.why_it_is_risky || '无原文摘录')}</div>
+        </article>
+      `;
+    }
+
+    function renderDetail() {
+      const finding = getSelectedFinding();
+      if (!finding) {
+        detailTitleNode.textContent = '尚未选择问题';
+        detailBadgesNode.innerHTML = '';
+        detailGridNode.innerHTML = `
+          <div class="detail-item"><strong>处理建议</strong><div>待运行</div></div>
+          <div class="detail-item"><strong>风险说明</strong><div>待运行</div></div>
+        `;
+        return;
+      }
+      detailTitleNode.textContent = finding.problem_title || '未命名问题';
+      detailBadgesNode.innerHTML = `
+        <span class="badge ${escapeHtml(finding.risk_level || '')}">${escapeHtml(riskLabel(finding.risk_level))}</span>
+        ${isMainIssue(finding) ? '<span class="badge main">章节主问题</span>' : ''}
+        <span class="badge">${escapeHtml(sectionLabel(finding))}</span>
+      `;
+      const authorityText = formatAuthorityText(finding);
+      const authorityKeyPoints = finding.authority_key_points || '暂无';
+      const reviewText = finding.needs_human_review
+        ? (finding.human_review_reason || '建议采购/法务复核后再决定是否保留当前表述。')
+        : '当前问题更适合直接修改或弱化，不建议原样发布。';
+      detailGridNode.innerHTML = `
+        <div class="detail-item action-callout"><strong>处理建议</strong><div>${escapeHtml(suggestedAction(finding).label)}${finding.needs_human_review ? ` ｜ ${escapeHtml(finding.human_review_reason || '需采购/法务复核')}` : ''}</div></div>
+        <div class="detail-item"><strong>风险说明</strong><div>${escapeHtml(finding.why_it_is_risky || '暂无')}</div></div>
+        <div class="detail-item legal-callout"><strong>法规依据</strong><div>${escapeHtml(authorityText || '暂无')}</div></div>
+        <div class="detail-item"><strong>条文要点</strong><div>${escapeHtml(authorityKeyPoints)}</div></div>
+        <div class="detail-item"><strong>适用逻辑</strong><div>${escapeHtml(finding.applicability_logic || '暂无')}</div></div>
+        <div class="detail-item"><strong>建议改写</strong><div>${escapeHtml(finding.rewrite_suggestion || '暂无')}</div></div>
+        <div class="detail-item"><strong>复核提示</strong><div>${escapeHtml(reviewText)}</div></div>
+        <div class="detail-item"><strong>代表性证据</strong><div>${escapeHtml(finding.source_text || '暂无')}</div></div>
+      `;
+    }
+
+    function renderDocument() {
+      const documentPayload = state.payload ? state.payload.document : null;
+      if (!documentPayload) {
+        documentHeadNode.innerHTML = '<h2 style="margin:0;">文件正文</h2>';
+        documentBodyNode.innerHTML = '<div class="empty">上传文件后，这里会渲染文档原文，并联动定位。</div>';
+        return;
+      }
+      documentHeadNode.innerHTML = `
+        <h2 style="margin:0;">文件正文</h2>
+        <div class="meta">原文件：${escapeHtml(documentPayload.source_path)}</div>
+        <div class="meta">稳定文本：${escapeHtml(documentPayload.normalized_text_path)}</div>
+        <div class="meta">总行数：${documentPayload.line_count} ｜ 渲染模式：${documentPayload.render_mode === 'docx_blocks' ? 'DOCX 原文结构' : '稳定文本'}</div>
+      `;
+      documentBodyNode.innerHTML = documentPayload.render_mode === 'docx_blocks'
+        ? (documentPayload.blocks || []).map((block) => renderBuyerDocumentBlock(block)).join('')
+        : (documentPayload.lines || []).map((line) => renderBuyerDocumentLine(line)).join('');
+      const finding = getSelectedFinding();
+      if (finding) highlightBuyerDocumentRange(finding.text_line_start, finding.text_line_end);
+    }
+
+    function renderBuyerDocumentBlock(block) {
+      const meta = `行号：${formatLineRange(block.start_line, block.end_line)}`;
+      return `<div class="doc-block" id="${escapeHtml(block.block_id)}" data-start-line="${block.start_line}" data-end-line="${block.end_line}">
+        ${block.html}
+        <div class="doc-block-meta">${escapeHtml(meta)}</div>
+      </div>`;
+    }
+
+    function renderBuyerDocumentLine(line) {
+      return `<div class="doc-line" id="buyer-line-${line.number}">
+        <div class="doc-line-number">${String(line.number).padStart(4, '0')}${line.page_hint ? `<br>${escapeHtml(line.page_hint)}` : ''}</div>
+        <div class="doc-line-text">${escapeHtml(line.text || ' ')}</div>
+      </div>`;
+    }
+
+    function highlightBuyerDocumentRange(start, end) {
+      documentBodyNode.querySelectorAll('.active').forEach((node) => node.classList.remove('active'));
+      let target = null;
+      const documentPayload = state.payload ? state.payload.document : null;
+      if (!documentPayload) return;
+      if (documentPayload.render_mode === 'docx_blocks') {
+        documentBodyNode.querySelectorAll('.doc-block').forEach((node) => {
+          const blockStart = Number(node.dataset.startLine);
+          const blockEnd = Number(node.dataset.endLine);
+          const overlaps = blockStart <= end && blockEnd >= start;
+          if (overlaps) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
+        });
+      } else {
+        for (let line = start; line <= end; line += 1) {
+          const node = document.getElementById(`buyer-line-${line}`);
+          if (node) {
+            node.classList.add('active');
+            if (!target) target = node;
+          }
+        }
+      }
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function getSelectedFinding() {
+      return state.filtered.find((item) => item.finding_id === state.selectedFindingId) || state.findings.find((item) => item.finding_id === state.selectedFindingId) || null;
+    }
+
+    function applyFilters(findings) {
+      let items = findings.slice();
+      if (state.viewMode === 'main') items = items.filter(isMainIssue);
+      if (state.riskMode !== 'all') items = items.filter((item) => item.risk_level === state.riskMode);
+      if (state.sectionMode !== 'all') items = items.filter((item) => classifySection(item) === state.sectionMode);
+      return items;
+    }
+
+    function sortFindings(findings) {
+      const priority = { high: 0, medium: 1, low: 2, none: 3 };
+      return [...findings].sort((left, right) => {
+        const levelDiff = (priority[left.risk_level] ?? 9) - (priority[right.risk_level] ?? 9);
+        if (levelDiff !== 0) return levelDiff;
+        const lineDiff = (left.text_line_start || 0) - (right.text_line_start || 0);
+        if (lineDiff !== 0) return lineDiff;
+        return String(left.finding_id).localeCompare(String(right.finding_id));
+      });
+    }
+
+    function summarizeBySection(findings) {
+      const mainFindings = findings.filter(isMainIssue);
+      return {
+        qualification: mainFindings.filter((item) => classifySection(item) === 'qualification').length,
+        scoring: mainFindings.filter((item) => classifySection(item) === 'scoring').length,
+        technical: mainFindings.filter((item) => classifySection(item) === 'technical').length,
+        commercial: mainFindings.filter((item) => classifySection(item) === 'commercial').length,
+      };
+    }
+
+    function isIssueGroupCollapsed(sectionKey) {
+      if (Object.prototype.hasOwnProperty.call(state.collapsedIssueSections, sectionKey)) {
+        return Boolean(state.collapsedIssueSections[sectionKey]);
+      }
+      const selected = getSelectedFinding();
+      if (!selected) return sectionKey !== 'qualification';
+      return classifySection(selected) !== sectionKey;
+    }
+
+    function isMainIssue(finding) {
+      return finding.finding_origin === 'analyzer' || (finding.finding_origin === 'llm_added' && /章节|主问题/.test(finding.problem_title || ''));
+    }
+
+    function classifySection(finding) {
+      const text = [finding.problem_title, finding.section_path, finding.source_section].filter(Boolean).join(' ');
+      if (/资格|申请人的资格要求|准入门槛/.test(text)) return 'qualification';
+      if (/评分|评标信息|演示|品牌档次|认证评分|商务评分/.test(text)) return 'scoring';
+      if (/技术|标准|检测报告|证明材料/.test(text)) return 'technical';
+      return 'commercial';
+    }
+
+    function sectionLabel(finding) {
+      return sectionLabelFromKey(classifySection(finding));
+    }
+
+    function sectionLabelFromKey(sectionKey) {
+      const mapping = {
+        qualification: '资格',
+        scoring: '评分',
+        technical: '技术',
+        commercial: '商务/验收',
+      };
+      return mapping[sectionKey] || '其它';
+    }
+
+    function sectionDescription(sectionKey) {
+      const mapping = {
+        qualification: '准入门槛、一般资质、场所要求。',
+        scoring: '评分结构、主观分档、品牌认证。',
+        technical: '技术标准、证明形式、必要性论证。',
+        commercial: '付款、验收、责任、费用边界。',
+      };
+      return mapping[sectionKey] || '当前筛选条件下的问题会按章节归在这里。';
+    }
+
+    function subthemeLabel(finding) {
+      const title = finding.problem_title || '';
+      if (/一般财务和规模/.test(title)) return '财务/规模';
+      if (/经营年限|属地场所|单项业绩/.test(title)) return '年限/场所/业绩';
+      if (/行业资质|专门许可/.test(title)) return '错位资质';
+      if (/品牌档次/.test(title)) return '品牌评分';
+      if (/认证评分/.test(title)) return '错位认证';
+      if (/标准或规范/.test(title)) return '标准错位';
+      if (/证明材料形式/.test(title)) return '证明形式';
+      if (/资金占用/.test(title)) return '资金占用';
+      if (/责任和违约后果/.test(title)) return '责任失衡';
+      if (/验收程序|最终确认边界/.test(title)) return '验收边界';
+      return finding.issue_type || '综合';
+    }
+
+    function compactLocation(finding) {
+      const section = finding.section_path || finding.source_section || '未定位章节';
+      const shortSection = section.split('->').pop().trim().slice(0, 18);
+      return `${shortSection || '未定位'} · L${finding.text_line_start}`;
+    }
+
+    function formatLineRange(start, end) {
+      if (!start && !end) return '—';
+      if (!end || start === end) return String(start).padStart(4, '0');
+      return `${String(start).padStart(4, '0')}-${String(end).padStart(4, '0')}`;
+    }
+
+    function riskLabel(level) {
+      return ({ high: '高风险', medium: '中风险', low: '低风险' }[level] || level || '未标注');
+    }
+
+    function buildReleaseDecision(findings) {
+      const highCount = findings.filter((item) => item.risk_level === 'high').length;
+      const reviewCount = findings.filter((item) => item.needs_human_review).length;
+      if (highCount >= 3) {
+        return {
+          title: '建议先修改后再发布',
+          summary: '当前存在多条高风险问题，建议先按审查意见改稿，并对边界性条款完成内部复核后再发布。',
+          badgeText: `高风险 ${highCount} 条`,
+          badgeRisk: 'high',
+          className: 'high',
+        };
+      }
+      if (highCount >= 1 || reviewCount >= 3) {
+        return {
+          title: '建议补充论证或复核后发布',
+          summary: '当前存在高风险或多条需复核问题，建议先弱化表述、补必要性论证，并完成采购/法务复核。',
+          badgeText: `需复核 ${reviewCount} 条`,
+          badgeRisk: 'medium',
+          className: 'medium',
+        };
+      }
+      return {
+        title: '建议完成常规复核后发布',
+        summary: '当前主要为中低风险或表述优化问题，建议按页面意见完成常规改稿后再发布。',
+        badgeText: '可进入复核',
+        badgeRisk: 'main',
+        className: 'medium',
+      };
+    }
+
+    function formatAuthorityText(finding) {
+      const parts = [];
+      if (finding.primary_authority) parts.push(`主依据：${finding.primary_authority}`);
+      if (finding.secondary_authorities && finding.secondary_authorities.length) {
+        parts.push(`辅依据：${finding.secondary_authorities.join('；')}`);
+      }
+      if (!parts.length && finding.legal_or_policy_basis) parts.push(finding.legal_or_policy_basis);
+      return parts.join(' ｜ ');
+    }
+
+    function treatmentPriority(finding) {
+      if (finding.risk_level === 'high' && !finding.needs_human_review) {
+        return { order: '01', rank: 1 };
+      }
+      if (finding.risk_level === 'high' || finding.needs_human_review) {
+        return { order: '02', rank: 2 };
+      }
+      if (suggestedAction(finding).className === 'action-justify') {
+        return { order: '03', rank: 3 };
+      }
+      return { order: '04', rank: 4 };
+    }
+
+    function suggestedAction(finding) {
+      if (finding.needs_human_review) return { label: '建议采购/法务复核', className: 'action-review' };
+      if (/论证/.test(finding.problem_title || '') || finding.issue_type === 'technical_justification_needed') {
+        return { label: '建议补必要性论证', className: 'action-justify' };
+      }
+      if (/弱化|主观|高分|过严|边界/.test([finding.problem_title, finding.why_it_is_risky].filter(Boolean).join(' '))) {
+        return { label: '建议弱化表述', className: 'action-soften' };
+      }
+      return { label: '建议直接修改', className: 'action-direct' };
+    }
+
+    function escapeHtml(text) {
+      return String(text || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    }
+  </script>
+</body>
+</html>"""
+
+
+def _rules_html() -> str:
+    return """<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>规则管理</title>
+  <style>
+    :root {
+      --bg: #f4efe5;
+      --panel: #fffdf8;
+      --line: #ddd2c2;
+      --ink: #20252b;
+      --muted: #6c675e;
+      --accent: #9d4a24;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
+    }
+    .app { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    .hero h1 { margin: 0 0 8px; font-size: 30px; }
+    .hero p { margin: 0 0 8px; color: var(--muted); line-height: 1.6; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(52, 41, 29, 0.06);
+      padding: 16px;
+    }
+    .meta { color: var(--muted); font-size: 13px; line-height: 1.6; word-break: break-word; }
+    .rules-grid {
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .rules-col {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .rules-col-head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 6px;
+    }
+    .rules-col-head h2, .rules-col-head h3 { margin: 0; }
+    .rules-toolbar, .rule-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .rules-list {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      max-height: 70vh;
+      overflow: auto;
+    }
+    .rule-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fffdfa;
+      display: grid;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .rule-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(157, 74, 36, 0.12);
+      background: #fff8f1;
+    }
+    .rule-card-title { font-size: 15px; font-weight: 700; line-height: 1.5; }
+    .rule-card-meta, .detail-label { color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .detail-value {
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .detail-pair { display: grid; gap: 4px; }
+    .rule-detail { padding: 16px; display: grid; gap: 12px; }
+    .rule-note {
+      width: 100%;
+      min-height: 80px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      font: inherit;
+      resize: vertical;
+    }
+    .filter-chip, button {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--ink);
+      padding: 8px 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    button.primary, .filter-chip.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: #fff5ea;
+    }
+    .empty { padding: 20px 16px; color: var(--muted); line-height: 1.7; }
+    @media (max-width: 1080px) {
+      .rules-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="hero">
+      <h1>规则管理</h1>
+      <p>这里单独管理模型新增候选规则、benchmark gate 状态和入库确认决策。</p>
+      <p><a href="/">返回审查工作台</a> · <a href="/review-check">打开采购人审查页</a> · <a href="/review-next">打开增强审查页</a></p>
+    </section>
+
+    <section class="panel">
+      <div id="rules-summary" class="meta">正在加载规则候选...</div>
+      <div class="rules-grid">
+        <section class="rules-col">
+          <div id="rules-col-head" class="rules-col-head"></div>
+          <div id="rules-list" class="rules-list"></div>
+        </section>
+        <section class="rules-col">
+          <div class="rules-col-head">
+            <h3>规则详情</h3>
+            <div class="meta">查看候选规则、gate 状态，并记录确认入库、暂缓或忽略决策。</div>
+          </div>
+          <div id="rule-detail" class="rule-detail"></div>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const rulesSummaryNode = document.getElementById('rules-summary');
+    const rulesColHeadNode = document.getElementById('rules-col-head');
+    const rulesListNode = document.getElementById('rules-list');
+    const ruleDetailNode = document.getElementById('rule-detail');
+
+    let latestRulePayload = { formal_rules: [], candidate_rules: [], decision_summary: {} };
+    let currentRuleFilter = 'pending';
+    let selectedCandidateId = '';
+
+    loadRuleManagement();
+
+    async function loadRuleManagement() {
+      try {
+        const response = await fetch('/api/rules');
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '规则管理加载失败');
+        latestRulePayload = payload;
+        if (!selectedCandidateId && payload.candidate_rules.length) {
+          selectedCandidateId = payload.candidate_rules[0].candidate_rule_id;
+        }
+        renderRules(payload);
+      } catch (error) {
+        rulesSummaryNode.textContent = `规则管理加载失败：${error.message}`;
+      }
+    }
+
+    function renderRules(payload) {
+      const summary = payload.decision_summary || {};
+      const formalSummary = payload.formal_rule_summary || {};
+      const topScene = (payload.catalog_scene_summary || [])[0];
+      const topDomain = (payload.domain_summary || [])[0];
+      const topAuthority = (payload.authority_summary || [])[0];
+      const sceneText = topScene ? `；主品目场景以 ${topScene.primary_catalog_name} 为主` : '';
+      const domainText = topDomain ? `；审查领域以 ${topDomain.primary_domain_key} 为主` : '';
+      const authorityText = topAuthority ? `；主依据以 ${topAuthority.primary_authority} 为主` : '';
+      rulesSummaryNode.textContent = `正式规则 ${payload.formal_rules.length} 条；候选规则 ${payload.candidate_rules.length} 条；待确认 ${summary.pending || 0} 条；已确认 ${summary.confirmed || 0} 条${sceneText}${domainText}${authorityText}。`;
+      const activeCount = ((formalSummary.by_status || {}).formal_active) || 0;
+      const catalogSensitiveCount = ((formalSummary.by_status || {}).formal_catalog_sensitive) || 0;
+      const supportCount = ((formalSummary.by_status || {}).formal_support) || 0;
+      const qualificationCount = ((formalSummary.by_family || {}).qualification) || 0;
+      const scoringCount = ((formalSummary.by_family || {}).scoring) || 0;
+      const technicalCount = ((formalSummary.by_family || {}).technical) || 0;
+      const commercialCount = ((formalSummary.by_family || {}).commercial) || 0;
+      rulesColHeadNode.innerHTML = `
+        <h2>候选规则</h2>
+        <div class="meta">候选规则来自模型新增问题和 benchmark gate 结果。确认入库表示进入本地规则候选确认状态，不会自动改代码。</div>
+        <div class="meta">正式规则治理：激活 ${activeCount} 条，品目敏感 ${catalogSensitiveCount} 条，支撑 ${supportCount} 条；资格 ${qualificationCount} 条，评分 ${scoringCount} 条，技术 ${technicalCount} 条，商务 ${commercialCount} 条。</div>
+        <div class="rules-toolbar">
+          <button type="button" class="filter-chip ${currentRuleFilter === 'pending' ? 'active' : ''}" data-rule-filter="pending">待确认</button>
+          <button type="button" class="filter-chip ${currentRuleFilter === 'confirmed' ? 'active' : ''}" data-rule-filter="confirmed">已确认</button>
+          <button type="button" class="filter-chip ${currentRuleFilter === 'all' ? 'active' : ''}" data-rule-filter="all">全部</button>
+        </div>`;
+      rulesColHeadNode.querySelectorAll('[data-rule-filter]').forEach((node) => {
+        node.addEventListener('click', () => {
+          currentRuleFilter = node.dataset.ruleFilter;
+          renderRules(latestRulePayload);
+        });
+      });
+      const candidates = applyRuleFilter(payload.candidate_rules || []);
+      rulesListNode.innerHTML = candidates.length
+        ? candidates.map((item) => renderRuleCard(item)).join('')
+        : '<div class="empty">当前没有符合筛选条件的候选规则。</div>';
+      rulesListNode.querySelectorAll('.rule-card').forEach((node) => {
+        node.addEventListener('click', () => {
+          selectedCandidateId = node.dataset.candidateId;
+          renderRules(latestRulePayload);
+        });
+      });
+      const selected = candidates.find((item) => item.candidate_rule_id === selectedCandidateId) || candidates[0] || null;
+      if (selected) selectedCandidateId = selected.candidate_rule_id;
+      renderRuleDetail(selected);
+    }
+
+    function renderRuleCard(item) {
+      const active = item.candidate_rule_id === selectedCandidateId ? 'active' : '';
+      const sceneLabel = item.primary_catalog_name || '未识别品目';
+      const domainLabel = item.primary_domain_key || 'unknown';
+      return `<article class="rule-card ${active}" data-candidate-id="${escapeHtml(item.candidate_rule_id)}">
+        <div class="rule-card-title">${escapeHtml(item.problem_title)}</div>
+        <div class="rule-card-meta">候选ID：${escapeHtml(item.candidate_rule_id)}</div>
+        <div class="rule-card-meta">问题类型：${escapeHtml(item.issue_type)} ｜ gate：${escapeHtml(item.gate_status)} ｜ 状态：${escapeHtml(decisionLabelText(item.decision))}</div>
+        <div class="rule-card-meta">主品目：${escapeHtml(sceneLabel)} ｜ 审查领域：${escapeHtml(domainLabel)}${item.is_mixed_scope ? ' ｜ 混合采购' : ''}</div>
+        <div class="rule-card-meta">法规主依据：${escapeHtml(item.primary_authority || '暂无')}</div>
+        <div class="rule-card-meta">${escapeHtml(item.source_text || '')}</div>
+      </article>`;
+    }
+
+    function renderRuleDetail(item) {
+      if (!item) {
+        ruleDetailNode.innerHTML = '<div class="empty">当前没有可查看的候选规则。</div>';
+        return;
+      }
+      ruleDetailNode.innerHTML = `
+        <div class="detail-pair"><div class="detail-label">候选规则ID</div><div class="detail-value">${escapeHtml(item.candidate_rule_id)}</div></div>
+        <div class="detail-pair"><div class="detail-label">问题标题</div><div class="detail-value">${escapeHtml(item.problem_title)}</div></div>
+        <div class="detail-pair"><div class="detail-label">问题类型</div><div class="detail-value">${escapeHtml(item.issue_type)}</div></div>
+        <div class="detail-pair"><div class="detail-label">采购品目场景</div><div class="detail-value">${escapeHtml(item.primary_catalog_name || '未识别品目')} ｜ ${escapeHtml(item.primary_domain_key || 'unknown')}${item.is_mixed_scope ? ' ｜ 混合采购' : ''}</div></div>
+        <div class="detail-pair"><div class="detail-label">来源位置</div><div class="detail-value">${escapeHtml(item.section_path || '')}</div></div>
+        <div class="detail-pair"><div class="detail-label">原文摘录</div><div class="detail-value">${escapeHtml(item.source_text || '')}</div></div>
+        <div class="detail-pair"><div class="detail-label">风险说明</div><div class="detail-value">${escapeHtml(item.why_it_is_risky || '')}</div></div>
+        <div class="detail-pair"><div class="detail-label">建议改写</div><div class="detail-value">${escapeHtml(item.rewrite_suggestion || '')}</div></div>
+        <div class="detail-pair"><div class="detail-label">法规主依据</div><div class="detail-value">${escapeHtml(item.primary_authority || '暂无')}</div></div>
+        <div class="detail-pair"><div class="detail-label">法规辅依据</div><div class="detail-value">${escapeHtml((item.secondary_authorities || []).join('；') || '暂无')}</div></div>
+        <div class="detail-pair"><div class="detail-label">适用逻辑</div><div class="detail-value">${escapeHtml(item.applicability_logic || '暂无')}</div></div>
+        <div class="detail-pair"><div class="detail-label">触发关键词</div><div class="detail-value">${escapeHtml((item.trigger_keywords || []).join('，'))}</div></div>
+        <div class="detail-pair"><div class="detail-label">benchmark gate</div><div class="detail-value">${escapeHtml(item.gate_status)} ｜ ${escapeHtml(item.gate_reason || '')}</div></div>
+        <div class="detail-pair"><div class="detail-label">法规侧复核</div><div class="detail-value">${escapeHtml(item.human_review_reason || '暂无')}</div></div>
+        <div class="detail-pair"><div class="detail-label">当前状态</div><div class="detail-value">${escapeHtml(decisionLabelText(item.decision))}</div></div>
+        <div class="detail-pair">
+          <div class="detail-label">备注</div>
+          <textarea id="rule-note" class="rule-note" placeholder="可选：记录为什么确认、暂缓或忽略">${escapeHtml(item.decision_note || '')}</textarea>
+        </div>
+        <div class="rule-actions">
+          <button type="button" class="primary" data-rule-action="confirmed">确认入库</button>
+          <button type="button" data-rule-action="deferred">暂缓</button>
+          <button type="button" data-rule-action="ignored">忽略</button>
+        </div>`;
+      ruleDetailNode.querySelectorAll('[data-rule-action]').forEach((node) => {
+        node.addEventListener('click', async () => {
+          await saveRuleDecision(item.candidate_rule_id, node.dataset.ruleAction);
+        });
+      });
+    }
+
+    async function saveRuleDecision(candidateRuleId, decision) {
+      const noteNode = document.getElementById('rule-note');
+      const note = noteNode ? noteNode.value : '';
+      const response = await fetch('/api/rules/decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidate_rule_id: candidateRuleId, decision, note }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || '规则决策保存失败');
+      latestRulePayload = payload;
+      selectedCandidateId = candidateRuleId;
+      renderRules(payload);
+    }
+
+    function applyRuleFilter(candidates) {
+      if (currentRuleFilter === 'all') return candidates;
+      return candidates.filter((item) => item.decision === currentRuleFilter);
+    }
+
+    function decisionLabelText(decision) {
+      return ({ pending: '待确认', confirmed: '已确认入库', deferred: '暂缓', ignored: '忽略' }[decision] || decision || '待确认');
+    }
+
+    function escapeHtml(text) {
+      return String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    }
+  </script>
+</body>
+</html>"""

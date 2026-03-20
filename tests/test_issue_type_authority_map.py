@@ -4,7 +4,7 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.knowledge.issue_type_authority_map import (
+from agent_compliance.core.knowledge.issue_type_authority_map import (
     get_issue_type_authority_record,
     load_issue_type_authority_records,
 )

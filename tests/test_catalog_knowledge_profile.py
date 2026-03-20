@@ -4,7 +4,7 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.knowledge.catalog_knowledge_profile import (
+from agent_compliance.core.knowledge.catalog_knowledge_profile import (
     catalog_commercial_lifecycle_markers_for_classification,
     catalog_core_delivery_capabilities_for_classification,
     catalog_domain_mismatch_markers_for_classification,
@@ -22,8 +22,8 @@ from agent_compliance.knowledge.catalog_knowledge_profile import (
     catalog_template_scope_markers_for_classification,
     load_catalog_knowledge_profiles,
 )
-from agent_compliance.knowledge.procurement_catalog import CatalogClassification
-from agent_compliance.pipelines.review_strategy import build_document_strategy_profile
+from agent_compliance.core.knowledge.procurement_catalog import CatalogClassification
+from agent_compliance.agents.compliance_review.pipelines.review_strategy import build_document_strategy_profile
 
 
 class CatalogKnowledgeProfileTest(unittest.TestCase):

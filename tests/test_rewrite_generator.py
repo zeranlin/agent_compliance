@@ -4,15 +4,15 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.pipelines.procurement_stage_router import DEFAULT_STAGE_PROFILE
-from agent_compliance.pipelines.rewrite_generator import (
+from agent_compliance.agents.compliance_review.pipelines.procurement_stage_router import DEFAULT_STAGE_PROFILE
+from agent_compliance.agents.compliance_review.pipelines.rewrite_generator import (
     ACTION_DIRECT,
     ACTION_JUSTIFY,
     ACTION_REVIEW,
     apply_rewrite_generator,
     determine_suggested_action,
 )
-from agent_compliance.schemas import Finding
+from agent_compliance.core.schemas import Finding
 
 
 class RewriteGeneratorTest(unittest.TestCase):

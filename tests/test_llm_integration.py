@@ -5,11 +5,11 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from agent_compliance.cli import build_parser
-from agent_compliance.config import LLMConfig, detect_llm_config
-from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog
-from agent_compliance.pipelines.llm_enhance import _build_prompt, enhance_review_result
-from agent_compliance.pipelines.llm_review import (
+from agent_compliance.apps.cli import build_parser
+from agent_compliance.core.config import LLMConfig, detect_llm_config
+from agent_compliance.core.knowledge.procurement_catalog import classify_procurement_catalog
+from agent_compliance.agents.compliance_review.pipelines.llm_enhance import _build_prompt, enhance_review_result
+from agent_compliance.agents.compliance_review.pipelines.llm_review import (
     _build_task_prompt,
     _chapter_summary_candidate_clauses,
     _document_audit_candidate_clauses,
@@ -17,9 +17,9 @@ from agent_compliance.pipelines.llm_review import (
     apply_llm_review_tasks,
     run_benchmark_gate,
 )
-from agent_compliance.parsers.section_splitter import split_into_clauses
-from agent_compliance.schemas import Finding, NormalizedDocument, ReviewResult
-from agent_compliance.web.app import _web_llm_config
+from agent_compliance.core.parsers.section_splitter import split_into_clauses
+from agent_compliance.core.schemas import Finding, NormalizedDocument, ReviewResult
+from agent_compliance.apps.web.app import _web_llm_config
 
 
 class LLMIntegrationTest(unittest.TestCase):
@@ -209,7 +209,7 @@ class LLMIntegrationTest(unittest.TestCase):
             '{"findings":[{"should_flag":true,"clause_ref":"11:5.4","clause_id":"5.4","issue_type":"unclear_acceptance_standard","problem_title":"验收结果单方确定且需求边界开放","why_it_is_risky":"验收结果完全由采购人单方确认，且实际需求边界不清。","rewrite_suggestion":"明确复验和异议处理机制。"}]}',
         ]
 
-        with patch("agent_compliance.pipelines.llm_review.OpenAICompatibleLLMClient.chat", side_effect=responses):
+        with patch("agent_compliance.agents.compliance_review.pipelines.llm_review.OpenAICompatibleLLMClient.chat", side_effect=responses):
             result, artifacts = apply_llm_review_tasks(document, review, llm_config, output_stem="llmtest")
 
         self.assertGreaterEqual(len(result.findings), 4)
@@ -343,7 +343,7 @@ class LLMIntegrationTest(unittest.TestCase):
             '{"findings":[]}',
         ]
 
-        with patch("agent_compliance.pipelines.llm_review.OpenAICompatibleLLMClient.chat", side_effect=responses):
+        with patch("agent_compliance.agents.compliance_review.pipelines.llm_review.OpenAICompatibleLLMClient.chat", side_effect=responses):
             result, artifacts = apply_llm_review_tasks(document, base_review, llm_config, output_stem="arbiterllm")
 
         titles = [finding.problem_title for finding in result.findings]
@@ -401,7 +401,7 @@ class LLMIntegrationTest(unittest.TestCase):
             timeout_seconds=60,
         )
 
-        with patch("agent_compliance.pipelines.llm_review.OpenAICompatibleLLMClient.chat", return_value='{"findings":[]}'):
+        with patch("agent_compliance.agents.compliance_review.pipelines.llm_review.OpenAICompatibleLLMClient.chat", return_value='{"findings":[]}'):
             result, artifacts = apply_llm_review_tasks(document, review, llm_config, output_stem="llmfallback")
 
         issue_types = {finding.issue_type for finding in artifacts.added_findings}
@@ -462,7 +462,7 @@ class LLMIntegrationTest(unittest.TestCase):
             timeout_seconds=60,
         )
 
-        with patch("agent_compliance.pipelines.llm_review.OpenAICompatibleLLMClient.chat", return_value='{"findings":[]}'):
+        with patch("agent_compliance.agents.compliance_review.pipelines.llm_review.OpenAICompatibleLLMClient.chat", return_value='{"findings":[]}'):
             result, artifacts = apply_llm_review_tasks(document, review, llm_config, output_stem="docauditfallback")
 
         titles = {finding.problem_title for finding in artifacts.added_findings}

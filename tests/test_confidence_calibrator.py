@@ -4,10 +4,10 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.knowledge.procurement_catalog import CatalogClassification
-from agent_compliance.pipelines.confidence_calibrator import calibrate_finding_confidence
-from agent_compliance.pipelines.procurement_stage_router import DEFAULT_STAGE_PROFILE
-from agent_compliance.schemas import Finding
+from agent_compliance.core.knowledge.procurement_catalog import CatalogClassification
+from agent_compliance.agents.compliance_review.pipelines.confidence_calibrator import calibrate_finding_confidence
+from agent_compliance.agents.compliance_review.pipelines.procurement_stage_router import DEFAULT_STAGE_PROFILE
+from agent_compliance.core.schemas import Finding
 
 
 class ConfidenceCalibratorTest(unittest.TestCase):

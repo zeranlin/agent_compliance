@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from tests._bootstrap import REPO_ROOT
-from agent_compliance.improvement.rule_management import load_rule_management_payload, save_rule_decision
+from agent_compliance.incubator.improvement.rule_management import load_rule_management_payload, save_rule_decision
 
 
 class RuleManagementTest(unittest.TestCase):

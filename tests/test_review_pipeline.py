@@ -3,13 +3,13 @@ from __future__ import annotations
 import unittest
 
 from tests._bootstrap import REPO_ROOT
-from agent_compliance.knowledge.procurement_catalog import classify_procurement_catalog
-from agent_compliance.parsers.pagination import build_page_map, page_hint_for_line
-from agent_compliance.parsers.section_splitter import split_into_clauses
-from agent_compliance.pipelines.review_evidence import select_representative_evidence
-from agent_compliance.pipelines.review import _drop_false_positive_findings, build_review_result
-from agent_compliance.pipelines.rule_scan import run_rule_scan
-from agent_compliance.schemas import Finding, NormalizedDocument
+from agent_compliance.core.knowledge.procurement_catalog import classify_procurement_catalog
+from agent_compliance.core.parsers.pagination import build_page_map, page_hint_for_line
+from agent_compliance.core.parsers.section_splitter import split_into_clauses
+from agent_compliance.agents.compliance_review.pipelines.review_evidence import select_representative_evidence
+from agent_compliance.agents.compliance_review.pipelines.review import _drop_false_positive_findings, build_review_result
+from agent_compliance.agents.compliance_review.pipelines.rule_scan import run_rule_scan
+from agent_compliance.core.schemas import Finding, NormalizedDocument
 
 
 class ReviewPipelineTest(unittest.TestCase):

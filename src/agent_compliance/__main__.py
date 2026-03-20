@@ -1,4 +1,4 @@
-from agent_compliance.cli import main
+from agent_compliance.apps.cli import main
 
 
 if __name__ == "__main__":

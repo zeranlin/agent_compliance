@@ -4,7 +4,7 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.evals.benchmark_regression_reporter import build_benchmark_regression_report
+from agent_compliance.incubator.evals.benchmark_regression_reporter import build_benchmark_regression_report
 
 
 class BenchmarkRegressionReporterTest(unittest.TestCase):

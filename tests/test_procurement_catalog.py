@@ -4,16 +4,16 @@ import json
 import unittest
 from pathlib import Path
 
-from agent_compliance.knowledge.procurement_catalog import (
+from agent_compliance.core.knowledge.procurement_catalog import (
     classify_procurement_catalog,
     classification_has_catalog_prefix,
     full_catalog_names_by_code_or_prefix,
     load_procurement_catalogs,
 )
-from agent_compliance.knowledge.review_domain_map import load_review_domain_map
-from agent_compliance.parsers.section_splitter import split_into_clauses
-from agent_compliance.pipelines.review_strategy import build_analyzer_execution_order, build_document_strategy_profile
-from agent_compliance.schemas import NormalizedDocument
+from agent_compliance.core.knowledge.review_domain_map import load_review_domain_map
+from agent_compliance.core.parsers.section_splitter import split_into_clauses
+from agent_compliance.agents.compliance_review.pipelines.review_strategy import build_analyzer_execution_order, build_document_strategy_profile
+from agent_compliance.core.schemas import NormalizedDocument
 from tests._bootstrap import REPO_ROOT
 
 

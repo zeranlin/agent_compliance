@@ -4,8 +4,8 @@ import unittest
 
 import tests._bootstrap  # noqa: F401
 
-from agent_compliance.knowledge.legal_authority_reasoner import reason_for_finding
-from agent_compliance.schemas import Finding
+from agent_compliance.core.knowledge.legal_authority_reasoner import reason_for_finding
+from agent_compliance.core.schemas import Finding
 
 
 class LegalAuthorityReasonerTest(unittest.TestCase):
