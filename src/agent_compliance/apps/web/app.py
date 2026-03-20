@@ -45,6 +45,12 @@ def run_web_server(host: str = "127.0.0.1", port: int = 8765) -> None:
 
 
 class ReviewWebHandler(BaseHTTPRequestHandler):
+    def _send_json(self, payload: dict, *, status: HTTPStatus = HTTPStatus.OK) -> None:
+        send_json(self, payload, status=status)
+
+    def _send_html(self, html: str, *, status: HTTPStatus = HTTPStatus.OK) -> None:
+        send_html(self, html, status=status)
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path
