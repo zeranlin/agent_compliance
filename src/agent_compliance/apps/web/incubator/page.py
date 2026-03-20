@@ -97,7 +97,7 @@ def incubator_html() -> str:
       font-weight: 600;
       color: var(--muted);
     }
-    input, select {
+    input, select, textarea {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 12px;
@@ -106,10 +106,28 @@ def incubator_html() -> str:
       color: var(--ink);
       background: #fff;
     }
+    textarea {
+      min-height: 84px;
+      resize: vertical;
+      line-height: 1.6;
+      font-family: inherit;
+    }
     .button-row {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
+    }
+    .subform {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fbfdff;
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+    .subform h3 {
+      margin: 0;
+      font-size: 18px;
     }
     button {
       border: none;
@@ -279,6 +297,51 @@ def incubator_html() -> str:
           <button id="refresh-runs-btn" class="secondary" type="button">刷新运行列表</button>
         </div>
         <div id="incubator-status" class="status">等待选择蓝图并启动一轮孵化。</div>
+        <div class="subform">
+          <div>
+            <h3>补充样例与对照</h3>
+            <p>选中一个已有 run 后，可以在这里补样例清单，或直接填写人工/强通用智能体/目标智能体三方结果，继续推进对照验证和蒸馏建议生成。</p>
+          </div>
+          <label>
+            样例清单名称
+            <input id="manifest-name-input" placeholder="例如：第一批采购需求样例" />
+          </label>
+          <label>
+            正样例路径（每行一个）
+            <textarea id="positive-paths-input" placeholder="/path/to/positive-a.docx&#10;/path/to/positive-b.docx"></textarea>
+          </label>
+          <label>
+            负样例路径（每行一个）
+            <textarea id="negative-paths-input" placeholder="/path/to/negative-a.docx"></textarea>
+          </label>
+          <label>
+            边界样例路径（每行一个）
+            <textarea id="boundary-paths-input" placeholder="/path/to/boundary-a.docx"></textarea>
+          </label>
+          <label>
+            对照样例 ID
+            <input id="comparison-sample-id-input" placeholder="例如：case-001" />
+          </label>
+          <label>
+            人工基准
+            <textarea id="human-baseline-input" placeholder="人工结果要点，一行一条。"></textarea>
+          </label>
+          <label>
+            强通用智能体结果
+            <textarea id="strong-agent-result-input" placeholder="强通用智能体结果要点，一行一条。"></textarea>
+          </label>
+          <label>
+            目标智能体结果
+            <textarea id="target-agent-result-input" placeholder="当前目标智能体结果要点，一行一条。"></textarea>
+          </label>
+          <label>
+            对照摘要（可选）
+            <textarea id="comparison-summary-input" placeholder="例如：当前目标智能体仍漏掉评分结构和边界条款。"></textarea>
+          </label>
+          <div class="button-row">
+            <button id="continue-run-btn" type="button">补充并续跑</button>
+          </div>
+        </div>
         <div>
           <h2 style="font-size:20px;">历史 runs</h2>
           <p>点击左侧任一 run，可直接查看 run manifest 摘要和蒸馏报告正文。</p>
@@ -293,6 +356,15 @@ def incubator_html() -> str:
   <script>
     const blueprintNode = document.getElementById('blueprint-select');
     const runTitleNode = document.getElementById('run-title-input');
+    const manifestNameNode = document.getElementById('manifest-name-input');
+    const positivePathsNode = document.getElementById('positive-paths-input');
+    const negativePathsNode = document.getElementById('negative-paths-input');
+    const boundaryPathsNode = document.getElementById('boundary-paths-input');
+    const comparisonSampleIdNode = document.getElementById('comparison-sample-id-input');
+    const humanBaselineNode = document.getElementById('human-baseline-input');
+    const strongAgentResultNode = document.getElementById('strong-agent-result-input');
+    const targetAgentResultNode = document.getElementById('target-agent-result-input');
+    const comparisonSummaryNode = document.getElementById('comparison-summary-input');
     const statusNode = document.getElementById('incubator-status');
     const runListNode = document.getElementById('run-list');
     const runDetailNode = document.getElementById('run-detail');
@@ -305,6 +377,7 @@ def incubator_html() -> str:
 
     document.getElementById('start-run-btn').addEventListener('click', startIncubationRun);
     document.getElementById('refresh-runs-btn').addEventListener('click', loadRuns);
+    document.getElementById('continue-run-btn').addEventListener('click', continueIncubationRun);
     blueprintNode.addEventListener('change', applyDefaultRunTitle);
 
     async function loadBlueprints() {
@@ -432,6 +505,41 @@ def incubator_html() -> str:
         }
       } catch (error) {
         statusNode.textContent = `启动孵化失败：${error.message}`;
+      }
+    }
+
+    async function continueIncubationRun() {
+      if (!selectedRunPath) {
+        statusNode.textContent = '请先在左侧选择一个已有 run。';
+        return;
+      }
+      statusNode.textContent = '正在补充样例与对照，并续跑当前 run...';
+      try {
+        const response = await fetch('/api/incubator/continue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            run_manifest: selectedRunPath,
+            manifest_name: manifestNameNode.value.trim(),
+            positive_paths: positivePathsNode.value,
+            negative_paths: negativePathsNode.value,
+            boundary_paths: boundaryPathsNode.value,
+            comparison_sample_id: comparisonSampleIdNode.value.trim(),
+            human_baseline: humanBaselineNode.value,
+            strong_agent_result: strongAgentResultNode.value,
+            target_agent_result: targetAgentResultNode.value,
+            comparison_summary: comparisonSummaryNode.value,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || '续跑孵化失败');
+        statusNode.textContent = `已续跑：${payload.run_title}；样例补充=${payload.continued.sample_manifest_added ? '是' : '否'}，对照补充=${payload.continued.comparison_added ? '是' : '否'}。`;
+        await loadRuns();
+        if (payload.outputs && payload.outputs.run_manifest) {
+          await showRunDetail(payload.outputs.run_manifest);
+        }
+      } catch (error) {
+        statusNode.textContent = `续跑孵化失败：${error.message}`;
       }
     }
 

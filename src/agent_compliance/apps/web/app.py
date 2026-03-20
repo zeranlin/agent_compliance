@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 from agent_compliance.apps.web.incubator.page import incubator_html
 from agent_compliance.apps.web.incubator.routes import (
+    handle_incubator_continue,
     handle_incubator_run_detail,
     handle_incubator_start,
     incubator_blueprints_payload,
@@ -96,6 +97,9 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/incubator/start":
             handle_incubator_start(self)
+            return
+        if path == "/api/incubator/continue":
+            handle_incubator_continue(self)
             return
         if path == "/api/review-start":
             handle_review_start(self)

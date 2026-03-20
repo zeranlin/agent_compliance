@@ -11,6 +11,8 @@ from agent_compliance.core.config import detect_paths
 from agent_compliance.incubator import (
     bootstrap_agent_factory,
     build_distillation_report,
+    build_sample_manifest,
+    build_validation_comparison,
     list_blueprints,
     load_incubation_run,
     resume_agent_factory,
@@ -100,6 +102,69 @@ def handle_incubator_start(handler) -> None:
         handler._send_json({"error": f"启动孵化失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
 
 
+def handle_incubator_continue(handler) -> None:
+    try:
+        length = int(handler.headers.get("Content-Length", "0"))
+        payload = json.loads(handler.rfile.read(length).decode("utf-8") or "{}")
+        requested_path = str(payload.get("run_manifest", "")).strip()
+        if not requested_path:
+            handler._send_json({"error": "缺少 run_manifest"}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        paths = detect_paths()
+        output_dir = paths.repo_root / "docs" / "generated" / "incubator"
+        manifest_path = safe_incubator_path(requested_path, output_dir)
+        run = load_incubation_run(manifest_path)
+
+        sample_manifest = _build_sample_manifest_from_payload(payload)
+        comparison = _build_comparison_from_payload(payload)
+        if sample_manifest is None and comparison is None:
+            handler._send_json(
+                {"error": "至少需要补充一项：样例清单或三方对照文本"},
+                status=HTTPStatus.BAD_REQUEST,
+            )
+            return
+
+        result = resume_agent_factory(
+            run,
+            sample_manifest=sample_manifest,
+            comparisons=(comparison,) if comparison else (),
+        )
+        run_key = run_key_from_manifest(manifest_path)
+        artifact_paths = write_distillation_report(
+            output_dir,
+            result.blueprint.agent_key,
+            run_key,
+            result.report,
+            result.report_markdown,
+        )
+        run_paths = write_incubation_run(
+            output_dir,
+            result.blueprint.agent_key,
+            run_key,
+            result.run,
+        )
+        handler._send_json(
+            {
+                "agent_key": result.blueprint.agent_key,
+                "agent_name": result.blueprint.agent_name,
+                "run_title": result.run.run_title,
+                "outputs": {
+                    "run_manifest": str(run_paths.manifest_path),
+                    "report_json": str(artifact_paths.json_path),
+                    "report_markdown": str(artifact_paths.markdown_path),
+                },
+                "summary": result.report["summary"],
+                "continued": {
+                    "sample_manifest_added": sample_manifest is not None,
+                    "comparison_added": comparison is not None,
+                },
+            }
+        )
+    except Exception as exc:
+        handler._send_json({"error": f"续跑孵化失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
+
+
 def handle_incubator_run_detail(handler, query: str) -> None:
     params = parse_qs(query)
     requested_path = (params.get("path") or [""])[0]
@@ -181,3 +246,44 @@ def safe_incubator_path(requested_path: str, base_dir: Path) -> Path:
     resolved = candidate.resolve()
     resolved.relative_to(base_dir.resolve())
     return resolved
+
+
+def _split_lines(raw_value: Any) -> tuple[str, ...]:
+    if not isinstance(raw_value, str):
+        return ()
+    return tuple(line.strip() for line in raw_value.splitlines() if line.strip())
+
+
+def _build_sample_manifest_from_payload(payload: dict[str, Any]):
+    positive_paths = _split_lines(payload.get("positive_paths"))
+    negative_paths = _split_lines(payload.get("negative_paths"))
+    boundary_paths = _split_lines(payload.get("boundary_paths"))
+    if not any((positive_paths, negative_paths, boundary_paths)):
+        return None
+    manifest_name = str(payload.get("manifest_name", "")).strip() or "Web 补充样例"
+    return build_sample_manifest(
+        manifest_name,
+        positive_paths=positive_paths,
+        negative_paths=negative_paths,
+        boundary_paths=boundary_paths,
+    )
+
+
+def _build_comparison_from_payload(payload: dict[str, Any]):
+    sample_id = str(payload.get("comparison_sample_id", "")).strip()
+    human_baseline = str(payload.get("human_baseline", "")).strip()
+    strong_agent_result = str(payload.get("strong_agent_result", "")).strip()
+    target_agent_result = str(payload.get("target_agent_result", "")).strip()
+    comparison_summary = str(payload.get("comparison_summary", "")).strip()
+    has_any = any((sample_id, human_baseline, strong_agent_result, target_agent_result, comparison_summary))
+    if not has_any:
+        return None
+    if not (sample_id and human_baseline and strong_agent_result and target_agent_result):
+        raise ValueError("三方对照需同时提供样例 ID、人工基准、强通用智能体结果和目标智能体结果")
+    return build_validation_comparison(
+        sample_id=sample_id,
+        human_baseline=human_baseline,
+        strong_agent_result=strong_agent_result,
+        target_agent_result=target_agent_result,
+        summary=comparison_summary,
+    )
