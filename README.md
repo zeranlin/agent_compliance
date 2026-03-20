@@ -95,7 +95,7 @@
 
 智能体孵化与蒸馏工厂当前已支持：
 - 标准蓝图模板：`review / budget_analysis / demand_research / comparison_eval`
-- 当前具体蓝图：`review_agent`、`budget_agent`、`demand_research_agent`
+- 当前具体蓝图：`review_agent`、`budget_agent`、`demand_research_agent`、`special_checks_agent`
 - 标准命令：`PYTHONPATH=src python3 -m agent_compliance incubate-agent <agent_key>`
 - 多轮比较命令：`PYTHONPATH=src python3 -m agent_compliance compare-incubation-runs <run1> <run2> ...`
 - 建议状态命令：`PYTHONPATH=src python3 -m agent_compliance update-incubation-recommendation <run.json> <recommendation_key> --status ...`
@@ -111,6 +111,8 @@
   - `*-productization.json`
 - 当前已用 `政府采购需求调查智能体` 跑通第一轮真实 MVP 孵化验证，产物位于：
   - `docs/generated/incubator/demand_research/`
+- 当前也已用 `政府采购四类专项检查智能体` 跑通一轮最小孵化验证，产物位于：
+  - `docs/generated/incubator/special_checks/`
 - 当前也已支持最小自动对照生成：
   - `--human-baseline-file`
   - `--strong-agent-result-file`

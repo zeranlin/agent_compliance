@@ -7,7 +7,9 @@ from agent_compliance.incubator.blueprints import (
     COMPARISON_EVAL_AGENT_TEMPLATE,
     DEMAND_RESEARCH_AGENT_BLUEPRINT,
     REVIEW_AGENT_BLUEPRINT,
+    SPECIAL_CHECKS_AGENT_BLUEPRINT,
     get_blueprint_template,
+    list_blueprints,
     list_blueprint_templates,
 )
 
@@ -24,8 +26,13 @@ class BlueprintTemplateTests(unittest.TestCase):
         self.assertEqual(REVIEW_AGENT_BLUEPRINT.template_key, "review")
         self.assertEqual(BUDGET_AGENT_BLUEPRINT.template_key, "budget_analysis")
         self.assertEqual(DEMAND_RESEARCH_AGENT_BLUEPRINT.template_key, "demand_research")
+        self.assertEqual(SPECIAL_CHECKS_AGENT_BLUEPRINT.template_key, "review")
         self.assertIn("web shell", REVIEW_AGENT_BLUEPRINT.shared_capabilities)
         self.assertIn("rules/__init__.py", BUDGET_AGENT_BLUEPRINT.required_files)
+
+    def test_list_blueprints_includes_special_checks_agent(self) -> None:
+        blueprint_keys = {blueprint.agent_key for blueprint in list_blueprints()}
+        self.assertIn("special_checks", blueprint_keys)
 
     def test_get_blueprint_template_returns_template_definition(self) -> None:
         template = get_blueprint_template("comparison_eval")

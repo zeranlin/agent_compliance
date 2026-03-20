@@ -11,6 +11,7 @@ from agent_compliance.incubator.blueprints import (
     DEMAND_RESEARCH_AGENT_BLUEPRINT,
     REVIEW_AGENT_BLUEPRINT,
     REVIEW_AGENT_TEMPLATE,
+    SPECIAL_CHECKS_AGENT_BLUEPRINT,
     budget_agent_blueprint,
     create_agent_blueprint,
     demand_research_agent_blueprint,
@@ -19,6 +20,7 @@ from agent_compliance.incubator.blueprints import (
     list_blueprints,
     list_blueprint_templates,
     review_agent_blueprint,
+    special_checks_agent_blueprint,
 )
 from agent_compliance.incubator.lifecycle import (
     DEFAULT_INCUBATION_LIFECYCLE,
@@ -116,6 +118,7 @@ __all__ = [
     "RegressionFeedback",
     "REVIEW_AGENT_BLUEPRINT",
     "REVIEW_AGENT_TEMPLATE",
+    "SPECIAL_CHECKS_AGENT_BLUEPRINT",
     "SampleSet",
     "ScaffoldPlan",
     "SampleAsset",
@@ -151,6 +154,7 @@ __all__ = [
     "render_run_comparison_markdown",
     "resume_agent_factory",
     "review_agent_blueprint",
+    "special_checks_agent_blueprint",
     "render_scaffold_file",
     "serialize_incubation_run",
     "serialize_sample_manifest",
