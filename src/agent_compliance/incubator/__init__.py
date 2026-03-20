@@ -90,8 +90,11 @@ from agent_compliance.incubator.productize import (
 )
 from agent_compliance.incubator.requirement_definition import (
     RequirementDefinitionDraft,
+    RequirementDefinitionGuidance,
     RequirementDefinitionPaths,
     build_requirement_definition,
+    build_requirement_guidance,
+    infer_template_key,
     render_requirement_definition_markdown,
     write_requirement_definition,
 )
@@ -123,6 +126,7 @@ __all__ = [
     "IncubationStageRecord",
     "ProductizationArtifactPaths",
     "RequirementDefinitionDraft",
+    "RequirementDefinitionGuidance",
     "RequirementDefinitionPaths",
     "RegressionFeedback",
     "REVIEW_AGENT_BLUEPRINT",
@@ -142,6 +146,7 @@ __all__ = [
     "build_regression_feedback",
     "build_productization_package",
     "build_requirement_definition",
+    "build_requirement_guidance",
     "build_validation_comparison",
     "build_validation_comparison_from_files",
     "collect_validation_comparisons_from_manifest",
@@ -158,6 +163,7 @@ __all__ = [
     "list_blueprints",
     "list_blueprint_templates",
     "load_sample_manifest",
+    "infer_template_key",
     "load_incubation_run",
     "render_distillation_report_markdown",
     "render_productization_markdown",

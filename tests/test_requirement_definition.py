@@ -6,12 +6,34 @@ from pathlib import Path
 
 from agent_compliance.incubator.requirement_definition import (
     build_requirement_definition,
+    build_requirement_guidance,
+    infer_template_key,
     render_requirement_definition_markdown,
     write_requirement_definition,
 )
 
 
 class RequirementDefinitionTests(unittest.TestCase):
+    def test_infer_template_key_prefers_review_for_checking_need(self) -> None:
+        self.assertEqual(
+            infer_template_key(
+                business_need="我要一个合规性检查智能体，用来对政府采购采购需求文档发布前进行风险检查",
+                usage_scenario="采购人内部发布前复核",
+            ),
+            "review",
+        )
+
+    def test_build_requirement_guidance_generates_process_and_questions(self) -> None:
+        guidance = build_requirement_guidance(
+            agent_name="",
+            business_need="根据采购品目和预算生成采购需求初稿骨架",
+            usage_scenario="采购需求编制前的需求调研阶段",
+        )
+        self.assertEqual(guidance.template_key, "budget_analysis")
+        self.assertEqual(len(guidance.handling_process), 6)
+        self.assertGreaterEqual(len(guidance.clarification_questions), 3)
+        self.assertIn("预算", guidance.product_direction)
+
     def test_build_requirement_definition_generates_summary_fields(self) -> None:
         draft = build_requirement_definition(
             agent_name="政府采购采购需求调查智能体",
