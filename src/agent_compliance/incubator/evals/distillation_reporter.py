@@ -17,6 +17,7 @@ def build_distillation_report(run: IncubationRun) -> dict[str, object]:
     priority_summary: dict[str, int] = {}
     target_layer_summary: dict[str, int] = {}
     recommendation_status_summary: dict[str, int] = {}
+    validated_change_count = 0
 
     for stage in run.stages:
         for recommendation in stage.recommendations:
@@ -29,6 +30,8 @@ def build_distillation_report(run: IncubationRun) -> dict[str, object]:
             recommendation_status_summary[recommendation.status] = (
                 recommendation_status_summary.get(recommendation.status, 0) + 1
             )
+            if recommendation.regression_result or recommendation.capability_change:
+                validated_change_count += 1
 
         stage_reports.append(
             {
@@ -53,6 +56,7 @@ def build_distillation_report(run: IncubationRun) -> dict[str, object]:
             "sample_set_count": sample_set_count,
             "comparison_count": comparison_count,
             "recommendation_count": recommendation_count,
+            "validated_change_count": validated_change_count,
         },
         "priority_summary": priority_summary,
         "target_layer_summary": target_layer_summary,
@@ -73,6 +77,7 @@ def render_distillation_report_markdown(report: dict[str, object]) -> str:
         f"- 样例集：`{summary['sample_set_count']}`",
         f"- 对照记录：`{summary['comparison_count']}`",
         f"- 蒸馏建议：`{summary['recommendation_count']}`",
+        f"- 已记录回归/能力变化：`{summary['validated_change_count']}`",
         "",
     ]
 
@@ -115,6 +120,13 @@ def render_distillation_report_markdown(report: dict[str, object]) -> str:
             lines.append(f"- 对照数量：{len(stage['comparisons'])}")
         if stage["recommendations"]:
             lines.append(f"- 蒸馏建议数量：{len(stage['recommendations'])}")
+            regression_notes = [
+                recommendation
+                for recommendation in stage["recommendations"]
+                if recommendation.get("regression_result") or recommendation.get("capability_change")
+            ]
+            if regression_notes:
+                lines.append(f"- 已记录回归结果数量：{len(regression_notes)}")
         lines.append("")
 
     return "\n".join(lines)

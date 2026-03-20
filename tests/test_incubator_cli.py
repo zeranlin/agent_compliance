@@ -284,6 +284,10 @@ class IncubatorCliTests(unittest.TestCase):
                         "implemented",
                         "--notes",
                         "已完成首轮实现",
+                        "--regression-result",
+                        "评分样例回归通过",
+                        "--capability-change",
+                        "已开始输出评分主问题",
                         "--json",
                     ]
                 )
@@ -296,6 +300,8 @@ class IncubatorCliTests(unittest.TestCase):
             recommendation = updated_run["stages"][5]["recommendations"][0]
             self.assertEqual(recommendation["status"], "implemented")
             self.assertEqual(recommendation["resolution_notes"], "已完成首轮实现")
+            self.assertEqual(recommendation["regression_result"], "评分样例回归通过")
+            self.assertEqual(recommendation["capability_change"], "已开始输出评分主问题")
 
 
 if __name__ == "__main__":

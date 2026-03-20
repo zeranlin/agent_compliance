@@ -90,6 +90,9 @@
 - 标准命令：`PYTHONPATH=src python3 -m agent_compliance incubate-agent <agent_key>`
 - 多轮比较命令：`PYTHONPATH=src python3 -m agent_compliance compare-incubation-runs <run1> <run2> ...`
 - 建议状态命令：`PYTHONPATH=src python3 -m agent_compliance update-incubation-recommendation <run.json> <recommendation_key> --status ...`
+- 回归回挂字段：
+  - `--regression-result`
+  - `--capability-change`
 - 标准产物：
   - `*-distillation-report.md`
   - `*-distillation-report.json`

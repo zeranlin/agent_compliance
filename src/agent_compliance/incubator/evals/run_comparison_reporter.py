@@ -21,6 +21,7 @@ def build_run_comparison_report(runs: tuple[IncubationRun, ...]) -> dict[str, ob
     completed_stage_counts: list[int] = []
     all_gap_points: list[str] = []
     all_target_layers: list[str] = []
+    validated_change_counts: list[int] = []
 
     for run in runs:
         comparisons = [comparison for stage in run.stages for comparison in stage.comparisons]
@@ -32,9 +33,15 @@ def build_run_comparison_report(runs: tuple[IncubationRun, ...]) -> dict[str, ob
             aligned for comparison in comparisons for aligned in comparison.aligned_points
         ]
         completed_stages = sum(1 for stage in run.stages if stage.status == "completed")
+        validated_changes = sum(
+            1
+            for recommendation in recommendations
+            if recommendation.regression_result or recommendation.capability_change
+        )
         gap_counts.append(len(gap_points))
         recommendation_counts.append(len(recommendations))
         completed_stage_counts.append(completed_stages)
+        validated_change_counts.append(validated_changes)
         all_gap_points.extend(gap_points)
         all_target_layers.extend(recommendation.target_layer for recommendation in recommendations)
 
@@ -46,6 +53,7 @@ def build_run_comparison_report(runs: tuple[IncubationRun, ...]) -> dict[str, ob
                 "gap_count": len(gap_points),
                 "aligned_count": len(aligned_points),
                 "recommendation_count": len(recommendations),
+                "validated_change_count": validated_changes,
                 "target_layers": tuple(recommendation.target_layer for recommendation in recommendations),
             }
         )
@@ -54,6 +62,7 @@ def build_run_comparison_report(runs: tuple[IncubationRun, ...]) -> dict[str, ob
         "gap_delta": gap_counts[-1] - gap_counts[0],
         "recommendation_delta": recommendation_counts[-1] - recommendation_counts[0],
         "completed_stage_delta": completed_stage_counts[-1] - completed_stage_counts[0],
+        "validated_change_delta": validated_change_counts[-1] - validated_change_counts[0],
         "is_gap_converging": gap_counts[-1] <= gap_counts[0],
     }
 
@@ -84,6 +93,7 @@ def render_run_comparison_markdown(report: dict[str, object]) -> str:
         f"- gap 变化：`{report['trend']['gap_delta']}`",
         f"- 建议变化：`{report['trend']['recommendation_delta']}`",
         f"- 完成阶段变化：`{report['trend']['completed_stage_delta']}`",
+        f"- 已记录回归/能力变化：`{report['trend']['validated_change_delta']}`",
         f"- gap 是否收敛：`{report['trend']['is_gap_converging']}`",
         "",
         "## 各轮摘要",
@@ -100,6 +110,7 @@ def render_run_comparison_markdown(report: dict[str, object]) -> str:
                 f"- gap 数量：`{run['gap_count']}`",
                 f"- 已对齐点：`{run['aligned_count']}`",
                 f"- 蒸馏建议：`{run['recommendation_count']}`",
+                f"- 已记录回归/能力变化：`{run['validated_change_count']}`",
                 "",
             ]
         )

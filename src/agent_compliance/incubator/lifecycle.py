@@ -62,6 +62,8 @@ class DistillationRecommendation:
     priority: str = "P1"
     status: str = "proposed"
     resolution_notes: str = ""
+    regression_result: str = ""
+    capability_change: str = ""
 
 
 @dataclass
@@ -119,6 +121,8 @@ class IncubationRun:
         recommendation_key: str,
         status: str,
         notes: str = "",
+        regression_result: str = "",
+        capability_change: str = "",
     ) -> None:
         recommendations = self.get_stage(stage).recommendations
         for index, recommendation in enumerate(recommendations):
@@ -132,6 +136,8 @@ class IncubationRun:
                     priority=recommendation.priority,
                     status=status,
                     resolution_notes=notes or recommendation.resolution_notes,
+                    regression_result=regression_result or recommendation.regression_result,
+                    capability_change=capability_change or recommendation.capability_change,
                 )
                 return
         raise KeyError(recommendation_key)

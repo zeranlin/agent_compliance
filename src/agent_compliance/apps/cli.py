@@ -145,6 +145,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("proposed", "accepted", "implemented", "validated", "dropped"),
     )
     update_recommendation_parser.add_argument("--notes", default="")
+    update_recommendation_parser.add_argument("--regression-result", default="")
+    update_recommendation_parser.add_argument("--capability-change", default="")
     update_recommendation_parser.add_argument("--json", action="store_true")
 
     web_parser = subparsers.add_parser(
@@ -313,6 +315,8 @@ def main(argv: list[str] | None = None) -> int:
             args.recommendation_key,
             args.status,
             args.notes,
+            args.regression_result,
+            args.capability_change,
         )
         write_incubation_run(
             args.run_manifest.parent.parent,
@@ -327,6 +331,8 @@ def main(argv: list[str] | None = None) -> int:
             "stage": stage.value,
             "status": args.status,
             "notes": args.notes,
+            "regression_result": args.regression_result,
+            "capability_change": args.capability_change,
         }
         return _print_result(payload, args.json)
 

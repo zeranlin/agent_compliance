@@ -49,6 +49,8 @@ class DistillationReporterTests(unittest.TestCase):
                 rationale="当前评分主问题漏判。",
                 priority="P0",
                 status="accepted",
+                regression_result="评分样例回归通过",
+                capability_change="已可稳定上浮评分结构失衡主问题",
             ),
         )
 
@@ -57,6 +59,7 @@ class DistillationReporterTests(unittest.TestCase):
         self.assertEqual(report["summary"]["sample_set_count"], 1)
         self.assertEqual(report["summary"]["comparison_count"], 1)
         self.assertEqual(report["summary"]["recommendation_count"], 1)
+        self.assertEqual(report["summary"]["validated_change_count"], 1)
         self.assertEqual(report["priority_summary"]["P0"], 1)
         self.assertEqual(report["recommendation_status_summary"]["accepted"], 1)
         self.assertEqual(

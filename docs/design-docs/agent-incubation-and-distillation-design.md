@@ -570,6 +570,17 @@ src/agent_compliance/incubator/
   - 让工厂不只会“提出建议”
   - 还能记录建议是否真的进入实现、验证或被放弃
 
+当前也已开始补齐“建议执行 -> 回归结果 -> 能力变化”最小回挂能力：
+
+- 每条建议现在还可继续记录：
+  - `regression_result`
+  - `capability_change`
+- 当前接入方式：
+  - `update-incubation-recommendation ... --regression-result ... --capability-change ...`
+- 当前目标：
+  - 让工厂开始回答“哪条建议真的让目标智能体变强”
+  - 让多轮 run 对比不只看 gap 数量，也能看能力变化记录
+
 ## 14. 下一步建议
 
 按优先级建议继续做：

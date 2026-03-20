@@ -37,6 +37,8 @@ class RunComparisonReporterTests(unittest.TestCase):
                 action="补需求章节结构",
                 rationale="结构仍缺失",
                 priority="P1",
+                regression_result="章节结构样例已回归",
+                capability_change="已能输出需求章节骨架",
             ),
         )
 
@@ -70,6 +72,7 @@ class RunComparisonReporterTests(unittest.TestCase):
         self.assertEqual(report["agent_key"], "demand_research")
         self.assertEqual(report["run_count"], 2)
         self.assertEqual(report["trend"]["gap_delta"], -1)
+        self.assertEqual(report["trend"]["validated_change_delta"], -1)
         self.assertTrue(report["trend"]["is_gap_converging"])
 
     def test_render_run_comparison_markdown_includes_summary(self) -> None:

@@ -46,6 +46,8 @@ class RunStoreTests(unittest.TestCase):
                 rationale="目标智能体漏判",
                 status="accepted",
                 resolution_notes="纳入下一轮实现",
+                regression_result="评分样例已完成首轮回归",
+                capability_change="已开始输出评分主问题上浮结果",
             ),
         )
 
@@ -67,6 +69,7 @@ class RunStoreTests(unittest.TestCase):
         loaded_recommendation = loaded.get_stage(IncubationStage.DISTILLATION_ITERATION).recommendations[0]
         self.assertEqual(loaded_recommendation.recommendation_key, "case-001:score-gap")
         self.assertEqual(loaded_recommendation.status, "accepted")
+        self.assertEqual(loaded_recommendation.regression_result, "评分样例已完成首轮回归")
 
 
 if __name__ == "__main__":

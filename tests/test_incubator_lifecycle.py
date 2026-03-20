@@ -80,11 +80,15 @@ class IncubatorLifecycleTests(unittest.TestCase):
             "case-002:budget-gap",
             "implemented",
             "已完成第一版实现",
+            "预算边界样例回归通过",
+            "目标智能体现已能输出预算边界约束",
         )
 
         recommendation = run.get_stage(IncubationStage.DISTILLATION_ITERATION).recommendations[0]
         self.assertEqual(recommendation.status, "implemented")
         self.assertEqual(recommendation.resolution_notes, "已完成第一版实现")
+        self.assertEqual(recommendation.regression_result, "预算边界样例回归通过")
+        self.assertEqual(recommendation.capability_change, "目标智能体现已能输出预算边界约束")
 
 
 if __name__ == "__main__":
