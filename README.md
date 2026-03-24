@@ -9,6 +9,11 @@
 - 帮助采购人完成改稿和复核
 - 帮助采购人更放心地把采购需求进行公布
 
+当前执行主线：
+- 只优先推进“采购需求合规性检查智能体”的审查能力做完整
+- 当前阶段以真实文件人工 vs 代码差异闭环、主链降噪、查点补齐、正式意见输出质量为最高优先级
+- `incubator`、`budget_demand` 和其他新智能体方向当前暂停新增扩张，仅保留已具备能力
+
 当前暂不优先扩展为：
 - 发布后的争议裁判
 - 投标文件评审裁判
@@ -80,7 +85,7 @@
 - `PYTHONPATH=src python3 -m agent_compliance incubate-agent <agent_key>`
 - `PYTHONPATH=src python3 -m agent_compliance web`
 
-智能体孵化与蒸馏工厂当前也已把脚手架升级到“可验证骨架”：
+智能体孵化与蒸馏工厂当前能力保留可用，但不作为当前新增建设主线：
 - 默认生成 `product_outline.md`
 - 默认生成 `evals/README.md`
 - 默认生成 `tests/test_agent_smoke.py`
