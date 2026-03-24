@@ -25,6 +25,7 @@ from agent_compliance.apps.web.review import (
     review_home_html,
     review_next_html,
 )
+from agent_compliance.apps.web.review.service import web_llm_config as _web_llm_config
 from agent_compliance.apps.web.review.routes import (
     handle_export_review,
     handle_open_source,
@@ -141,4 +142,4 @@ class ReviewWebHandler(BaseHTTPRequestHandler):
         return
 
 
-__all__ = ["ReviewWebHandler", "run_web_server"]
+__all__ = ["ReviewWebHandler", "run_web_server", "_web_llm_config"]
