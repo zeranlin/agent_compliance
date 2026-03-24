@@ -89,6 +89,8 @@ def _match_section(line: str) -> tuple[int, str] | None:
         return (2, cn_match.group(1))
     numeric_match = SECTION_PATTERNS[2].match(line)
     if numeric_match and len(line) <= 80 and "。" not in line:
+        if _looks_like_pseudo_numeric_heading(line, numeric_match.group(1), numeric_match.group(2)):
+            return None
         level = min(numeric_match.group(1).count(".") + 2, 5)
         return (level, line)
     if _looks_like_table_label(line):
@@ -96,6 +98,30 @@ def _match_section(line: str) -> tuple[int, str] | None:
     if any(keyword in line for keyword in SECTION_KEYWORDS) and len(line) <= 40 and "。" not in line and "；" not in line:
         return (3, line)
     return None
+
+
+def _looks_like_pseudo_numeric_heading(line: str, numeric_prefix: str, suffix: str) -> bool:
+    normalized_suffix = suffix.strip()
+    if not normalized_suffix:
+        return True
+    if _looks_like_decimal_table_value(numeric_prefix) and len(normalized_suffix) <= 6:
+        return True
+    if "%" in line or "％" in line:
+        return True
+    if re.fullmatch(r"[\d\s,，.。%％;；:：()（）/-]+", line):
+        return True
+    if re.fullmatch(r"[\d\s,，.。%％;；:：()（）/-]+", normalized_suffix):
+        return True
+    if "元" in normalized_suffix and len(normalized_suffix) <= 12:
+        return True
+    if not re.search(r"[\u4e00-\u9fffA-Za-z]", normalized_suffix):
+        return True
+    return False
+
+
+def _looks_like_decimal_table_value(numeric_prefix: str) -> bool:
+    parts = numeric_prefix.split(".")
+    return len(parts) == 2 and len(parts[1]) == 2
 
 
 def _update_section_stack(section_stack: list[str], section_info: tuple[int, str]) -> list[str]:
@@ -138,6 +164,8 @@ def _looks_like_table_label(line: str) -> bool:
         return True
     if normalized in GENERIC_TABLE_LABELS:
         return True
+    if _looks_like_table_header_row(normalized):
+        return True
     if len(normalized) <= 12 and re.fullmatch(r"(序号|内容|评分项|评分因素|权重\(%\)|评分准则)", normalized):
         return True
     return False
@@ -146,6 +174,12 @@ def _looks_like_table_label(line: str) -> bool:
 def _is_semantic_table_label(line: str) -> bool:
     normalized = line.strip("：: ")
     return normalized in SEMANTIC_TABLE_LABEL_RANKS
+
+
+def _looks_like_table_header_row(line: str) -> bool:
+    header_terms = ("序号", "名称", "内容", "说明", "单位", "数量", "金额", "单价", "资格要求", "详细")
+    hits = sum(1 for term in header_terms if term in line)
+    return hits >= 3 and len(line) <= 40 and "。" not in line and "；" not in line
 
 
 def _infer_table_label(current_table_label: str | None, line: str) -> str | None:

@@ -50,6 +50,36 @@ class TextExtractorTests(unittest.TestCase):
         self.assertEqual(text, "textutil 兜底文本。")
         textutil.assert_called_once()
 
+    def test_extract_text_merges_common_pdf_table_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source = Path(tmpdir) / "sample.pdf"
+            source.write_bytes(b"%PDF-1.4\n")
+            fragmented = "\n".join(
+                [
+                    "是否采购",
+                    "环保产品",
+                    "否",
+                    "未采购环",
+                    "保产品原",
+                    "因",
+                    "无",
+                    "标的物所",
+                    "属行业",
+                    "工业",
+                ]
+            )
+            with (
+                patch("agent_compliance.core.parsers.text_extractor._extract_with_pypdf", return_value=fragmented),
+                patch("agent_compliance.core.parsers.text_extractor._extract_with_pdfplumber") as plumber,
+                patch("agent_compliance.core.parsers.text_extractor._extract_with_textutil") as textutil,
+            ):
+                text = extract_text(source)
+        self.assertIn("是否采购环保产品", text)
+        self.assertIn("未采购环保产品原因", text)
+        self.assertIn("标的物所属行业", text)
+        plumber.assert_not_called()
+        textutil.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
