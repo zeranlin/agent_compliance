@@ -1649,6 +1649,8 @@ def _add_template_domain_theme_finding(
     for clause in document.clauses:
         if _is_template_instruction_clause(clause):
             continue
+        if _is_negated_project_attribute_clause(clause):
+            continue
         if _is_qualification_clause(clause):
             continue
         if not any(marker in clause.text for marker in mismatch_markers):
@@ -1702,6 +1704,26 @@ def _add_template_domain_theme_finding(
         ),
     )
     return findings
+
+
+def _is_negated_project_attribute_clause(clause) -> bool:
+    text = clause.text.strip()
+    negative_project_attributes = (
+        "是否属于政务信息系统项目：否",
+        "是否属于政务信息系统项目:否",
+        "是否采购环境标识产品： 否",
+        "是否采购节能产品： 否",
+        "是否采购环境标识产品：否",
+        "是否采购节能产品：否",
+        "是否采购进口产品：否",
+    )
+    if text in negative_project_attributes:
+        return True
+    if text.startswith("（") and "是否属于" in text and text.endswith("：否"):
+        return True
+    if text.startswith("（") and "是否采购" in text and text.endswith("：否"):
+        return True
+    return False
 
 
 def _effective_domain_key(

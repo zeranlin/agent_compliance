@@ -5,6 +5,38 @@
   "description": "第一版审查领域映射：基于2022版政府采购品目分类目录，将高频官方品目编码映射到代码审查主链路使用的审查领域。",
   "entries": [
     {
+      "catalog_id": "CAT-AGRI-FORESTRY",
+      "review_domain_key": "agri_forestry_greening",
+      "review_domain_name": "农林牧渔及造林绿化",
+      "category_type": "mixed",
+      "mapped_catalog_codes": [
+        "A07039900",
+        "C09000000",
+        "C09020100",
+        "C13030000"
+      ],
+      "mapped_catalog_prefixes": [
+        "A0703",
+        "C0900",
+        "C0902",
+        "C1303"
+      ],
+      "keyword_fallbacks": [
+        "林业和草原",
+        "造林绿化",
+        "造林服务",
+        "人工造林",
+        "苗木",
+        "农林牧渔"
+      ],
+      "coverage_note": "覆盖农林牧渔业产品、造林服务、园林绿化管理及相关绿化实施保障场景。",
+      "preferred_analyzers": [
+        "technical_reference_consistency_engine",
+        "commercial_lifecycle_analyzer",
+        "mixed_scope_boundary_engine"
+      ]
+    },
+    {
       "catalog_id": "CAT-FURNITURE",
       "review_domain_key": "furniture_goods",
       "review_domain_name": "家具",

@@ -2,6 +2,127 @@
   "version": "v1",
   "profiles": [
     {
+      "catalog_id": "CAT-AGRI-FORESTRY",
+      "catalog_name": "农林牧渔及造林绿化",
+      "review_domain_key": "agri_forestry_greening",
+      "category_type": "mixed",
+      "reasonable_requirements": [
+        "苗木及物资供货",
+        "造林实施",
+        "成活率验收",
+        "绿化养护"
+      ],
+      "core_delivery_capabilities": [
+        "苗木及物资供货",
+        "造林实施",
+        "绿化养护",
+        "成活率和保存率验收"
+      ],
+      "high_risk_patterns": [
+        "成活率责任过重",
+        "跨域信息化义务误植入",
+        "错位环保或系统要求",
+        "验收标准与自然条件绑定过严"
+      ],
+      "scoring_risk_markers": [
+        "成活率",
+        "保存率",
+        "苗木质量",
+        "有机肥",
+        "复合肥"
+      ],
+      "scoring_mismatch_markers": [
+        "政务信息系统",
+        "软件著作权",
+        "平台建设",
+        "系统对接",
+        "驻场运维"
+      ],
+      "commercial_lifecycle_markers": [
+        "成活率",
+        "保存率",
+        "养护期",
+        "验收",
+        "付款",
+        "补植"
+      ],
+      "common_mismatch_clues": [
+        "政务信息系统",
+        "软件著作权",
+        "平台建设",
+        "系统对接"
+      ],
+      "boundary_notes": "造林绿化项目通常围绕苗木、肥料、栽植、养护和成活率验收设置要求；如出现政务信息系统、平台建设、软件著作权、驻场运维等信息化表述，应优先判断是否为否定型元信息、模板残留或错位要求。",
+      "related_issue_types": [
+        "template_mismatch",
+        "technical_justification_needed",
+        "one_sided_commercial_term"
+      ],
+      "preferred_analyzers": [
+        "technical_reference_consistency_engine",
+        "commercial_lifecycle_analyzer",
+        "mixed_scope_boundary_engine"
+      ],
+      "domain_mismatch_markers": [
+        "政务信息系统",
+        "软件著作权",
+        "平台建设",
+        "系统对接",
+        "驻场运维"
+      ],
+      "template_scope_markers": [
+        "政务信息系统",
+        "平台建设",
+        "系统对接",
+        "驻场运维"
+      ],
+      "mixed_scope_markers": [
+        "平台",
+        "系统",
+        "接口",
+        "软件",
+        "运维"
+      ],
+      "scoring_theme_markers": [
+        "苗木及物资供货",
+        "造林实施",
+        "绿化养护",
+        "成活率验收"
+      ],
+      "scoring_evidence_markers": [
+        "苗木清单",
+        "实施方案",
+        "养护方案",
+        "验收方案"
+      ],
+      "mixed_scope_core_markers": [
+        "造林",
+        "绿化",
+        "苗木",
+        "肥料",
+        "养护",
+        "成活率"
+      ],
+      "mixed_scope_support_markers": [
+        "补植",
+        "保存率",
+        "验收"
+      ],
+      "mixed_scope_out_of_scope_markers": [
+        "政务信息系统",
+        "平台建设",
+        "系统对接",
+        "软件著作权",
+        "驻场运维"
+      ],
+      "mixed_scope_hard_mismatch_markers": [
+        "平台建设",
+        "系统对接",
+        "软件著作权",
+        "驻场运维"
+      ]
+    },
+    {
       "catalog_id": "CAT-FURNITURE",
       "catalog_name": "家具",
       "review_domain_key": "furniture_goods",

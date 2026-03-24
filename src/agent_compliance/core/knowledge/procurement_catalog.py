@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import json
 from functools import lru_cache
 from pathlib import Path
+import re
 
 from agent_compliance.core.schemas import NormalizedDocument
 from agent_compliance.core.knowledge.review_domain_map import load_review_domain_map, review_domain_map_by_catalog_id
@@ -157,7 +158,8 @@ def _mapped_codes_and_prefixes(catalog_ids: tuple[str, ...] | list[str]) -> tupl
 def classify_procurement_catalog(document: NormalizedDocument) -> CatalogClassification:
     catalogs = load_procurement_catalogs()
     title_text = f"{document.document_name} {document.source_path}".lower()
-    body_text = " ".join(clause.text for clause in document.clauses[:200]).lower()
+    body_clauses = tuple(clause.text for clause in document.clauses[:200])
+    body_text = " ".join(body_clauses).lower()
     mixed_info_markers = (
         "系统端口",
         "无缝对接",
@@ -175,12 +177,18 @@ def classify_procurement_catalog(document: NormalizedDocument) -> CatalogClassif
 
     scored: list[tuple[int, int, ProcurementCatalog, tuple[str, ...]]] = []
     for catalog in catalogs:
-        title_matches = tuple(keyword for keyword in catalog.domain_keywords if keyword.lower() in title_text)
-        body_matches = tuple(keyword for keyword in catalog.domain_keywords if keyword.lower() in body_text)
+        title_matches = tuple(
+            keyword for keyword in catalog.domain_keywords if _keyword_counts_for_catalog(keyword, title_text, (title_text,)) > 0
+        )
+        body_matches = tuple(
+            keyword for keyword in catalog.domain_keywords if _keyword_counts_for_catalog(keyword, body_text, body_clauses) > 0
+        )
         unique_matches = tuple(dict.fromkeys([*title_matches, *body_matches]))
         if not unique_matches:
             continue
-        score = len(title_matches) * 3 + len(body_matches)
+        score = sum(_keyword_counts_for_catalog(keyword, title_text, (title_text,)) * 3 for keyword in title_matches) + sum(
+            _keyword_counts_for_catalog(keyword, body_text, body_clauses) for keyword in body_matches
+        )
         scored.append((score, len(title_matches), catalog, unique_matches))
 
     scored.sort(key=lambda item: (-item[0], -item[1], item[2].catalog_id))
@@ -275,6 +283,33 @@ def classify_procurement_catalog(document: NormalizedDocument) -> CatalogClassif
         is_mixed_scope=is_mixed_scope,
         catalog_evidence=evidence,
     )
+
+
+def _keyword_counts_for_catalog(keyword: str, aggregate_text: str, clauses: tuple[str, ...]) -> int:
+    lowered_keyword = keyword.lower()
+    count = 0
+    for clause in clauses:
+        clause_text = clause.lower()
+        if lowered_keyword not in clause_text:
+            continue
+        if _keyword_hit_is_negated_metadata(lowered_keyword, clause_text):
+            continue
+        count += clause_text.count(lowered_keyword)
+    if count:
+        return count
+    if lowered_keyword in aggregate_text and not _keyword_hit_is_negated_metadata(lowered_keyword, aggregate_text):
+        return 1
+    return 0
+
+
+def _keyword_hit_is_negated_metadata(keyword: str, text: str) -> bool:
+    negated_patterns = (
+        rf"是否属于[^。；\n]*{re.escape(keyword)}[^。；\n]*[:：]?\s*否",
+        rf"是否采购[^。；\n]*{re.escape(keyword)}[^。；\n]*[:：]?\s*否",
+        rf"不属于[^。；\n]*{re.escape(keyword)}",
+        rf"未采购[^。；\n]*{re.escape(keyword)}",
+    )
+    return any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in negated_patterns)
 
 
 def classification_has_domain(classification: CatalogClassification | None, domain_key: str) -> bool:

@@ -125,6 +125,35 @@ class ReviewPipelineTest(unittest.TestCase):
             )
         )
 
+    def test_review_does_not_raise_template_mismatch_for_negated_project_attribute_clause(self) -> None:
+        text = "\n".join(
+            [
+                "项目名称：丹巴县2024年中央财政林业草原专项资金造林绿化项目",
+                "林业和草原",
+                "造林绿化",
+                "苗木",
+                "（十）是否属于政务信息系统项目：否",
+            ]
+        )
+        clauses = split_into_clauses(text)
+        document = NormalizedDocument(
+            source_path="/tmp/danba.pdf",
+            document_name="丹巴县2024年中央财政林业草原专项资金造林绿化项目.pdf",
+            file_hash="danba",
+            normalized_text_path="/tmp/danba.txt",
+            clause_count=len(clauses),
+            clauses=clauses,
+        )
+        hits = run_rule_scan(document)
+        review = build_review_result(document, hits)
+
+        self.assertFalse(
+            any(
+                finding.problem_title == "文件中存在与标的域不匹配的模板残留或义务外扩"
+                for finding in review.findings
+            )
+        )
+
     def test_review_requires_more_than_two_lightweight_sports_support_markers_without_hard_mismatch(self) -> None:
         text = "\n".join(
             [

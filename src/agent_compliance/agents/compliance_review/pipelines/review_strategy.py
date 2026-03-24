@@ -131,7 +131,10 @@ def build_document_strategy_profile(
         domain = classification.primary_domain_key if classification is not None else "general"
         procurement_mode = "综合型政府采购项目"
         domain_hint = "需结合全部章节综合判断"
-        if domain == "medical_tcm_mixed":
+        if domain == "agri_forestry_greening":
+            procurement_mode = "农林牧渔或造林绿化项目"
+            domain_hint = "苗木、肥料、造林服务与绿化实施保障类"
+        elif domain == "medical_tcm_mixed":
             procurement_mode = "医疗药品或医用配套采购项目"
             domain_hint = "药品供货、设备配套与院内接口并存"
         elif domain == "medical_tcm":
@@ -186,7 +189,10 @@ def build_document_strategy_profile(
         )
     )
 
-    if domain == "furniture_goods":
+    if domain == "agri_forestry_greening":
+        procurement_mode = "农林牧渔或造林绿化项目"
+        domain_hint = "苗木、肥料、造林实施、绿化养护与验收成活率保障类"
+    elif domain == "furniture_goods":
         procurement_mode = "货物采购并含安装调试项目"
         domain_hint = "办公或医用家具供货、安装和售后保障类"
     elif domain == "textile_goods":
@@ -210,7 +216,7 @@ def build_document_strategy_profile(
     elif any(token in combined for token in ("中药", "药品", "颗粒", "医院")) or domain in {"medical_tcm", "medical_tcm_mixed"}:
         procurement_mode = "医疗药品或医用配套采购项目"
         domain_hint = "药品供货、设备配套与院内接口并存" if domain == "medical_tcm_mixed" else "药品供货与医用配套服务类"
-    elif any(token in combined for token in ("系统", "平台", "接口", "演示", "驻场运维")) or domain == "information_system":
+    elif (_looks_like_information_system_project(combined) or domain == "information_system"):
         procurement_mode = "信息化或数字化服务项目"
         domain_hint = "平台建设、系统对接或持续运维类"
     elif any(token in combined for token in ("发电机", "机电设备", "安装调试")) or domain == "equipment_installation":
@@ -317,6 +323,22 @@ def section_label_from_key(section_key: str) -> str:
 
 def document_domain(document: NormalizedDocument) -> str:
     return classify_procurement_catalog(document).primary_domain_key
+
+
+def _looks_like_information_system_project(combined_text: str) -> bool:
+    positive_tokens = ("系统", "平台", "接口", "演示", "驻场运维")
+    if not any(token in combined_text for token in positive_tokens):
+        return False
+    negative_patterns = (
+        "是否属于政务信息系统项目：否",
+        "是否属于政务信息系统项目:否",
+        "政务信息系统项目：否",
+        "政务信息系统项目:否",
+    )
+    sanitized = combined_text
+    for pattern in negative_patterns:
+        sanitized = sanitized.replace(pattern, "")
+    return any(token in sanitized for token in positive_tokens)
 
 
 def build_analyzer_execution_order(

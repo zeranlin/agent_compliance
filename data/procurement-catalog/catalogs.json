@@ -1,5 +1,16 @@
 [
   {
+    "catalog_id": "CAT-AGRI-FORESTRY",
+    "catalog_name": "农林牧渔及造林绿化",
+    "domain_key": "agri_forestry_greening",
+    "category_type": "mixed",
+    "domain_keywords": ["林业和草原", "造林绿化", "造林服务", "人工造林", "苗木", "有机肥", "复合肥", "农林牧渔", "绿化项目"],
+    "reasonable_requirements": ["苗木及物资供货", "造林实施", "成活率验收", "绿化养护"],
+    "high_risk_patterns": ["成活率责任过重", "跨域信息化义务误植入", "错位环保或系统要求", "验收标准与自然条件绑定过严"],
+    "related_issue_types": ["template_mismatch", "technical_justification_needed", "one_sided_commercial_term"],
+    "preferred_analyzers": ["technical_reference_consistency_engine", "commercial_lifecycle_analyzer", "mixed_scope_boundary_engine"]
+  },
+  {
     "catalog_id": "CAT-FURNITURE",
     "catalog_name": "家具",
     "domain_key": "furniture_goods",

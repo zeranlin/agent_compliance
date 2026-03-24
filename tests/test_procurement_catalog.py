@@ -61,6 +61,27 @@ class ProcurementCatalogTest(unittest.TestCase):
         self.assertTrue(classification_has_catalog_prefix(classification, "C1602"))
         self.assertFalse(classification.is_mixed_scope)
 
+    def test_classify_agri_forestry_project(self) -> None:
+        document = self._document(
+            "丹巴县2024年中央财政林业草原专项资金造林绿化项目.pdf",
+            ["林业和草原", "造林绿化", "人工造林", "苗木", "有机肥", "复合肥", "成活率"],
+        )
+        classification = classify_procurement_catalog(document)
+
+        self.assertEqual(classification.primary_domain_key, "agri_forestry_greening")
+        self.assertEqual(classification.primary_catalog_name, "农林牧渔及造林绿化")
+        self.assertTrue(classification_has_catalog_prefix(classification, "A0703"))
+
+    def test_negated_information_system_metadata_does_not_force_information_project(self) -> None:
+        document = self._document(
+            "造林绿化项目.pdf",
+            ["林业和草原", "造林绿化", "苗木", "（十）是否属于政务信息系统项目：否"],
+        )
+        classification = classify_procurement_catalog(document)
+
+        self.assertNotEqual(classification.primary_domain_key, "information_system")
+        self.assertEqual(classification.primary_domain_key, "agri_forestry_greening")
+
     def test_classify_by_official_catalog_name(self) -> None:
         document = self._document(
             "信息系统集成实施服务项目.docx",
@@ -110,6 +131,17 @@ class ProcurementCatalogTest(unittest.TestCase):
         self.assertIn("commercial", strategy.preferred_analyzer_groups)
         self.assertEqual(analyzer_order[0], "scoring")
 
+    def test_strategy_uses_agri_forestry_mode(self) -> None:
+        document = self._document(
+            "造林绿化项目.pdf",
+            ["林业和草原", "造林绿化", "人工造林", "苗木", "（十）是否属于政务信息系统项目：否"],
+        )
+        classification = classify_procurement_catalog(document)
+        strategy = build_document_strategy_profile([], document=document, classification=classification)
+
+        self.assertEqual(strategy.primary_catalog_name, "农林牧渔及造林绿化")
+        self.assertEqual(strategy.procurement_mode, "农林牧渔或造林绿化项目")
+
     def test_full_catalog_skeleton_exists(self) -> None:
         path = REPO_ROOT / "data" / "procurement-catalog" / "catalogs-full.json"
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -126,6 +158,7 @@ class ProcurementCatalogTest(unittest.TestCase):
 
         by_domain = {item.review_domain_key: item for item in entries}
         self.assertIn("furniture_goods", by_domain)
+        self.assertIn("agri_forestry_greening", by_domain)
         self.assertIn("sports_facility_goods", by_domain)
         self.assertIn("information_system", by_domain)
         self.assertIn("medical_device_goods", by_domain)
@@ -143,6 +176,7 @@ class ProcurementCatalogTest(unittest.TestCase):
                 self.assertTrue(any(code.startswith(prefix) for code in full_codes), prefix)
 
         self.assertIn("C21040000", by_domain["property_service"].mapped_catalog_codes)
+        self.assertIn("A07039900", by_domain["agri_forestry_greening"].mapped_catalog_codes)
         self.assertIn("A0246", by_domain["sports_facility_goods"].mapped_catalog_prefixes)
         self.assertIn("C1602", by_domain["information_system"].mapped_catalog_prefixes)
         self.assertIn("C2309", by_domain["signage_printing_service"].mapped_catalog_prefixes)
